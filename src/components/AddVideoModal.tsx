@@ -6,6 +6,7 @@ import { X, Plus, Trash2, HelpCircle } from 'lucide-react';
 interface AddVideoModalProps {
   onClose: () => void;
   onSave: (video: VideoRecord) => Promise<void>;
+  userEmail?: string;
 }
 
 const COMMON_MODELS = [
@@ -20,7 +21,7 @@ const COMMON_MODELS = [
   'HunyuanVideo'
 ];
 
-export function AddVideoModal({ onClose, onSave }: AddVideoModalProps) {
+export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps) {
   const [videoUrl, setVideoUrl] = useState('');
   const [prompt, setPrompt] = useState('');
   const [negativePrompt, setNegativePrompt] = useState('');
@@ -93,7 +94,8 @@ export function AddVideoModal({ onClose, onSave }: AddVideoModalProps) {
       durationSeconds: durationSeconds.trim() !== '' ? Number(durationSeconds) : undefined,
       loras: cleanLoras,
       notes: notes.trim() ? notes.trim() : undefined,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      createdBy: userEmail || undefined
     };
 
     await onSave(record);

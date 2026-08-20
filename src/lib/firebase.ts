@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // Código de inicialización básico de Firebase
 // Asegúrate de definir estas variables en tu archivo .env local en tu futuro proyecto.
@@ -16,4 +17,5 @@ const firebaseConfig = {
 // Inicializar Firebase (solo si hay configuración para evitar errores de renderizado en esta demo)
 const app = firebaseConfig.projectId ? initializeApp(firebaseConfig) : null;
 export const db = app ? getFirestore(app) : null;
+export const auth = app ? getAuth(app) : null;
 
