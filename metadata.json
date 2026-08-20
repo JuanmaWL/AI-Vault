@@ -1,6 +1,5 @@
 {
   "name": "AI Video Vault",
   "description": "Video catalog and parameter registry for AI-generated videos.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "requestFramePermissions": []
 }

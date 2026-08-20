@@ -4,20 +4,64 @@ import { collection, addDoc, onSnapshot, orderBy, query } from 'firebase/firesto
 import { VideoRecord } from './types';
 import { VideoCard } from './components/VideoCard';
 import { AddVideoModal } from './components/AddVideoModal';
+import { extractDriveFileId, calculateOrientation } from './lib/utils';
 import { Search, Plus, Database } from 'lucide-react';
+import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
-const STORAGE_KEY = 'local_ai_videos';
+const STORAGE_KEY = 'local_ai_videos_v2';
+
+// Normaliza registros antiguos si existían en localStorage o Firestore
+function normalizeRecord(raw: any): VideoRecord {
+  const width = typeof raw.width === 'number' ? raw.width : 1920;
+  const height = typeof raw.height === 'number' ? raw.height : 1080;
+  const videoUrl = raw.videoUrl || '';
+  const driveFileId = raw.driveFileId || extractDriveFileId(videoUrl);
+  const orientation = raw.orientation || calculateOrientation(width, height);
+
+  return {
+    id: raw.id,
+    schemaVersion: 2,
+    videoUrl,
+    driveFileId,
+    prompt: raw.prompt || '',
+    negativePrompt: raw.negativePrompt,
+    model: raw.model || 'Desconocido',
+    source: raw.source === 'cloud' ? 'cloud' : 'local',
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    width,
+    height,
+    orientation,
+    steps: typeof raw.steps === 'number' ? raw.steps : 30,
+    shift: typeof raw.shift === 'number' ? raw.shift : undefined,
+    seed: typeof raw.seed === 'number' ? raw.seed : undefined,
+    fps: typeof raw.fps === 'number' ? raw.fps : undefined,
+    durationSeconds: typeof raw.durationSeconds === 'number' ? raw.durationSeconds : undefined,
+    loras: Array.isArray(raw.loras) ? raw.loras : [],
+    notes: raw.notes,
+    createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+    createdBy: raw.createdBy
+  };
+}
 
 const MOCK_DATA: VideoRecord[] = [
   {
     id: 'mock1',
+    schemaVersion: 2,
     videoUrl: 'https://drive.google.com/file/d/1M5uutzAXG3r8b8HS_HtPczRGTa_zBVAD/view?usp=sharing',
+    driveFileId: '1M5uutzAXG3r8b8HS_HtPczRGTa_zBVAD',
     prompt: 'A high quality cinematic shot of a stunning futuristic cyberpunk street, neon lights reflection, masterpiece, detailed.',
-    model: 'Midjourney + Runway Gen-3',
-    resolution: '1920x1080',
-    steps: 50,
-    shift: 1.5,
+    model: 'Wan2.1 FL2VA (Wan2GP)',
+    source: 'local',
+    tags: ['Wan2GP', '33B', 'FL2VA'],
+    width: 1920,
+    height: 1080,
+    orientation: '16:9',
+    steps: 30,
+    shift: 5.0,
+    seed: 4891024,
+    fps: 24,
+    durationSeconds: 5,
     loras: [
       { name: 'NeonGlow', weight: 0.7 }
     ],
@@ -37,7 +81,9 @@ export default function App() {
     try {
       const localData = localStorage.getItem(STORAGE_KEY);
       if (localData) {
-        setVideos(JSON.parse(localData));
+        const parsed = JSON.parse(localData);
+        const normalized = Array.isArray(parsed) ? parsed.map(normalizeRecord) : MOCK_DATA;
+        setVideos(normalized);
       } else {
         setVideos(MOCK_DATA);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(MOCK_DATA));
@@ -55,10 +101,10 @@ export default function App() {
         const unsubscribe = onSnapshot(
           q,
           (snapshot) => {
-            const fetchedVideos = snapshot.docs.map((doc) => ({
+            const fetchedVideos = snapshot.docs.map((doc) => normalizeRecord({
               id: doc.id,
               ...doc.data()
-            })) as VideoRecord[];
+            }));
             setVideos(fetchedVideos);
             setLoading(false);
           },
@@ -110,7 +156,8 @@ export default function App() {
     return videos.filter(
       (v) =>
         v.prompt.toLowerCase().includes(lower) ||
-        v.model.toLowerCase().includes(lower)
+        v.model.toLowerCase().includes(lower) ||
+        (v.tags && v.tags.some((t) => t.toLowerCase().includes(lower)))
     );
   }, [videos, searchTerm]);
 
@@ -152,7 +199,7 @@ export default function App() {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500 group-focus-within:text-white transition-colors" />
               <input
                 type="text"
-                placeholder="Buscar por prompt o modelo..."
+                placeholder="Buscar por prompt, modelo o etiquetas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-neutral-900/50 border border-neutral-800 rounded-full pl-12 pr-6 py-2.5 text-sm focus:outline-none focus:border-neutral-600 focus:bg-neutral-900 transition-all text-neutral-200 placeholder:text-neutral-500"
@@ -200,7 +247,7 @@ export default function App() {
           <div className="flex items-center gap-3">
             <span className="font-semibold text-neutral-300">AI Video Vault</span>
             <span className="px-2.5 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-teal-400 font-medium">
-              v0.0.1
+              v{pkg.version}
             </span>
           </div>
 
