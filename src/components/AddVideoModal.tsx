@@ -1,7 +1,8 @@
-import { useState, FormEvent, useMemo } from 'react';
+import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
 import { extractDriveFileId, calculateOrientation } from '../lib/utils';
-import { X, Plus, Trash2, HelpCircle } from 'lucide-react';
+import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud } from 'lucide-react';
+import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 interface AddVideoModalProps {
   onClose: () => void;
@@ -38,10 +39,219 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
   const [notes, setNotes] = useState('');
   const [loras, setLoras] = useState<Lora[]>([]);
   
+  // Extra fields for metadata
+  const [renderSeconds, setRenderSeconds] = useState<string>('');
+  const [generatedAt, setGeneratedAt] = useState<number | undefined>(undefined);
+  const [rawMetadata, setRawMetadata] = useState<string>('');
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Autocomplete state
+  const [autoFilled, setAutoFilled] = useState<Record<string, boolean>>({});
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const detectedFileId = useMemo(() => extractDriveFileId(videoUrl), [videoUrl]);
   const currentOrientation = useMemo(() => calculateOrientation(width, height), [width, height]);
+
+  const parseModelAndTags = (modelType: string, typeDesc: string = '') => {
+    const combined = `${modelType} ${typeDesc}`.toLowerCase();
+    let baseModel = modelType;
+    let newTags: string[] = [];
+
+    if (combined.includes('minimax') || combined.includes('h3')) {
+        baseModel = 'Minimax H3';
+    } else if (combined.includes('wan 2.1') || combined.includes('wan_2.1') || combined.includes('wan2.1')) {
+        baseModel = 'Wan 2.1';
+    } else if (combined.includes('wan 2.2') || combined.includes('wan_2.2') || combined.includes('wan2.2')) {
+        baseModel = 'Wan 2.2';
+    } else if (combined.includes('ltx 2.3') || combined.includes('ltx_2.3') || combined.includes('ltx2.3')) {
+        baseModel = 'LTX 2.3';
+    } else if (combined.includes('ltx 2.5') || combined.includes('ltx_2.5') || combined.includes('ltx2.5')) {
+        baseModel = 'LTX 2.5';
+    } else if (combined.includes('hunyuan')) {
+        baseModel = 'HunyuanVideo';
+    }
+
+    if (combined.includes('pruned')) newTags.push('pruned');
+    if (combined.includes('distilled')) newTags.push('distilled');
+    if (combined.includes('33b')) newTags.push('33B');
+    if (combined.includes('20b')) newTags.push('20B');
+    if (combined.includes('14b')) newTags.push('14B');
+    if (combined.includes('ref2va')) newTags.push('ref2va');
+    if (combined.includes('fl2va')) newTags.push('fl2va');
+    if (combined.includes('int8')) newTags.push('int8');
+    if (combined.includes('fp8')) newTags.push('fp8');
+
+    return { baseModel, newTags: Array.from(new Set(newTags)) };
+  };
+
+  const processLocalFile = async (file: File) => {
+    setExtracting(true);
+    setExtractError(null);
+
+    try {
+      const mediainfo = await import('mediainfo.js');
+      
+      const getSize = () => file.size;
+      const readChunk = (chunkSize: number, offset: number) =>
+        new Promise<Uint8Array>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            if (event.target?.error) {
+              reject(event.target.error);
+            }
+            resolve(new Uint8Array(event.target?.result as ArrayBuffer));
+          };
+          reader.readAsArrayBuffer(file.slice(offset, offset + chunkSize));
+        });
+
+      const mi = await mediainfo.default({ 
+        format: 'object',
+        locateFile: () => wasmUrl
+      });
+      
+      const result = await mi.analyzeData(getSize, readChunk);
+      
+      console.log("MediaInfo Result:", JSON.stringify(result, null, 2));
+
+      const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General');
+      const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video');
+
+      const commentRaw = generalTrack?.extra?.Comment || generalTrack?.Comment || videoTrack?.extra?.Comment || videoTrack?.Comment;
+      
+      let newAutoFilled: Record<string, boolean> = {};
+      let foundSomething = false;
+
+      if (videoTrack?.Width) {
+        setWidth(Number(videoTrack.Width));
+        newAutoFilled.width = true;
+        foundSomething = true;
+      }
+      if (videoTrack?.Height) {
+        setHeight(Number(videoTrack.Height));
+        newAutoFilled.height = true;
+        foundSomething = true;
+      }
+      if (generalTrack?.Duration) {
+        setDurationSeconds(String(parseFloat(generalTrack.Duration)));
+        newAutoFilled.durationSeconds = true;
+        foundSomething = true;
+      }
+
+      if (commentRaw) {
+        try {
+          const parsed = JSON.parse(commentRaw);
+          setRawMetadata(commentRaw);
+          
+          if (parsed.prompt) { setPrompt(parsed.prompt); newAutoFilled.prompt = true; foundSomething = true; }
+          if (parsed.seed !== undefined) { setSeed(String(parsed.seed)); newAutoFilled.seed = true; foundSomething = true; }
+          if (parsed.num_inference_steps !== undefined) { setSteps(Number(parsed.num_inference_steps)); newAutoFilled.steps = true; foundSomething = true; }
+          if (parsed.flow_shift !== undefined) { setShift(String(parsed.flow_shift)); newAutoFilled.shift = true; foundSomething = true; }
+          
+          if (parsed.model_type || parsed.type) { 
+            const { baseModel, newTags } = parseModelAndTags(parsed.model_type || '', parsed.type || '');
+            setModel(baseModel); 
+            newAutoFilled.model = true;
+            if (newTags.length > 0) {
+              setTagsInput(newTags.join(', '));
+              newAutoFilled.tags = true;
+            }
+            foundSomething = true; 
+          }
+          
+          if (parsed.resolution && !newAutoFilled.width) {
+            const [w, h] = parsed.resolution.split('x');
+            if (w && h) {
+              setWidth(Number(w));
+              setHeight(Number(h));
+              newAutoFilled.width = true;
+              newAutoFilled.height = true;
+              foundSomething = true;
+            }
+          }
+          
+          if (parsed.generation_time !== undefined) {
+            setRenderSeconds(String(parsed.generation_time));
+            newAutoFilled.renderSeconds = true;
+            foundSomething = true;
+          }
+          if (parsed.creation_timestamp !== undefined) {
+            setGeneratedAt(Number(parsed.creation_timestamp) * 1000);
+            newAutoFilled.generatedAt = true;
+            foundSomething = true;
+          }
+
+          if (parsed.activated_loras && parsed.loras_multipliers) {
+            const weights = String(parsed.loras_multipliers).split('|');
+            const newLoras: Lora[] = [];
+            parsed.activated_loras.forEach((loraPath: string, i: number) => {
+              const nameParts = loraPath.split(/[\/\\]/);
+              let baseName = nameParts[nameParts.length - 1];
+              baseName = baseName.replace(/\.[^/.]+$/, "");
+
+              const weightStr = weights[i];
+              if (weightStr !== undefined && weightStr !== '') {
+                newLoras.push({ name: baseName, weight: parseFloat(weightStr) });
+              }
+            });
+            if (newLoras.length > 0) {
+              setLoras(newLoras);
+              newAutoFilled.loras = true;
+              foundSomething = true;
+            }
+          }
+          
+        } catch (e) {
+          console.error("Error parsing JSON comment", e);
+        }
+      }
+      
+      if (!foundSomething) {
+         setExtractError("No se encontraron metadatos en este archivo.");
+      }
+      
+      setAutoFilled(newAutoFilled);
+
+    } catch (err) {
+      console.error("Error with mediainfo.js", err);
+      setExtractError("Error al procesar el archivo local.");
+    } finally {
+      setExtracting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processLocalFile(file);
+    }
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      processLocalFile(file);
+    } else {
+      setExtractError("Por favor, suelta un archivo de vídeo válido.");
+    }
+  };
 
   const handleAddLora = () => {
     setLoras([...loras, { name: '', weight: 1.0 }]);
@@ -60,6 +270,15 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
   const setResolutionPreset = (w: number, h: number) => {
     setWidth(w);
     setHeight(h);
+  };
+
+  const AutoFillBadge = ({ field }: { field: string }) => {
+    if (!autoFilled[field]) return null;
+    return (
+      <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 bg-teal-950/40 border border-teal-800/60 rounded" title="Importado desde archivo">
+        <Check className="w-3 h-3 text-teal-400" />
+      </span>
+    );
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -95,7 +314,10 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
       loras: cleanLoras,
       notes: notes.trim() ? notes.trim() : undefined,
       createdAt: Date.now(),
-      createdBy: userEmail || undefined
+      createdBy: userEmail || undefined,
+      renderSeconds: renderSeconds.trim() !== '' ? Number(renderSeconds) : undefined,
+      generatedAt,
+      rawMetadata: rawMetadata.trim() !== '' ? rawMetadata : undefined
     };
 
     await onSave(record);
@@ -105,7 +327,7 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         <div className="flex items-center justify-between p-6 border-b border-neutral-800">
           <div>
             <h2 className="text-lg font-bold text-neutral-100">Nuevo Registro de Vídeo</h2>
@@ -117,6 +339,68 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
         </div>
 
         <div className="overflow-y-auto p-6 space-y-6">
+          
+          {/* Autocompletar desde archivo local */}
+          <div 
+            className={`rounded-xl p-5 border-2 border-dashed transition-all ${
+              isDragging 
+                ? 'bg-teal-950/20 border-teal-500/50' 
+                : 'bg-neutral-900/30 border-neutral-800'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-200 flex items-center gap-2">
+                  <FileVideo className="w-4 h-4 text-teal-400" />
+                  Autocompletar desde archivo local (opcional)
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1">
+                  Arrastra o selecciona el vídeo original para extraer prompt, modelo, resolución, etc.
+                </p>
+              </div>
+              <div className="shrink-0">
+                <input
+                  type="file"
+                  accept="video/mp4,video/quicktime"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={extracting}
+                  className={`px-4 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 border ${
+                    isDragging
+                      ? 'bg-teal-900/50 text-teal-200 border-teal-700/50'
+                      : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  {extracting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin" />
+                      Extrayendo...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-4 h-4" />
+                      {isDragging ? 'Suelta el vídeo aquí' : 'Seleccionar Archivo'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+            {extractError && (
+              <div className="mt-3 flex items-center gap-2 text-rose-400 text-xs bg-rose-950/30 p-2.5 rounded-lg border border-rose-900/50">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <p>{extractError}</p>
+              </div>
+            )}
+          </div>
+
           <form id="add-video-form" onSubmit={handleSubmit} className="space-y-6">
             
             {/* Origen del Vídeo */}
@@ -144,7 +428,8 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
             {/* Prompt */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
-                Prompt Generativo <span className="text-teal-400">*</span>
+                Prompt <span className="text-teal-400">*</span>
+                <AutoFillBadge field="prompt" />
               </label>
               <textarea 
                 required
@@ -175,6 +460,7 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
               <div className="sm:col-span-2 space-y-2">
                 <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
                   Modelo AI <span className="text-teal-400">*</span>
+                  <AutoFillBadge field="model" />
                 </label>
                 <input 
                   type="text" 
@@ -225,8 +511,9 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
 
             {/* Tags */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+              <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider flex items-center gap-1">
                 Etiquetas / Tags (Separadas por comas)
+                <AutoFillBadge field="tags" />
               </label>
               <input 
                 type="text" 
@@ -242,6 +529,8 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
                   Dimensiones y Orientación
+                  <AutoFillBadge field="width" />
+                  <AutoFillBadge field="height" />
                 </label>
                 <span className="text-xs font-mono font-medium px-2 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-teal-400">
                   {width} x {height} ({currentOrientation})
@@ -322,10 +611,11 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
             </div>
 
             {/* Parámetros de Generación */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
                   Steps <span className="text-teal-400">*</span>
+                  <AutoFillBadge field="steps" />
                 </label>
                 <input 
                   type="number" 
@@ -338,8 +628,9 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
                   Shift
+                  <AutoFillBadge field="shift" />
                 </label>
                 <input 
                   type="number" 
@@ -352,8 +643,9 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
                   Seed
+                  <AutoFillBadge field="seed" />
                 </label>
                 <input 
                   type="number" 
@@ -365,8 +657,9 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
               </div>
 
               <div className="space-y-1">
-                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
-                  FPS / Segundos
+                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                  FPS / Seg
+                  <AutoFillBadge field="durationSeconds" />
                 </label>
                 <div className="grid grid-cols-2 gap-1">
                   <input 
@@ -388,13 +681,28 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
                   />
                 </div>
               </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                  Render (s)
+                  <AutoFillBadge field="renderSeconds" />
+                </label>
+                <input 
+                  type="number" 
+                  value={renderSeconds}
+                  onChange={e => setRenderSeconds(e.target.value)}
+                  placeholder="Ej: 479"
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
+                />
+              </div>
             </div>
 
             {/* LoRAs */}
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
+                <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider flex items-center gap-1">
                   LoRAs Aplicados
+                  <AutoFillBadge field="loras" />
                 </label>
                 <button 
                   type="button" 

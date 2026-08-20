@@ -50,4 +50,3 @@ export function DriveVideoPlayer({ url, driveFileId, className }: DriveVideoPlay
     </div>
   );
 }
-

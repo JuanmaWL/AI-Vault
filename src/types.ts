@@ -35,4 +35,9 @@ export interface VideoRecord {
   notes?: string;
   createdAt: number;
   createdBy?: string;       // email del usuario autenticado que creó el registro
+  
+  // Metadatos adicionales importados
+  renderSeconds?: number;
+  generatedAt?: number;     // timestamp Unix (ms)
+  rawMetadata?: string;     // JSON original sin parsear
 }

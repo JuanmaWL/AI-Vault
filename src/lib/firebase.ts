@@ -18,4 +18,3 @@ const firebaseConfig = {
 const app = firebaseConfig.projectId ? initializeApp(firebaseConfig) : null;
 export const db = app ? getFirestore(app) : null;
 export const auth = app ? getAuth(app) : null;
-

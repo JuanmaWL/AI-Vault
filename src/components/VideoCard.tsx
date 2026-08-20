@@ -85,7 +85,7 @@ export function VideoCard({ video }: VideoCardProps) {
           {/* Prompt */}
           <div>
             <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-2 mb-2">
-              <PlaySquare className="w-3.5 h-3.5 text-teal-400" /> Prompt Generativo
+              <PlaySquare className="w-3.5 h-3.5 text-teal-400" /> Prompt
             </h3>
             <p className="text-neutral-200 text-sm sm:text-base leading-relaxed bg-neutral-950/70 p-4 rounded-xl border border-neutral-800/80 font-normal select-text">
               {video.prompt}
@@ -107,7 +107,7 @@ export function VideoCard({ video }: VideoCardProps) {
 
         {/* Métricas técnicas */}
         <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
             <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/50">
               <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-neutral-400" /> Resolución
@@ -141,6 +141,17 @@ export function VideoCard({ video }: VideoCardProps) {
                 {video.seed !== undefined ? video.seed : '—'}
               </span>
             </div>
+
+            {video.renderSeconds !== undefined && (
+              <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/50">
+                <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-neutral-400" /> Render
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-neutral-200 font-mono">
+                  {Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s
+                </span>
+              </div>
+            )}
           </div>
 
           {fpsDurationText && (
@@ -185,4 +196,3 @@ export function VideoCard({ video }: VideoCardProps) {
     </div>
   );
 }
-
