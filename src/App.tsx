@@ -102,6 +102,8 @@ export default function App() {
   const [filterModel, setFilterModel] = useState<string>('Todos');
   const [filterOrientation, setFilterOrientation] = useState<string>('Todas');
   const [filterSource, setFilterSource] = useState<string>('Todos');
+  const [filterResolution, setFilterResolution] = useState<string>('Todas');
+  const [filterLora, setFilterLora] = useState<string>('Todos');
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [groupByFolder, setGroupByFolder] = useState<boolean>(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -284,6 +286,8 @@ export default function App() {
   const uniqueUsers = useMemo(() => Array.from(new Set(videos.map(v => v.createdBy).filter(Boolean) as string[])).sort(), [videos]);
   const uniqueModels = useMemo(() => Array.from(new Set(videos.map(v => v.model).filter(Boolean) as string[])).sort(), [videos]);
   const uniqueTags = useMemo(() => Array.from(new Set(videos.flatMap(v => v.tags || []))).sort(), [videos]);
+  const uniqueResolutions = useMemo(() => Array.from(new Set(videos.map(v => `${v.width}x${v.height}`))).sort(), [videos]);
+  const uniqueLoras = useMemo(() => Array.from(new Set(videos.flatMap(v => v.loras?.map(l => l.name) || []))).sort(), [videos]);
 
   const filteredVideos = useMemo(() => {
     return videos.filter(video => {
@@ -292,7 +296,12 @@ export default function App() {
         const lower = searchTerm.toLowerCase();
         const matchesSearch = video.prompt.toLowerCase().includes(lower) ||
           video.model.toLowerCase().includes(lower) ||
-          (video.tags && video.tags.some((t) => t.toLowerCase().includes(lower)));
+          (video.tags && video.tags.some((t) => t.toLowerCase().includes(lower))) ||
+          (video.loras && video.loras.some((l) => l.name.toLowerCase().includes(lower))) ||
+          video.steps.toString().includes(lower) ||
+          (video.shift !== undefined && video.shift.toString().includes(lower)) ||
+          (video.hardware && video.hardware.gpu.toLowerCase().includes(lower));
+
         if (!matchesSearch) return false;
       }
       
@@ -322,9 +331,17 @@ export default function App() {
         if (!video.tags || !filterTags.every(t => video.tags!.includes(t))) return false;
       }
 
+      // 8. Resolution
+      if (filterResolution !== 'Todas' && `${video.width}x${video.height}` !== filterResolution) return false;
+
+      // 9. LoRA
+      if (filterLora !== 'Todos') {
+        if (!video.loras || !video.loras.some(l => l.name === filterLora)) return false;
+      }
+
       return true;
     });
-  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterOrientation, filterSource, filterTags]);
+  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterOrientation, filterSource, filterTags, filterResolution, filterLora]);
 
   const groupedVideos = useMemo(() => {
     if (!groupByFolder) return null;
@@ -396,6 +413,13 @@ export default function App() {
       timeStyle: 'short',
     }).format(new Date(maxTime));
   }, [videos]);
+
+  const handleNavigateToVideo = (id: string) => {
+    setView('detail');
+    setTimeout(() => {
+      document.getElementById(`video-card-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 100);
+  };
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 font-sans selection:bg-teal-900/50 flex flex-col justify-between">
@@ -580,6 +604,14 @@ export default function App() {
                 <option value="Todos">Todos los modelos</option>
                 {uniqueModels.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
+              <select value={filterResolution} onChange={e => setFilterResolution(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
+                <option value="Todas">Resolución (Todas)</option>
+                {uniqueResolutions.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <select value={filterLora} onChange={e => setFilterLora(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
+                <option value="Todos">LoRAs (Todos)</option>
+                {uniqueLoras.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
 
               <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden">
                 {['Todas', '16:9', '9:16', '1:1'].map(o => (
@@ -616,7 +648,7 @@ export default function App() {
           </div>
 
           {view === 'compare' ? (
-            <CompareView videos={filteredVideos} sharedPrompt={sharedPrompt} />
+            <CompareView videos={filteredVideos} sharedPrompt={sharedPrompt} onNavigateToVideo={handleNavigateToVideo} />
           ) : loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="w-8 h-8 border-2 border-neutral-800 border-t-white rounded-full animate-spin"></div>

@@ -34,7 +34,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const isNegativeLong = (video.negativePrompt?.length || 0) > PROMPT_LIMIT;
 
   return (
-    <div className={`flex flex-col lg:flex-row bg-neutral-900/60 border ${isSelected ? 'border-teal-500' : 'border-neutral-800'} rounded-2xl overflow-hidden hover:border-neutral-700 transition-all shadow-lg relative`}>
+    <div id={`video-card-${video.id}`} className={`flex flex-col lg:flex-row bg-neutral-900/60 border ${isSelected ? 'border-teal-500' : 'border-neutral-800'} rounded-2xl overflow-hidden hover:border-neutral-700 transition-all shadow-lg relative`}>
       {/* Zona de previsualización de vídeo amplia */}
       <div className="w-full lg:w-[540px] xl:w-[620px] shrink-0 bg-neutral-950 p-4 sm:p-6 flex flex-col justify-center border-b lg:border-b-0 lg:border-r border-neutral-800">
         

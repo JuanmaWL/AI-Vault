@@ -1,17 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { VideoRecord } from '../types';
-import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 
 interface CompareViewProps {
   videos: VideoRecord[];
   sharedPrompt: string | null;
+  onNavigateToVideo: (id: string) => void;
 }
 
 type GridSize = 'compact' | 'medium' | 'large';
+type InfoLevel = 'minimal' | 'technical';
 
-export function CompareView({ videos, sharedPrompt }: CompareViewProps) {
+export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: CompareViewProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [gridSize, setGridSize] = useState<GridSize>('medium');
+  const [infoLevel, setInfoLevel] = useState<InfoLevel>('minimal');
   const [isMuted, setIsMuted] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
@@ -68,9 +71,15 @@ export function CompareView({ videos, sharedPrompt }: CompareViewProps) {
       });
     }));
 
-    vids.forEach(vid => vid.currentTime = 0);
     await Promise.all(vids.map(vid => vid.play().catch(e => console.warn('Autoplay bloqueado', e))));
     setIsPlaying(true);
+  };
+
+  const handleRewindAll = () => {
+    const vids = Array.from(selectedIds)
+      .map(id => videoRefs.current.get(id))
+      .filter(Boolean) as HTMLVideoElement[];
+    vids.forEach(vid => vid.currentTime = 0);
   };
 
   const handlePauseAll = () => {
@@ -134,21 +143,37 @@ export function CompareView({ videos, sharedPrompt }: CompareViewProps) {
           <button onClick={handlePauseAll} className="flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">
             <Pause className="w-4 h-4 fill-current" /> <span className="hidden sm:inline">Pausar todos</span>
           </button>
+          <button onClick={handleRewindAll} className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors ml-1" title="Rebobinar al inicio">
+            <RotateCcw className="w-5 h-5" />
+          </button>
           <button onClick={toggleMuteAll} className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors ml-1 sm:ml-2" title={isMuted ? "Activar sonido" : "Silenciar"}>
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
         </div>
 
-        <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-1">
-          {(['compact', 'medium', 'large'] as GridSize[]).map(size => (
-            <button
-              key={size}
-              onClick={() => setGridSize(size)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${gridSize === size ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}`}
-            >
-              {size === 'compact' ? 'Compacto (6)' : size === 'medium' ? 'Medio (4)' : 'Grande (3)'}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-1">
+            {(['minimal', 'technical'] as InfoLevel[]).map(level => (
+              <button
+                key={level}
+                onClick={() => setInfoLevel(level)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${infoLevel === level ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}`}
+              >
+                {level === 'minimal' ? 'Detalle: Minimalista' : 'Detalle: Técnico'}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 rounded-lg p-1">
+            {(['compact', 'medium', 'large'] as GridSize[]).map(size => (
+              <button
+                key={size}
+                onClick={() => setGridSize(size)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${gridSize === size ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}`}
+              >
+                {size === 'compact' ? '6 columnas' : size === 'medium' ? '4 columnas' : '3 columnas'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -165,6 +190,8 @@ export function CompareView({ videos, sharedPrompt }: CompareViewProps) {
               else videoRefs.current.delete(video.id!);
             }}
             isGlobalMuted={isMuted}
+            infoLevel={infoLevel}
+            onNavigateToVideo={() => onNavigateToVideo(video.id!)}
           />
         ))}
       </div>
@@ -177,13 +204,17 @@ function CompareCard({
   isSelected, 
   onToggle, 
   videoRef, 
-  isGlobalMuted 
+  isGlobalMuted,
+  infoLevel,
+  onNavigateToVideo
 }: { 
   video: VideoRecord; 
   isSelected: boolean; 
   onToggle: () => void; 
   videoRef: (el: HTMLVideoElement | null) => void; 
   isGlobalMuted: boolean;
+  infoLevel: InfoLevel;
+  onNavigateToVideo: () => void;
 }) {
   const [hasError, setHasError] = useState(false);
   
@@ -234,19 +265,64 @@ function CompareCard({
         )}
       </div>
 
-      {/* Metadata Compacta */}
-      <div className="p-3 bg-neutral-900 flex-1 flex flex-col justify-between gap-1.5">
-        <div className="text-sm font-semibold text-neutral-200 truncate" title={video.model}>
-          {video.model}
+      {/* Metadata */}
+      <div className="p-3 bg-neutral-900 flex-1 flex flex-col gap-1.5 group">
+        <div className="flex items-center justify-between">
+          <div 
+            className="text-sm font-semibold text-neutral-200 truncate cursor-pointer hover:text-teal-400 transition-colors" 
+            title={video.model} 
+            onClick={onNavigateToVideo}
+          >
+            {video.model}
+          </div>
+          <button 
+            onClick={onNavigateToVideo} 
+            className="text-neutral-500 hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-all p-1" 
+            title="Abrir en vista detallada"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </button>
         </div>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-neutral-400">
-          <span>{video.steps}st</span>
-          {video.shift !== undefined && <span>· s{video.shift}</span>}
-          {video.seed !== undefined && <span>· {video.seed}</span>}
-          {video.renderSeconds !== undefined && (
-            <span>· <span className="text-teal-400">{Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span></span>
-          )}
-        </div>
+
+        {infoLevel === 'minimal' ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-neutral-500 mt-auto">
+            <span>{video.steps}st</span>
+            {video.shift !== undefined && <span>· s{video.shift}</span>}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5 mt-1 border-t border-neutral-800/50 pt-2.5">
+            <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+              <span className="text-neutral-500">Pasos / Shift</span>
+              <span>{video.steps} / {video.shift !== undefined ? video.shift : '-'}</span>
+            </div>
+            <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+              <span className="text-neutral-500">Resolución</span>
+              <span>{video.width}x{video.height}</span>
+            </div>
+            {video.renderSeconds !== undefined && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">Tiempo Render</span>
+                <span className="text-teal-400">{Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span>
+              </div>
+            )}
+            {video.seed !== undefined && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">Seed</span>
+                <span className="truncate max-w-[120px] text-right" title={video.seed.toString()}>{video.seed}</span>
+              </div>
+            )}
+            {video.loras && video.loras.length > 0 && (
+              <div className="flex flex-col gap-0.5 text-[11px] font-mono text-neutral-400 mt-1">
+                <span className="text-neutral-500 mb-0.5">LoRAs:</span>
+                {video.loras.map(l => (
+                  <span key={l.name} className="truncate text-indigo-300 ml-1.5" title={`${l.name} (${l.weight})`}>
+                    • {l.name} <span className="text-indigo-500">({l.weight})</span>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
