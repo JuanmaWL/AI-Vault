@@ -1,7 +1,7 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
 import { extractDriveFileId, calculateOrientation } from '../lib/utils';
-import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud } from 'lucide-react';
+import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2 } from 'lucide-react';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 interface AddVideoModalProps {
@@ -56,6 +56,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const detectedFileId = useMemo(() => extractDriveFileId(videoUrl), [videoUrl]);
+  const isDirectMp4 = useMemo(() => videoUrl.toLowerCase().includes('.mp4'), [videoUrl]);
   const currentOrientation = useMemo(() => calculateOrientation(Number(width) || 0, Number(height) || 0), [width, height]);
 
   const parseModelAndTags = (modelType: string, typeDesc: string = '') => {
@@ -285,6 +286,18 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
     setLoras(updated);
   };
 
+  const [wandSuccess, setWandSuccess] = useState(false);
+  const handleExtractDigiStorage = () => {
+    const digiMatch = videoUrl.match(/^https?:\/\/digistorage\.es\/links\/([a-zA-Z0-9-]+)/i);
+    if (digiMatch && digiMatch[1]) {
+      const linkId = digiMatch[1];
+      setVideoUrl(`https://digistorage.es/content/links/${linkId}/files/get/video.mp4?path=%2F`);
+      setAutoFilled(prev => ({ ...prev, videoUrl: true }));
+      setWandSuccess(true);
+      setTimeout(() => setWandSuccess(false), 2000);
+    }
+  };
+
   const AutoFillBadge = ({ field }: { field: string }) => {
     if (!autoFilled[field]) return null;
     return (
@@ -433,7 +446,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
-                  Enlace de Google Drive <span className="text-teal-400">*</span>
+                  Enlace del Vídeo (Drive / DigiStorage) <span className="text-teal-400">*</span>
                 </label>
                 {detectedFileId && (
                   <span className="text-[11px] text-teal-400 font-mono">
@@ -441,14 +454,52 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   </span>
                 )}
               </div>
-              <input 
-                type="url" 
-                required
-                value={videoUrl}
-                onChange={e => setVideoUrl(e.target.value)}
-                placeholder="https://drive.google.com/file/d/1M5uutzAXG3r8b8HS.../view?usp=sharing"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all font-mono"
-              />
+              <div className="relative">
+                <input 
+                  type="url" 
+                  required
+                  value={videoUrl}
+                  onChange={e => setVideoUrl(e.target.value)}
+                  placeholder="Drive o DigiStorage (ej: https://digistorage.es/links/...)"
+                  className={`w-full ${wandSuccess ? 'bg-teal-950/40 border-teal-400 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'bg-neutral-950 border-neutral-800'} rounded-xl pl-4 ${videoUrl.includes('digistorage.es/links/') && !isDirectMp4 ? 'pr-12' : 'pr-4'} py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all duration-300 font-mono`}
+                />
+                {videoUrl.includes('digistorage.es/links/') && !isDirectMp4 && (
+                  <button
+                    type="button"
+                    onClick={handleExtractDigiStorage}
+                    title="Va a intentar extraer el mp4 directo"
+                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all duration-300 ${wandSuccess ? 'bg-teal-500 text-neutral-950 scale-110' : 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20'}`}
+                  >
+                    {wandSuccess ? <Check className="w-4 h-4" /> : <Wand2 className="w-4 h-4" />}
+                  </button>
+                )}
+              </div>
+              
+              {/* Mini Preview Video */}
+              {videoUrl && (detectedFileId || isDirectMp4) && (
+                <div className="mt-3 aspect-video w-full rounded-xl bg-black border border-neutral-800 overflow-hidden shadow-lg transition-all duration-500 opacity-100 translate-y-0 relative group">
+                  {detectedFileId ? (
+                    <iframe
+                      src={`https://drive.google.com/file/d/${detectedFileId}/preview`}
+                      className="w-full h-full"
+                      allow="autoplay"
+                    />
+                  ) : (
+                    <video
+                      src={videoUrl}
+                      className="w-full h-full object-contain"
+                      controls
+                      preload="metadata"
+                      autoPlay
+                      muted
+                      loop
+                    />
+                  )}
+                  <div className="absolute top-2 right-2 bg-neutral-950/80 backdrop-blur text-[10px] text-neutral-300 px-2 py-1 rounded-md border border-neutral-800 font-medium">
+                    Vista previa
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Prompt */}

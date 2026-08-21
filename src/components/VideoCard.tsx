@@ -49,7 +49,18 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
           </div>
         )}
 
-        <DriveVideoPlayer url={video.videoUrl} driveFileId={video.driveFileId} className="shadow-2xl" />
+        {video.driveFileId ? (
+          <DriveVideoPlayer url={video.videoUrl} driveFileId={video.driveFileId} className="shadow-2xl" />
+        ) : (
+          <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-neutral-800 flex items-center justify-center">
+            <video 
+              src={video.videoUrl} 
+              className="w-full h-full object-contain" 
+              controls 
+              preload="metadata"
+            />
+          </div>
+        )}
         
         <div className="mt-3 flex items-center justify-between text-xs text-neutral-400 px-1">
           {formattedDate ? (
@@ -66,7 +77,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-neutral-400 hover:text-teal-400 transition-colors"
           >
-            Abrir en Google Drive <ExternalLink className="w-3 h-3" />
+            {video.driveFileId ? 'Abrir en Google Drive' : 'Abrir original'} <ExternalLink className="w-3 h-3" />
           </a>
         </div>
       </div>

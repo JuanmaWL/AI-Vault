@@ -4,6 +4,7 @@ import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateD
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { VideoRecord } from './types';
 import { VideoCard } from './components/VideoCard';
+import { CompareView } from './components/CompareView';
 import { AddVideoModal } from './components/AddVideoModal';
 import { LoginModal } from './components/LoginModal';
 import { SetNickModal } from './components/SetNickModal';
@@ -88,6 +89,9 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
+
+  // View state
+  const [view, setView] = useState<'detail' | 'compare'>('detail');
 
   // Filters state
   const [filterGroup, setFilterGroup] = useState<string>('Todas');
@@ -291,6 +295,13 @@ export default function App() {
     setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
   };
 
+  const sharedPrompt = useMemo(() => {
+    if (filterGroup === 'Todas' || filteredVideos.length === 0) return null;
+    const firstPrompt = filteredVideos[0].prompt;
+    const allMatch = filteredVideos.every(v => v.prompt === firstPrompt);
+    return allMatch ? firstPrompt : null;
+  }, [filteredVideos, filterGroup]);
+
   const handleDuplicateVideo = (video: VideoRecord) => {
     const { id, videoUrl, driveFileId, createdAt, rawMetadata, ...rest } = video;
     setEditingVideo({ ...rest, schemaVersion: 2 } as VideoRecord);
@@ -373,6 +384,22 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
+              {/* Selector de Vistas */}
+              <div className="hidden lg:flex bg-neutral-900 p-1 rounded-lg border border-neutral-800 mr-2">
+                <button 
+                  onClick={() => setView('detail')} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'detail' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200'}`}
+                >
+                  Detallada
+                </button>
+                <button 
+                  onClick={() => setView('compare')} 
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'compare' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200'}`}
+                >
+                  Comparación
+                </button>
+              </div>
+
               {/* Botón de Autenticación / Estado de Usuario */}
               {currentUser ? (
                 <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 rounded-full pl-3 pr-1.5 py-1 group/user">
@@ -532,7 +559,9 @@ export default function App() {
             )}
           </div>
 
-          {loading ? (
+          {view === 'compare' ? (
+            <CompareView videos={filteredVideos} sharedPrompt={sharedPrompt} />
+          ) : loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="w-8 h-8 border-2 border-neutral-800 border-t-white rounded-full animate-spin"></div>
             </div>
@@ -559,7 +588,13 @@ export default function App() {
                         <span className="font-semibold text-neutral-200">{groupName}</span>
                         <span className="text-xs font-medium bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full">{groupVideos.length}</span>
                       </button>
-                      <button className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors">
+                      <button 
+                        onClick={() => {
+                          setFilterGroup(groupName);
+                          setView('compare');
+                        }}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors"
+                      >
                         Comparar
                       </button>
                     </div>
