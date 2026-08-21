@@ -1,16 +1,17 @@
 import { useEffect, useState, useMemo } from 'react';
 import { db, auth } from './lib/firebase';
-import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { VideoRecord } from './types';
+import { VideoRecord, UserProfile, UserHardware } from './types';
 import { VideoCard } from './components/VideoCard';
 import { CompareView } from './components/CompareView';
 import { AddVideoModal } from './components/AddVideoModal';
 import { LoginModal } from './components/LoginModal';
 import { SetNickModal } from './components/SetNickModal';
+import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare } from 'lucide-react';
+import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu } from 'lucide-react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -87,6 +88,8 @@ export default function App() {
   const [isNickModalOpen, setIsNickModalOpen] = useState(false);
   const [userDisplayName, setUserDisplayName] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
 
@@ -107,6 +110,31 @@ export default function App() {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
 
+  // Fetch or create user profile
+  const fetchUserProfile = async (user: User) => {
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'users', user.uid);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data() as UserProfile;
+        setUserProfile(data);
+        if (!data.hardware) {
+          setIsHardwareModalOpen(true);
+        }
+      } else {
+        const newProfile: UserProfile = { uid: user.uid, email: user.email || '' };
+        await setDoc(docRef, newProfile);
+        setUserProfile(newProfile);
+        setIsHardwareModalOpen(true);
+      }
+    } catch (err) {
+      console.error('Error fetching user profile', err);
+      // Fallback para que la app no se rompa si fallan los permisos
+      setUserProfile({ uid: user.uid, email: user.email || '' });
+    }
+  };
+
   // Escuchar estado de autenticación
   useEffect(() => {
     if (auth) {
@@ -114,9 +142,12 @@ export default function App() {
         setCurrentUser(user);
         if (user) {
           setUserDisplayName(user.displayName || '');
+          fetchUserProfile(user);
           if (!user.displayName) {
             setIsNickModalOpen(true);
           }
+        } else {
+          setUserProfile(null);
         }
       });
       return () => unsubscribe();
@@ -124,6 +155,17 @@ export default function App() {
       setCurrentUser(null);
     }
   }, []);
+
+  const handleSaveHardware = async (hardware: UserHardware) => {
+    if (!currentUser || !db) return;
+    const docRef = doc(db, 'users', currentUser.uid);
+    await setDoc(docRef, { hardware }, { merge: true });
+    setUserProfile(prev => {
+      if (prev) return { ...prev, hardware };
+      return { uid: currentUser.uid, email: currentUser.email || '', hardware };
+    });
+    setIsHardwareModalOpen(false);
+  };
 
   const handleLogout = async () => {
     if (auth) {
@@ -186,6 +228,10 @@ export default function App() {
   };
 
   const handleAddVideo = async (record: VideoRecord) => {
+    // Inject hardware stamp from user profile if not already present
+    if (!record.hardware && userProfile?.hardware) {
+      record.hardware = { ...userProfile.hardware };
+    }
     const cleanRecord = cleanUndefined(record);
     if (db && !usingLocal) {
       try {
@@ -413,6 +459,16 @@ export default function App() {
                       {userDisplayName || currentUser.email}
                     </span>
                     <Edit3 className="w-3 h-3 text-neutral-500 opacity-0 group-hover/user:opacity-100 transition-opacity" />
+                  </button>
+
+                  <div className="h-3 w-px bg-neutral-800" />
+                  
+                  <button
+                    onClick={() => setIsHardwareModalOpen(true)}
+                    title="Perfil de Hardware"
+                    className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors px-1"
+                  >
+                    <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
                   </button>
 
                   <div className="h-3 w-px bg-neutral-800" />
@@ -698,6 +754,15 @@ export default function App() {
           onUpdated={(newNick) => {
             setUserDisplayName(newNick);
           }}
+        />
+      )}
+
+      {isHardwareModalOpen && currentUser && (
+        <HardwareProfileModal
+          initialData={userProfile?.hardware}
+          isMandatory={!userProfile?.hardware}
+          onClose={() => setIsHardwareModalOpen(false)}
+          onSave={handleSaveHardware}
         />
       )}
     </div>

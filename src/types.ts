@@ -1,3 +1,15 @@
+export interface UserHardware {
+  gpu: string;
+  vram: number;
+  ram: number;
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  hardware?: UserHardware;
+}
+
 export interface Lora {
   name: string;
   weight: number;
@@ -21,6 +33,9 @@ export interface VideoRecord {
   source: VideoSource;     // 'local' (Wan2GP) | 'cloud'
   tags?: string[];         // libre: "pruned", "33B", "distilled", "ref2va"...
   groupName?: string;      // carpeta o grupo de comparación
+
+  // Hardware usado (sello histórico)
+  hardware?: UserHardware;
 
   // Parámetros técnicos
   width: number;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { VideoRecord } from '../types';
 import { DriveVideoPlayer } from './DriveVideoPlayer';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu } from 'lucide-react';
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -101,6 +101,15 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
               >
                 {video.source === 'local' ? 'Local (Wan2GP)' : 'Cloud'}
               </span>
+              {video.hardware && (
+                <span 
+                  className="text-[11px] font-semibold tracking-wider px-2 py-0.5 rounded-full border bg-indigo-950/40 border-indigo-900/50 text-indigo-300 flex items-center gap-1.5"
+                  title={`${video.hardware.gpu} • ${video.hardware.vram}GB VRAM • ${video.hardware.ram}GB RAM`}
+                >
+                  <Cpu className="w-3 h-3" />
+                  {video.hardware.gpu}
+                </span>
+              )}
               {video.renderSeconds !== undefined && (
                 <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-neutral-800/80 border border-neutral-700 text-teal-400 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
