@@ -9,6 +9,7 @@ interface AddVideoModalProps {
   onSave: (video: VideoRecord) => Promise<void>;
   userEmail?: string;
   initialData?: VideoRecord;
+  existingGroups: string[];
 }
 
 const COMMON_MODELS = [
@@ -22,13 +23,14 @@ const COMMON_MODELS = [
   'Luma Dream Machine'
 ];
 
-export function AddVideoModal({ onClose, onSave, userEmail, initialData }: AddVideoModalProps) {
+export function AddVideoModal({ onClose, onSave, userEmail, initialData, existingGroups }: AddVideoModalProps) {
   const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
   const [prompt, setPrompt] = useState(initialData?.prompt || '');
   const [negativePrompt, setNegativePrompt] = useState(initialData?.negativePrompt || '');
   const [model, setModel] = useState(initialData?.model || 'Wan 2.1');
   const [source, setSource] = useState<VideoSource>(initialData?.source || 'local');
   const [tagsInput, setTagsInput] = useState(initialData?.tags?.join(', ') || 'Wan 2.1');
+  const [groupName, setGroupName] = useState(initialData?.groupName || localStorage.getItem('ai_video_vault_last_group') || '');
   const [width, setWidth] = useState<number | ''>(initialData?.width || 1920);
   const [height, setHeight] = useState<number | ''>(initialData?.height || 1080);
   const [steps, setSteps] = useState<number | ''>(initialData?.steps || 30);
@@ -338,8 +340,11 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData }: AddVi
       createdBy: initialData?.createdBy || userEmail || undefined,
       renderSeconds: renderSeconds.trim() !== '' ? Number(renderSeconds) : undefined,
       generatedAt,
-      rawMetadata: rawMetadata.trim() !== '' ? rawMetadata : undefined
+      rawMetadata: rawMetadata.trim() !== '' ? rawMetadata : undefined,
+      groupName: groupName.trim() !== '' ? groupName.trim() : undefined
     };
+
+    localStorage.setItem('ai_video_vault_last_group', groupName.trim());
 
     await onSave(record);
     setIsSubmitting(false);
@@ -543,6 +548,26 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData }: AddVi
                 placeholder="pruned, 33B, distilled, ref2va, Wan2GP..."
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm text-neutral-300 focus:outline-none focus:border-neutral-600 transition-all"
               />
+            </div>
+
+            {/* Grupo / Carpeta */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
+                Carpeta / grupo de comparación (opcional)
+              </label>
+              <input 
+                type="text" 
+                list="groups-list"
+                value={groupName}
+                onChange={e => setGroupName(e.target.value)}
+                placeholder="Ej: Test Wan vs Minimax"
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm text-neutral-300 focus:outline-none focus:border-neutral-600 transition-all"
+              />
+              <datalist id="groups-list">
+                {existingGroups.map(g => (
+                  <option key={g} value={g} />
+                ))}
+              </datalist>
             </div>
 
             {/* Resolución y Orientación */}

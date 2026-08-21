@@ -20,6 +20,7 @@ export interface VideoRecord {
   model: string;           // texto libre con autocompletado (histórico de valores usados)
   source: VideoSource;     // 'local' (Wan2GP) | 'cloud'
   tags?: string[];         // libre: "pruned", "33B", "distilled", "ref2va"...
+  groupName?: string;      // carpeta o grupo de comparación
 
   // Parámetros técnicos
   width: number;

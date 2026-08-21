@@ -33,6 +33,7 @@ function normalizeRecord(raw: any): VideoRecord {
     model: raw.model || 'Desconocido',
     source: raw.source === 'cloud' ? 'cloud' : 'local',
     tags: Array.isArray(raw.tags) ? raw.tags : [],
+    groupName: typeof raw.groupName === 'string' ? raw.groupName : undefined,
     width,
     height,
     orientation,
@@ -87,6 +88,16 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
+
+  // Filters state
+  const [filterGroup, setFilterGroup] = useState<string>('Todas');
+  const [filterUser, setFilterUser] = useState<string>('Todos');
+  const [filterModel, setFilterModel] = useState<string>('Todos');
+  const [filterOrientation, setFilterOrientation] = useState<string>('Todas');
+  const [filterSource, setFilterSource] = useState<string>('Todos');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [groupByFolder, setGroupByFolder] = useState<boolean>(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
@@ -218,16 +229,73 @@ export default function App() {
     }
   };
 
+  // Extract unique values for filters
+  const uniqueGroups = useMemo(() => Array.from(new Set(videos.map(v => v.groupName).filter(Boolean) as string[])).sort(), [videos]);
+  const uniqueUsers = useMemo(() => Array.from(new Set(videos.map(v => v.createdBy).filter(Boolean) as string[])).sort(), [videos]);
+  const uniqueModels = useMemo(() => Array.from(new Set(videos.map(v => v.model).filter(Boolean) as string[])).sort(), [videos]);
+  const uniqueTags = useMemo(() => Array.from(new Set(videos.flatMap(v => v.tags || []))).sort(), [videos]);
+
   const filteredVideos = useMemo(() => {
-    if (!searchTerm.trim()) return videos;
-    const lower = searchTerm.toLowerCase();
-    return videos.filter(
-      (v) =>
-        v.prompt.toLowerCase().includes(lower) ||
-        v.model.toLowerCase().includes(lower) ||
-        (v.tags && v.tags.some((t) => t.toLowerCase().includes(lower)))
-    );
-  }, [videos, searchTerm]);
+    return videos.filter(video => {
+      // 1. Text Search
+      if (searchTerm.trim()) {
+        const lower = searchTerm.toLowerCase();
+        const matchesSearch = video.prompt.toLowerCase().includes(lower) ||
+          video.model.toLowerCase().includes(lower) ||
+          (video.tags && video.tags.some((t) => t.toLowerCase().includes(lower)));
+        if (!matchesSearch) return false;
+      }
+      
+      // 2. Folder/Group
+      if (filterGroup !== 'Todas') {
+        const videoGroup = video.groupName || 'Sin carpeta';
+        if (videoGroup !== filterGroup) return false;
+      }
+      
+      // 3. User
+      if (filterUser !== 'Todos') {
+        const videoUser = video.createdBy || 'Anónimo';
+        if (videoUser !== filterUser) return false;
+      }
+
+      // 4. Model
+      if (filterModel !== 'Todos' && video.model !== filterModel) return false;
+
+      // 5. Orientation
+      if (filterOrientation !== 'Todas' && video.orientation !== filterOrientation) return false;
+
+      // 6. Source
+      if (filterSource !== 'Todos' && video.source !== filterSource.toLowerCase()) return false;
+
+      // 7. Tags
+      if (filterTags.length > 0) {
+        if (!video.tags || !filterTags.every(t => video.tags!.includes(t))) return false;
+      }
+
+      return true;
+    });
+  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterOrientation, filterSource, filterTags]);
+
+  const groupedVideos = useMemo(() => {
+    if (!groupByFolder) return null;
+    const groups: Record<string, VideoRecord[]> = {};
+    filteredVideos.forEach(v => {
+      const g = v.groupName || 'Sin carpeta';
+      if (!groups[g]) groups[g] = [];
+      groups[g].push(v);
+    });
+    return groups;
+  }, [filteredVideos, groupByFolder]);
+
+  const toggleGroupCollapse = (group: string) => {
+    setCollapsedGroups(prev => ({ ...prev, [group]: !prev[group] }));
+  };
+
+  const handleDuplicateVideo = (video: VideoRecord) => {
+    const { id, videoUrl, driveFileId, createdAt, rawMetadata, ...rest } = video;
+    setEditingVideo({ ...rest, schemaVersion: 2 } as VideoRecord);
+    setIsModalOpen(true);
+  };
 
   const toggleSelection = (id: string) => {
     const newSelection = new Set(selectedVideoIds);
@@ -394,6 +462,76 @@ export default function App() {
 
         {/* Main Content */}
         <main className="max-w-[1600px] mx-auto px-6 py-8">
+          
+          {/* Barra de Filtros */}
+          <div className="mb-6 p-4 bg-neutral-900/40 rounded-xl border border-neutral-800/80 flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <span className="text-sm font-medium text-neutral-400">
+                Mostrando <strong className="text-neutral-200">{filteredVideos.length}</strong> de {videos.length} vídeos
+              </span>
+              <label className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer select-none">
+                <input 
+                  type="checkbox" 
+                  checked={groupByFolder} 
+                  onChange={e => setGroupByFolder(e.target.checked)}
+                  className="rounded border-neutral-700 bg-neutral-900 text-teal-500 focus:ring-teal-500/20 w-4 h-4"
+                />
+                Agrupar por carpeta
+              </label>
+            </div>
+
+            <div className="flex flex-wrap gap-3 items-center">
+              <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
+                <option value="Todas">Todas las carpetas</option>
+                {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                <option value="Sin carpeta">Sin carpeta</option>
+              </select>
+
+              <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
+                <option value="Todos">Todos los usuarios</option>
+                {uniqueUsers.map(u => <option key={u} value={u}>{u}</option>)}
+                <option value="Anónimo">Anónimo</option>
+              </select>
+
+              <select value={filterModel} onChange={e => setFilterModel(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
+                <option value="Todos">Todos los modelos</option>
+                {uniqueModels.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+
+              <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden">
+                {['Todas', '16:9', '9:16', '1:1'].map(o => (
+                  <button key={o} onClick={() => setFilterOrientation(o)} className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${filterOrientation === o ? 'bg-neutral-800 text-neutral-100' : 'text-neutral-500 hover:text-neutral-300'}`}>{o}</button>
+                ))}
+              </div>
+
+              <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden">
+                {['Todos', 'Local', 'Cloud'].map(s => (
+                  <button key={s} onClick={() => setFilterSource(s)} className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${filterSource === s ? 'bg-neutral-800 text-neutral-100' : 'text-neutral-500 hover:text-neutral-300'}`}>{s}</button>
+                ))}
+              </div>
+            </div>
+
+            {uniqueTags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-[11px] text-neutral-500 uppercase tracking-wider mr-2">Tags:</span>
+                {uniqueTags.map(tag => {
+                  const isActive = filterTags.includes(tag);
+                  return (
+                    <button 
+                      key={tag}
+                      onClick={() => {
+                        setFilterTags(prev => isActive ? prev.filter(t => t !== tag) : [...prev, tag]);
+                      }}
+                      className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors border ${isActive ? 'bg-teal-950/60 border-teal-800 text-teal-300' : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-neutral-300'}`}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="w-8 h-8 border-2 border-neutral-800 border-t-white rounded-full animate-spin"></div>
@@ -404,7 +542,50 @@ export default function App() {
                 <Database className="w-8 h-8 text-neutral-700" />
               </div>
               <h3 className="text-xl font-semibold text-neutral-300 mb-2">No hay resultados</h3>
-              <p className="text-neutral-500 max-w-sm">No se encontraron vídeos que coincidan con tu búsqueda. Intenta con otros términos.</p>
+              <p className="text-neutral-500 max-w-sm">No se encontraron vídeos que coincidan con tu búsqueda. Intenta con otros filtros.</p>
+            </div>
+          ) : groupedVideos ? (
+            <div className="flex flex-col gap-8 pb-12">
+              {Object.entries(groupedVideos).sort((a, b) => {
+                if (a[0] === 'Sin carpeta') return 1;
+                if (b[0] === 'Sin carpeta') return -1;
+                return a[0].localeCompare(b[0]);
+              }).map(([groupName, groupVideos]) => {
+                const isCollapsed = collapsedGroups[groupName];
+                return (
+                  <div key={groupName} className="flex flex-col gap-4">
+                    <div className="flex items-center justify-between bg-neutral-900/60 p-3 px-4 rounded-xl border border-neutral-800/80">
+                      <button onClick={() => toggleGroupCollapse(groupName)} className="flex items-center gap-3 text-left">
+                        <span className="font-semibold text-neutral-200">{groupName}</span>
+                        <span className="text-xs font-medium bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full">{groupVideos.length}</span>
+                      </button>
+                      <button className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors">
+                        Comparar
+                      </button>
+                    </div>
+                    {!isCollapsed && (
+                      <div className="flex flex-col gap-6 pl-2 border-l-2 border-neutral-800/50">
+                        {groupVideos.map((video) => (
+                          <div key={video.id || video.videoUrl}>
+                            <VideoCard 
+                              video={video} 
+                              selectionMode={selectionMode}
+                              isSelected={selectedVideoIds.has(video.id!)}
+                              onToggleSelect={() => toggleSelection(video.id!)}
+                              onDeleteClick={currentUser && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                              onEditClick={currentUser && !selectionMode ? () => {
+                                setEditingVideo(video);
+                                setIsModalOpen(true);
+                              } : undefined}
+                              onDuplicateClick={currentUser && !selectionMode ? () => handleDuplicateVideo(video) : undefined}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="flex flex-col gap-6 pb-12">
@@ -413,13 +594,14 @@ export default function App() {
                   <VideoCard 
                     video={video} 
                     selectionMode={selectionMode}
-                    isSelected={selectedVideoIds.has(video.id)}
-                    onToggleSelect={() => toggleSelection(video.id)}
-                    onDeleteClick={currentUser && !selectionMode ? () => setVideosToDelete([video.id]) : undefined}
+                    isSelected={selectedVideoIds.has(video.id!)}
+                    onToggleSelect={() => toggleSelection(video.id!)}
+                    onDeleteClick={currentUser && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
                     onEditClick={currentUser && !selectionMode ? () => {
                       setEditingVideo(video);
                       setIsModalOpen(true);
                     } : undefined}
+                    onDuplicateClick={currentUser && !selectionMode ? () => handleDuplicateVideo(video) : undefined}
                   />
                 </div>
               ))}
@@ -464,6 +646,7 @@ export default function App() {
           onSave={editingVideo ? handleEditVideo : handleAddVideo}
           userEmail={userDisplayName || currentUser?.email || undefined}
           initialData={editingVideo}
+          existingGroups={uniqueGroups}
         />
       )}
 

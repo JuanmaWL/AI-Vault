@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { VideoRecord } from '../types';
 import { DriveVideoPlayer } from './DriveVideoPlayer';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -10,9 +10,10 @@ interface VideoCardProps {
   onToggleSelect?: () => void;
   onDeleteClick?: () => void;
   onEditClick?: () => void;
+  onDuplicateClick?: () => void;
 }
 
-export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick }: VideoCardProps) {
+export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onDuplicateClick }: VideoCardProps) {
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
 
@@ -116,6 +117,15 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
               {/* Botones de acción */}
               {!selectionMode && (
                 <div className="flex items-center gap-1">
+                  {onDuplicateClick && (
+                    <button
+                      onClick={onDuplicateClick}
+                      className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-teal-950/30 rounded-lg transition-colors border border-transparent hover:border-teal-900/50"
+                      title="Duplicar vídeo"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  )}
                   {onEditClick && (
                     <button
                       onClick={onEditClick}
