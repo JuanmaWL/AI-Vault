@@ -5,6 +5,7 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { VideoRecord, UserProfile, UserHardware } from './types';
 import { VideoCard } from './components/VideoCard';
 import { CompareView } from './components/CompareView';
+import { DashboardView } from './components/DashboardView';
 import { AddVideoModal } from './components/AddVideoModal';
 import { LoginModal } from './components/LoginModal';
 import { SetNickModal } from './components/SetNickModal';
@@ -94,7 +95,7 @@ export default function App() {
   const [usingLocal, setUsingLocal] = useState(false);
 
   // View state
-  const [view, setView] = useState<'detail' | 'compare'>('detail');
+  const [view, setView] = useState<'detail' | 'compare' | 'dashboard'>('detail');
 
   // Filters state
   const [filterGroup, setFilterGroup] = useState<string>('Todas');
@@ -454,22 +455,6 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
-              {/* Selector de Vistas */}
-              <div className="hidden lg:flex bg-neutral-900 p-1 rounded-lg border border-neutral-800 mr-2">
-                <button 
-                  onClick={() => setView('detail')} 
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'detail' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200'}`}
-                >
-                  Detallada
-                </button>
-                <button 
-                  onClick={() => setView('compare')} 
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${view === 'compare' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200'}`}
-                >
-                  Comparación
-                </button>
-              </div>
-
               {/* Botón de Autenticación / Estado de Usuario */}
               {currentUser ? (
                 <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 rounded-full pl-3 pr-1.5 py-1 group/user">
@@ -567,6 +552,32 @@ export default function App() {
           </div>
         </header>
 
+        {/* Sub-navegación para vistas */}
+        <div className="border-b border-neutral-900 bg-neutral-950/50">
+          <div className="max-w-[1600px] mx-auto px-6">
+            <div className="flex items-center gap-1 py-3 overflow-x-auto no-scrollbar">
+              <button 
+                onClick={() => setView('detail')} 
+                className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${view === 'detail' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50'}`}
+              >
+                Vista Detallada
+              </button>
+              <button 
+                onClick={() => setView('compare')} 
+                className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${view === 'compare' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50'}`}
+              >
+                Comparativa Visual
+              </button>
+              <button 
+                onClick={() => setView('dashboard')} 
+                className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${view === 'dashboard' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50'}`}
+              >
+                Métricas y Rendimiento
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Main Content */}
         <main className="max-w-[1600px] mx-auto px-6 py-8">
           
@@ -647,7 +658,9 @@ export default function App() {
             )}
           </div>
 
-          {view === 'compare' ? (
+          {view === 'dashboard' ? (
+            <DashboardView videos={filteredVideos} />
+          ) : view === 'compare' ? (
             <CompareView videos={filteredVideos} sharedPrompt={sharedPrompt} onNavigateToVideo={handleNavigateToVideo} />
           ) : loading ? (
             <div className="flex items-center justify-center h-64">

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { VideoRecord } from '../types';
-import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle } from 'lucide-react';
 
 interface CompareViewProps {
   videos: VideoRecord[];
@@ -19,70 +19,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
   const [isPlaying, setIsPlaying] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
   const [rateLimitWarning, setRateLimitWarning] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState<number>(1);
-  const [readyCount, setReadyCount] = useState<number>(0);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
-
-  // Carga escalonada en segundo plano
-  useEffect(() => {
-    let isCancelled = false;
-    setReadyCount(0);
-
-    const preloadVideos = async () => {
-      // Esperar a que los refs se llenen (renderizado inicial de tarjetas)
-      await new Promise(r => setTimeout(r, 500));
-      if (isCancelled) return;
-
-      const vids = videos.map(v => videoRefs.current.get(v.id!)).filter(Boolean) as HTMLVideoElement[];
-      let loaded = 0;
-
-      for (const vid of vids) {
-        if (isCancelled) break;
-        
-        if (vid.readyState >= 3) {
-          loaded++;
-          setReadyCount(loaded);
-          continue;
-        }
-
-        // Si no está listo, ordenamos carga
-        vid.preload = 'auto';
-        
-        await new Promise<void>(resolve => {
-          const onReady = () => {
-             vid.removeEventListener('canplay', onReady);
-             vid.removeEventListener('error', onReady);
-             resolve();
-          };
-          vid.addEventListener('canplay', onReady);
-          vid.addEventListener('error', onReady);
-          
-          if (vid.readyState === 0) vid.load();
-          
-          // Timeout de 2.5s por vídeo si se queda atascado o es lento
-          setTimeout(onReady, 2500);
-        });
-
-        if (!isCancelled) {
-          loaded++;
-          setReadyCount(loaded);
-          // Retraso entre vídeos para no saltar el cortafuegos de DigiStorage
-          await new Promise(r => setTimeout(r, 300));
-        }
-      }
-    };
-
-    preloadVideos();
-    return () => { isCancelled = true; };
-  }, [videos]);
-
-  // Aplicar velocidad de reproducción a todos los vídeos cuando cambia
-  useEffect(() => {
-    const vids = Array.from(videoRefs.current.values());
-    vids.forEach(vid => {
-      vid.playbackRate = playbackRate;
-    });
-  }, [playbackRate]);
 
   // Seleccionar todos por defecto al cambiar la lista de videos filtrados
   useEffect(() => {
@@ -119,7 +56,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
       .map(id => videoRefs.current.get(id))
       .filter(Boolean) as HTMLVideoElement[];
     
-    if (vids.length > 8 && readyCount < videos.length) {
+    if (vids.length > 8) {
       setRateLimitWarning(true);
       setTimeout(() => setRateLimitWarning(false), 8000);
     }
@@ -142,17 +79,12 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
 
     setIsPlaying(true);
     
-    // Si todos los vídeos ya están precargados (listos), reproducir a la vez para sincronización perfecta
-    if (readyCount === videos.length) {
-      vids.forEach(vid => vid.play().catch(e => console.warn('Autoplay bloqueado', e)));
-    } else {
-      // Carga escalonada (Staggered playback) como fallback si no habían terminado de precargar
-      for (let i = 0; i < vids.length; i++) {
-        vids[i].play().catch(e => console.warn('Autoplay bloqueado', e));
-        if (i < vids.length - 1) {
-          // Pausa de 150ms entre cada petición de reproducción
-          await new Promise(r => setTimeout(r, 150));
-        }
+    // Carga escalonada (Staggered playback) para evitar bloqueos por límite de peticiones (ej. Error 429 en DigiStorage/Drive)
+    for (let i = 0; i < vids.length; i++) {
+      vids[i].play().catch(e => console.warn('Autoplay bloqueado', e));
+      if (i < vids.length - 1) {
+        // Pausa de 150ms entre cada petición de reproducción
+        await new Promise(r => setTimeout(r, 150));
       }
     }
   };
@@ -229,31 +161,6 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
         </div>
       )}
 
-      {/* Estado de precarga */}
-      {readyCount < videos.length && videos.length > 0 && (
-        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 flex items-center justify-between animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center gap-3">
-            <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
-            <div>
-              <h4 className="text-sm font-semibold text-indigo-400">Preparando vídeos para sincronización...</h4>
-              <p className="text-xs text-neutral-400 mt-1">
-                Precargando para asegurar reproducción simultánea sin cortes.
-              </p>
-            </div>
-          </div>
-          <div className="text-right">
-            <span className="text-xl font-bold text-indigo-400">{readyCount}</span>
-            <span className="text-sm text-neutral-500"> / {videos.length} listos</span>
-            <div className="w-32 h-2 bg-neutral-900 rounded-full mt-2 overflow-hidden border border-neutral-800">
-              <div 
-                className="h-full bg-indigo-500 transition-all duration-300 ease-out" 
-                style={{ width: `${(readyCount / videos.length) * 100}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Barra de Controles Fija */}
       <div className="sticky top-4 z-20 bg-neutral-950/90 backdrop-blur-md border border-neutral-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-4 shadow-[0_8px_30px_rgb(0,0,0,0.5)]">
         <div className="flex flex-wrap items-center gap-2">
@@ -266,20 +173,6 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
           <button onClick={handleRewindAll} className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors ml-1" title="Rebobinar al inicio">
             <RotateCcw className="w-5 h-5" />
           </button>
-          
-          <select 
-            value={playbackRate} 
-            onChange={e => setPlaybackRate(Number(e.target.value))} 
-            className="ml-1 sm:ml-2 bg-neutral-800 border border-neutral-700 text-neutral-200 text-sm font-semibold rounded-lg px-2 py-1.5 focus:outline-none focus:border-teal-500 cursor-pointer"
-            title="Velocidad de reproducción"
-          >
-            <option value={0.25}>0.25x</option>
-            <option value={0.5}>0.5x</option>
-            <option value={1}>1x</option>
-            <option value={1.5}>1.5x</option>
-            <option value={2}>2x</option>
-          </select>
-
           <button onClick={toggleMuteAll} className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors ml-1 sm:ml-2" title={isMuted ? "Activar sonido" : "Silenciar"}>
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
@@ -320,10 +213,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
             isSelected={selectedIds.has(video.id!)}
             onToggle={() => toggleSelect(video.id!)}
             videoRef={(el) => {
-              if (el) {
-                videoRefs.current.set(video.id!, el);
-                el.playbackRate = playbackRate; // Aplicar velocidad actual
-              }
+              if (el) videoRefs.current.set(video.id!, el);
               else videoRefs.current.delete(video.id!);
             }}
             isGlobalMuted={isMuted}
