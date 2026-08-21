@@ -1,14 +1,15 @@
 import { useEffect, useState, useMemo } from 'react';
 import { db, auth } from './lib/firebase';
-import { collection, addDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { VideoRecord } from './types';
 import { VideoCard } from './components/VideoCard';
 import { AddVideoModal } from './components/AddVideoModal';
 import { LoginModal } from './components/LoginModal';
 import { SetNickModal } from './components/SetNickModal';
+import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3 } from 'lucide-react';
+import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare } from 'lucide-react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -43,7 +44,10 @@ function normalizeRecord(raw: any): VideoRecord {
     loras: Array.isArray(raw.loras) ? raw.loras : [],
     notes: raw.notes,
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
-    createdBy: raw.createdBy
+    createdBy: raw.createdBy,
+    renderSeconds: typeof raw.renderSeconds === 'number' ? raw.renderSeconds : undefined,
+    generatedAt: typeof raw.generatedAt === 'number' ? raw.generatedAt : undefined,
+    rawMetadata: typeof raw.rawMetadata === 'string' ? raw.rawMetadata : undefined
   };
 }
 
@@ -76,12 +80,17 @@ export default function App() {
   const [videos, setVideos] = useState<VideoRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingVideo, setEditingVideo] = useState<VideoRecord | undefined>(undefined);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isNickModalOpen, setIsNickModalOpen] = useState(false);
   const [userDisplayName, setUserDisplayName] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
+
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
+  const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
 
   // Escuchar estado de autenticación
   useEffect(() => {
@@ -157,20 +166,24 @@ export default function App() {
     }
   }, []);
 
+  const cleanUndefined = (obj: any) => {
+    return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
+  };
+
   const handleAddVideo = async (record: VideoRecord) => {
+    const cleanRecord = cleanUndefined(record);
     if (db && !usingLocal) {
       try {
-        await addDoc(collection(db, COLLECTION_NAME), record);
-      } catch {
+        await addDoc(collection(db, COLLECTION_NAME), cleanRecord);
+      } catch (err) {
+        console.error("Error al escribir en Firestore", err);
         // Fallback inmediato a almacenamiento local si Firebase rechaza la escritura
         const newRecord = { ...record, id: `local_${Date.now()}` };
         const updated = [newRecord, ...videos];
         setVideos(updated);
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        } catch {
-          // Ignore local storage quota errors
-        }
+        } catch {}
         setUsingLocal(true);
       }
     } else {
@@ -179,9 +192,29 @@ export default function App() {
       setVideos(updated);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {
-        // Ignore local storage quota errors
+      } catch {}
+    }
+  };
+
+  const handleEditVideo = async (record: VideoRecord) => {
+    const cleanRecord = cleanUndefined(record);
+    if (db && !usingLocal && record.id && !record.id.startsWith('local_')) {
+      try {
+        await updateDoc(doc(db, COLLECTION_NAME, record.id), cleanRecord);
+      } catch (err) {
+        console.error("Error al actualizar en Firestore", err);
+        const updated = videos.map(v => v.id === record.id ? record : v);
+        setVideos(updated);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        } catch {}
       }
+    } else {
+      const updated = videos.map(v => v.id === record.id ? record : v);
+      setVideos(updated);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
     }
   };
 
@@ -195,6 +228,36 @@ export default function App() {
         (v.tags && v.tags.some((t) => t.toLowerCase().includes(lower)))
     );
   }, [videos, searchTerm]);
+
+  const toggleSelection = (id: string) => {
+    const newSelection = new Set(selectedVideoIds);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedVideoIds(newSelection);
+  };
+
+  const handleDeleteConfirm = async (ids: string[]) => {
+    if (db && !usingLocal) {
+      try {
+        await Promise.all(ids.map(id => deleteDoc(doc(db, COLLECTION_NAME, id))));
+      } catch (err) {
+        console.error("Error al borrar de Firestore", err);
+        // Fallback local visual, pero puede que las reglas rechacen si no eres el autor
+      }
+    } else {
+      const updated = videos.filter(v => !ids.includes(v.id));
+      setVideos(updated);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch {}
+    }
+    setSelectedVideoIds(new Set());
+    setSelectionMode(false);
+    setVideosToDelete(null);
+  };
 
   const latestUploadDate = useMemo(() => {
     if (!videos || videos.length === 0) return null;
@@ -279,12 +342,39 @@ export default function App() {
 
               {/* Botón Nuevo Registro (condicional a estar autenticado) */}
               {currentUser ? (
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex items-center gap-2 bg-white text-black hover:bg-neutral-200 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-                >
-                  <Plus className="w-4 h-4" /> Nuevo Registro
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectionMode(!selectionMode);
+                      setSelectedVideoIds(new Set());
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition-all shadow-md border ${
+                       selectionMode 
+                        ? 'bg-neutral-800 text-neutral-200 border-neutral-700' 
+                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800 text-neutral-400'
+                    }`}
+                  >
+                    <CheckSquare className="w-4 h-4" />
+                    <span className="hidden xl:inline">{selectionMode ? 'Cancelar' : 'Seleccionar'}</span>
+                  </button>
+
+                  {selectionMode && selectedVideoIds.size > 0 && (
+                    <button
+                       onClick={() => setVideosToDelete(Array.from(selectedVideoIds))}
+                       className="flex items-center gap-2 px-4 py-2.5 bg-rose-950/50 hover:bg-rose-900/50 text-rose-400 border border-rose-900/50 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
+                    >
+                       <Trash2 className="w-4 h-4" />
+                       <span className="hidden xl:inline">Borrar ({selectedVideoIds.size})</span>
+                    </button>
+                  )}
+                  
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 bg-white text-black hover:bg-neutral-200 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                  >
+                    <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nuevo Registro</span>
+                  </button>
+                </div>
               ) : (
                 <div className="relative group">
                   <button
@@ -320,7 +410,17 @@ export default function App() {
             <div className="flex flex-col gap-6 pb-12">
               {filteredVideos.map((video) => (
                 <div key={video.id || video.videoUrl}>
-                  <VideoCard video={video} />
+                  <VideoCard 
+                    video={video} 
+                    selectionMode={selectionMode}
+                    isSelected={selectedVideoIds.has(video.id)}
+                    onToggleSelect={() => toggleSelection(video.id)}
+                    onDeleteClick={currentUser && !selectionMode ? () => setVideosToDelete([video.id]) : undefined}
+                    onEditClick={currentUser && !selectionMode ? () => {
+                      setEditingVideo(video);
+                      setIsModalOpen(true);
+                    } : undefined}
+                  />
                 </div>
               ))}
             </div>
@@ -347,11 +447,23 @@ export default function App() {
         </div>
       </footer>
 
+      {videosToDelete && (
+        <DeleteConfirmModal
+          count={videosToDelete.length}
+          onConfirm={() => handleDeleteConfirm(videosToDelete)}
+          onCancel={() => setVideosToDelete(null)}
+        />
+      )}
+
       {isModalOpen && (
         <AddVideoModal 
-          onClose={() => setIsModalOpen(false)} 
-          onSave={handleAddVideo}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingVideo(undefined);
+          }} 
+          onSave={editingVideo ? handleEditVideo : handleAddVideo}
           userEmail={userDisplayName || currentUser?.email || undefined}
+          initialData={editingVideo}
         />
       )}
 

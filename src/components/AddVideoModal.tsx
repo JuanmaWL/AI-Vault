@@ -8,41 +8,41 @@ interface AddVideoModalProps {
   onClose: () => void;
   onSave: (video: VideoRecord) => Promise<void>;
   userEmail?: string;
+  initialData?: VideoRecord;
 }
 
 const COMMON_MODELS = [
-  'Wan2.1 FL2VA (Wan2GP)',
-  'Minimax H3 FL2VA Pruned (Wan2GP)',
-  'Minimax H3 FL2VA 33B (Wan2GP)',
-  'LTX 2.3 (Wan2GP)',
-  'LTX 2.5 Distilled (Wan2GP)',
+  'Wan 2.1',
+  'Minimax H3',
+  'LTX 2.3',
+  'LTX 2.5',
+  'HunyuanVideo',
   'Kling 1.5',
   'Runway Gen-3',
-  'Luma Dream Machine',
-  'HunyuanVideo'
+  'Luma Dream Machine'
 ];
 
-export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps) {
-  const [videoUrl, setVideoUrl] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [negativePrompt, setNegativePrompt] = useState('');
-  const [model, setModel] = useState('Wan2.1 FL2VA (Wan2GP)');
-  const [source, setSource] = useState<VideoSource>('local');
-  const [tagsInput, setTagsInput] = useState('Wan2GP, 33B');
-  const [width, setWidth] = useState<number>(1920);
-  const [height, setHeight] = useState<number>(1080);
-  const [steps, setSteps] = useState<number>(30);
-  const [shift, setShift] = useState<string>('5.0');
-  const [seed, setSeed] = useState<string>('');
-  const [fps, setFps] = useState<string>('24');
-  const [durationSeconds, setDurationSeconds] = useState<string>('5');
-  const [notes, setNotes] = useState('');
-  const [loras, setLoras] = useState<Lora[]>([]);
+export function AddVideoModal({ onClose, onSave, userEmail, initialData }: AddVideoModalProps) {
+  const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
+  const [prompt, setPrompt] = useState(initialData?.prompt || '');
+  const [negativePrompt, setNegativePrompt] = useState(initialData?.negativePrompt || '');
+  const [model, setModel] = useState(initialData?.model || 'Wan 2.1');
+  const [source, setSource] = useState<VideoSource>(initialData?.source || 'local');
+  const [tagsInput, setTagsInput] = useState(initialData?.tags?.join(', ') || 'Wan 2.1');
+  const [width, setWidth] = useState<number | ''>(initialData?.width || 1920);
+  const [height, setHeight] = useState<number | ''>(initialData?.height || 1080);
+  const [steps, setSteps] = useState<number | ''>(initialData?.steps || 30);
+  const [shift, setShift] = useState<string>(initialData?.shift?.toString() || '5.0');
+  const [seed, setSeed] = useState<string>(initialData?.seed?.toString() || '');
+  const [fps, setFps] = useState<string>(initialData?.fps?.toString() || '24');
+  const [durationSeconds, setDurationSeconds] = useState<string>(initialData?.durationSeconds?.toString() || '5');
+  const [notes, setNotes] = useState(initialData?.notes || '');
+  const [loras, setLoras] = useState<Lora[]>(initialData?.loras || []);
   
   // Extra fields for metadata
-  const [renderSeconds, setRenderSeconds] = useState<string>('');
-  const [generatedAt, setGeneratedAt] = useState<number | undefined>(undefined);
-  const [rawMetadata, setRawMetadata] = useState<string>('');
+  const [renderSeconds, setRenderSeconds] = useState<string>(initialData?.renderSeconds?.toString() || '');
+  const [generatedAt, setGeneratedAt] = useState<number | undefined>(initialData?.generatedAt);
+  const [rawMetadata, setRawMetadata] = useState<string>(initialData?.rawMetadata || '');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -54,7 +54,7 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const detectedFileId = useMemo(() => extractDriveFileId(videoUrl), [videoUrl]);
-  const currentOrientation = useMemo(() => calculateOrientation(width, height), [width, height]);
+  const currentOrientation = useMemo(() => calculateOrientation(Number(width) || 0, Number(height) || 0), [width, height]);
 
   const parseModelAndTags = (modelType: string, typeDesc: string = '') => {
     const combined = `${modelType} ${typeDesc}`.toLowerCase();
@@ -63,21 +63,28 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
 
     if (combined.includes('minimax') || combined.includes('h3')) {
         baseModel = 'Minimax H3';
+    } else if (combined.includes('scail2')) {
+        baseModel = 'Wan 2.1';
+        newTags.push('SCAIL 2');
     } else if (combined.includes('wan 2.1') || combined.includes('wan_2.1') || combined.includes('wan2.1')) {
         baseModel = 'Wan 2.1';
     } else if (combined.includes('wan 2.2') || combined.includes('wan_2.2') || combined.includes('wan2.2')) {
         baseModel = 'Wan 2.2';
-    } else if (combined.includes('ltx 2.3') || combined.includes('ltx_2.3') || combined.includes('ltx2.3')) {
-        baseModel = 'LTX 2.3';
-    } else if (combined.includes('ltx 2.5') || combined.includes('ltx_2.5') || combined.includes('ltx2.5')) {
+    } else if (combined.includes('ltx 2.5') || combined.includes('ltx_2.5') || combined.includes('ltx2.5') || combined.includes('ltx2_25')) {
         baseModel = 'LTX 2.5';
+    } else if (combined.includes('ltx 2.3') || combined.includes('ltx_2.3') || combined.includes('ltx2.3') || combined.includes('ltx2')) {
+        baseModel = 'LTX 2.3';
     } else if (combined.includes('hunyuan')) {
         baseModel = 'HunyuanVideo';
     }
 
+    if (baseModel.includes('LTX')) newTags.push('LTX');
+    if (baseModel.includes('Wan 2.1')) newTags.push('Wan 2.1');
+
     if (combined.includes('pruned')) newTags.push('pruned');
     if (combined.includes('distilled')) newTags.push('distilled');
     if (combined.includes('33b')) newTags.push('33B');
+    if (combined.includes('22b')) newTags.push('22B');
     if (combined.includes('20b')) newTags.push('20B');
     if (combined.includes('14b')) newTags.push('14B');
     if (combined.includes('ref2va')) newTags.push('ref2va');
@@ -117,8 +124,8 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
       
       console.log("MediaInfo Result:", JSON.stringify(result, null, 2));
 
-      const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General');
-      const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video');
+      const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General') as any;
+      const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video') as any;
 
       const commentRaw = generalTrack?.extra?.Comment || generalTrack?.Comment || videoTrack?.extra?.Comment || videoTrack?.Comment;
       
@@ -178,6 +185,15 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
             newAutoFilled.renderSeconds = true;
             foundSomething = true;
           }
+
+          if (parsed.video_length !== undefined && !newAutoFilled.durationSeconds) {
+            const currentFps = fps ? Number(fps) : 24;
+            const computedDuration = Number(parsed.video_length) / currentFps;
+            setDurationSeconds(computedDuration.toFixed(1));
+            newAutoFilled.durationSeconds = true;
+            foundSomething = true;
+          }
+
           if (parsed.creation_timestamp !== undefined) {
             setGeneratedAt(Number(parsed.creation_timestamp) * 1000);
             newAutoFilled.generatedAt = true;
@@ -267,11 +283,6 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
     setLoras(updated);
   };
 
-  const setResolutionPreset = (w: number, h: number) => {
-    setWidth(w);
-    setHeight(h);
-  };
-
   const AutoFillBadge = ({ field }: { field: string }) => {
     if (!autoFilled[field]) return null;
     return (
@@ -289,12 +300,22 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
     const cleanLoras = loras.filter(l => l.name.trim() !== '');
     
     // Procesar tags
-    const cleanTags = tagsInput
+    let cleanTags = tagsInput
       .split(',')
       .map(t => t.trim())
       .filter(t => t.length > 0);
 
+    const modelName = model.trim();
+    if (modelName !== '') {
+      if (!cleanTags.some(t => t.toLowerCase() === modelName.toLowerCase())) {
+        cleanTags.unshift(modelName);
+      }
+    }
+    
+    cleanTags = Array.from(new Set(cleanTags));
+
     const record: VideoRecord = {
+      id: initialData?.id,
       schemaVersion: 2,
       videoUrl: videoUrl.trim(),
       driveFileId: detectedFileId || extractDriveFileId(videoUrl),
@@ -313,8 +334,8 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
       durationSeconds: durationSeconds.trim() !== '' ? Number(durationSeconds) : undefined,
       loras: cleanLoras,
       notes: notes.trim() ? notes.trim() : undefined,
-      createdAt: Date.now(),
-      createdBy: userEmail || undefined,
+      createdAt: initialData?.createdAt || Date.now(),
+      createdBy: initialData?.createdBy || userEmail || undefined,
       renderSeconds: renderSeconds.trim() !== '' ? Number(renderSeconds) : undefined,
       generatedAt,
       rawMetadata: rawMetadata.trim() !== '' ? rawMetadata : undefined
@@ -330,7 +351,7 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
       <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
         <div className="flex items-center justify-between p-6 border-b border-neutral-800">
           <div>
-            <h2 className="text-lg font-bold text-neutral-100">Nuevo Registro de Vídeo</h2>
+            <h2 className="text-lg font-bold text-neutral-100">{initialData ? 'Editar Registro de Vídeo' : 'Nuevo Registro de Vídeo'}</h2>
             <p className="text-xs text-neutral-400 mt-0.5">Catálogo y metadatos de generación AI</p>
           </div>
           <button onClick={onClose} className="text-neutral-400 hover:text-white transition-colors p-1">
@@ -537,51 +558,79 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
                 </span>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setResolutionPreset(1920, 1080)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                    width === 1920 && height === 1080
-                      ? 'bg-teal-950/80 border-teal-700 text-teal-300'
-                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200'
-                  }`}
+              <div className="flex flex-col gap-2">
+                <label className="text-[11px] text-neutral-500 mb-0.5 block">Preset de Resolución</label>
+                <select 
+                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-neutral-600"
+                  value={`${width}x${height}`}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val !== 'custom') {
+                      const [w, h] = val.split('x');
+                      setWidth(Number(w));
+                      setHeight(Number(h));
+                    }
+                  }}
                 >
-                  1920x1080 (16:9)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResolutionPreset(1280, 720)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                    width === 1280 && height === 720
-                      ? 'bg-teal-950/80 border-teal-700 text-teal-300'
-                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200'
-                  }`}
-                >
-                  1280x720 (16:9)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResolutionPreset(1080, 1920)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                    width === 1080 && height === 1920
-                      ? 'bg-teal-950/80 border-teal-700 text-teal-300'
-                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200'
-                  }`}
-                >
-                  1080x1920 (9:16)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResolutionPreset(1024, 1024)}
-                  className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                    width === 1024 && height === 1024
-                      ? 'bg-teal-950/80 border-teal-700 text-teal-300'
-                      : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-neutral-200'
-                  }`}
-                >
-                  1024x1024 (1:1)
-                </button>
+                  <option value="custom">Personalizado...</option>
+                  <optgroup label="1080p">
+                    <option value="1920x1080">1920x1080 (16:9)</option>
+                    <option value="1920x1088">1920x1088 (~16:9)</option>
+                    <option value="1080x1920">1080x1920 (9:16)</option>
+                    <option value="1088x1920">1088x1920 (~9:16)</option>
+                    <option value="1440x1440">1440x1440 (1:1)</option>
+                    <option value="1536x1024">1536x1024 (3:2)</option>
+                    <option value="1024x1536">1024x1536 (2:3)</option>
+                    <option value="1920x832">1920x832 (21:9)</option>
+                    <option value="832x1920">832x1920 (9:21)</option>
+                    <option value="2048x768">2048x768 (8:3)</option>
+                    <option value="1024x1792">1024x1792 (4:7)</option>
+                    <option value="1088x1088">1088x1088 (1:1)</option>
+                  </optgroup>
+                  <optgroup label="720p">
+                    <option value="1280x720">1280x720 (16:9)</option>
+                    <option value="1280x704">1280x704 (~16:9)</option>
+                    <option value="720x1280">720x1280 (9:16)</option>
+                    <option value="704x1280">704x1280 (~9:16)</option>
+                    <option value="1024x1024">1024x1024 (1:1)</option>
+                    <option value="1600x384">1600x384 (4:1)</option>
+                    <option value="1280x544">1280x544 (21:9)</option>
+                    <option value="544x1280">544x1280 (9:21)</option>
+                    <option value="1088x832">1088x832 (4:3)</option>
+                    <option value="832x1088">832x1088 (3:4)</option>
+                    <option value="960x960">960x960 (1:1)</option>
+                    <option value="1344x768">1344x768 (~16:9)</option>
+                    <option value="768x1344">768x1344 (~9:16)</option>
+                    <option value="768x768">768x768 (1:1)</option>
+                  </optgroup>
+                  <optgroup label="540p">
+                    <option value="960x544">960x544 (16:9)</option>
+                    <option value="544x960">544x960 (9:16)</option>
+                  </optgroup>
+                  <optgroup label="480p">
+                    <option value="832x608">832x608 (4:3)</option>
+                    <option value="608x832">608x832 (3:4)</option>
+                    <option value="704x704">704x704 (1:1)</option>
+                    <option value="832x480">832x480 (16:9)</option>
+                    <option value="480x832">480x832 (9:16)</option>
+                    <option value="544x544">544x544 (1:1)</option>
+                  </optgroup>
+                  <optgroup label="384p">
+                    <option value="672x384">672x384 (16:9)</option>
+                    <option value="384x672">384x672 (9:16)</option>
+                    <option value="512x512">512x512 (1:1)</option>
+                  </optgroup>
+                  <optgroup label="320p">
+                    <option value="576x320">576x320 (16:9)</option>
+                    <option value="320x576">320x576 (9:16)</option>
+                    <option value="448x448">448x448 (1:1)</option>
+                  </optgroup>
+                  <optgroup label="256p">
+                    <option value="448x256">448x256 (7:4)</option>
+                    <option value="256x448">256x448 (4:7)</option>
+                    <option value="320x320">320x320 (1:1)</option>
+                  </optgroup>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -777,7 +826,7 @@ export function AddVideoModal({ onClose, onSave, userEmail }: AddVideoModalProps
             disabled={isSubmitting}
             className="px-6 py-2.5 bg-white text-black hover:bg-neutral-200 disabled:opacity-50 text-sm font-semibold rounded-xl transition-all shadow-md flex items-center gap-2"
           >
-            {isSubmitting ? 'Guardando...' : 'Guardar Registro'}
+            {isSubmitting ? 'Guardando...' : (initialData ? 'Guardar Cambios' : 'Guardar Registro')}
           </button>
         </div>
       </div>
