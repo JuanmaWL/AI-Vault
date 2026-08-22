@@ -7,6 +7,7 @@ export interface UserHardware {
 export interface UserProfile {
   uid: string;
   email: string;
+  displayName?: string;
   hardware?: UserHardware;
 }
 
@@ -47,11 +48,15 @@ export interface VideoRecord {
   fps?: number;
   durationSeconds?: number;
   fileSizeBytes?: number;
+  videoVae?: string;        // Video VAE (ej: "Wan 2.1 VAE", "TAESD", etc.)
+  textEncoder?: string;     // Text Encoder (ej: "Qwen3-VL", "umt5_xxl", etc.)
+  precision?: string;       // Formato/precisión/cuantización (ej: "GGUF Q4_K_M", "FP8", "BF16")
   loras: Lora[];
 
   notes?: string;
   createdAt: number;
   createdBy?: string;       // email del usuario autenticado que creó el registro
+  creatorDisplayName?: string; // Apodo o nombre para mostrar del usuario
   
   // Metadatos adicionales importados
   renderSeconds?: number;

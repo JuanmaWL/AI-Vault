@@ -50,6 +50,10 @@ function normalizeRecord(raw: any): VideoRecord {
     notes: raw.notes,
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
     createdBy: raw.createdBy,
+    creatorDisplayName: typeof raw.creatorDisplayName === 'string' ? raw.creatorDisplayName : undefined,
+    videoVae: typeof raw.videoVae === 'string' ? raw.videoVae : undefined,
+    textEncoder: typeof raw.textEncoder === 'string' ? raw.textEncoder : undefined,
+    precision: typeof raw.precision === 'string' ? raw.precision : undefined,
     renderSeconds: typeof raw.renderSeconds === 'number' ? raw.renderSeconds : undefined,
     fileSizeBytes: typeof raw.fileSizeBytes === 'number' ? raw.fileSizeBytes : undefined,
     generatedAt: typeof raw.generatedAt === 'number' ? raw.generatedAt : undefined,
@@ -109,6 +113,9 @@ export default function App() {
   const [filterSource, setFilterSource] = useState<string>('Todos');
   const [filterResolution, setFilterResolution] = useState<string>('Todas');
   const [filterLora, setFilterLora] = useState<string>('Todos');
+  const [filterPrecision, setFilterPrecision] = useState<string>('Todas');
+  const [filterVae, setFilterVae] = useState<string>('Todos');
+  const [filterEncoder, setFilterEncoder] = useState<string>('Todos');
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [groupByFolder, setGroupByFolder] = useState<boolean>(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -117,7 +124,7 @@ export default function App() {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
 
-  // Fetch or create user profile
+  // Fetch or create user profile with Firestore multi-device sync
   const fetchUserProfile = async (user: User) => {
     let localHardware: UserHardware | undefined;
     try {
@@ -125,10 +132,59 @@ export default function App() {
       if (stored) localHardware = JSON.parse(stored);
     } catch {}
 
-    const baseProfile: UserProfile = { uid: user.uid, email: user.email || '', hardware: localHardware };
+    let firestoreHardware: UserHardware | undefined;
+    let firestoreDisplayName: string | undefined;
+
+    if (db) {
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          if (data.hardware) firestoreHardware = data.hardware as UserHardware;
+          if (data.displayName) firestoreDisplayName = data.displayName as string;
+        }
+      } catch (e) {
+        console.warn('Could not fetch user profile from Firestore', e);
+      }
+    }
+
+    const activeHardware = firestoreHardware || localHardware;
+    const activeDisplayName = user.displayName || firestoreDisplayName || '';
+
+    if (activeDisplayName) {
+      setUserDisplayName(activeDisplayName);
+    }
+
+    if (activeHardware) {
+      try {
+        localStorage.setItem('ai_video_vault_hardware', JSON.stringify(activeHardware));
+      } catch {}
+    }
+
+    // If we had local hardware but not yet in Firestore, sync it up
+    if (db && localHardware && !firestoreHardware) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email || '',
+          displayName: activeDisplayName,
+          hardware: localHardware,
+          updatedAt: Date.now()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Could not sync local hardware to Firestore', err);
+      }
+    }
+
+    const baseProfile: UserProfile = { 
+      uid: user.uid, 
+      email: user.email || '', 
+      displayName: activeDisplayName,
+      hardware: activeHardware 
+    };
     setUserProfile(baseProfile);
 
-    if (!localHardware) {
+    if (!activeHardware) {
       setIsHardwareModalOpen(true);
     }
   };
@@ -161,9 +217,24 @@ export default function App() {
     } catch (err) {
       console.error('Error saving hardware to local storage', err);
     }
+
+    if (db) {
+      try {
+        await setDoc(doc(db, 'users', currentUser.uid), {
+          uid: currentUser.uid,
+          email: currentUser.email || '',
+          displayName: currentUser.displayName || userDisplayName || '',
+          hardware,
+          updatedAt: Date.now()
+        }, { merge: true });
+      } catch (err) {
+        console.warn('Could not sync hardware to Firestore', err);
+      }
+    }
+
     setUserProfile(prev => {
       if (prev) return { ...prev, hardware };
-      return { uid: currentUser.uid, email: currentUser.email || '', hardware };
+      return { uid: currentUser.uid, email: currentUser.email || '', displayName: userDisplayName, hardware };
     });
     setIsHardwareModalOpen(false);
   };
@@ -229,12 +300,24 @@ export default function App() {
   };
 
   const handleSaveBatch = async (records: VideoRecord[]) => {
+    const activeNick = userDisplayName || currentUser?.displayName || userProfile?.displayName;
+    const activeEmail = currentUser?.email || userProfile?.email;
+
+    records.forEach(record => {
+      if (!record.hardware && userProfile?.hardware) {
+        record.hardware = { ...userProfile.hardware };
+      }
+      if (!record.createdBy && activeEmail) {
+        record.createdBy = activeEmail;
+      }
+      if (!record.creatorDisplayName && activeNick) {
+        record.creatorDisplayName = activeNick;
+      }
+    });
+
     if (db && !usingLocal) {
       try {
         const batchPromises = records.map(record => {
-          if (!record.hardware && userProfile?.hardware) {
-            record.hardware = { ...userProfile.hardware };
-          }
           const cleanRecord = cleanUndefined(record);
           return addDoc(collection(db, COLLECTION_NAME), cleanRecord);
         });
@@ -244,7 +327,6 @@ export default function App() {
       }
     } else {
       const recordsWithIds = records.map(r => {
-        if (!r.hardware && userProfile?.hardware) r.hardware = { ...userProfile.hardware };
         return { ...r, id: `local_${crypto.randomUUID()}` };
       });
       const newVids = [...recordsWithIds, ...videos];
@@ -256,10 +338,18 @@ export default function App() {
   };
 
   const handleAddVideo = async (record: VideoRecord) => {
-    // Inject hardware stamp from user profile if not already present
+    // Inject hardware & creator stamp from user profile if not already present
     if (!record.hardware && userProfile?.hardware) {
       record.hardware = { ...userProfile.hardware };
     }
+    if (!record.createdBy && (currentUser?.email || userProfile?.email)) {
+      record.createdBy = currentUser?.email || userProfile?.email;
+    }
+    const activeNick = userDisplayName || currentUser?.displayName || userProfile?.displayName;
+    if (!record.creatorDisplayName && activeNick) {
+      record.creatorDisplayName = activeNick;
+    }
+
     const cleanRecord = cleanUndefined(record);
     if (db && !usingLocal) {
       try {
@@ -309,11 +399,23 @@ export default function App() {
 
   // Extract unique values for filters
   const uniqueGroups = useMemo(() => Array.from(new Set(videos.map(v => v.groupName).filter(Boolean) as string[])).sort(), [videos]);
-  const uniqueUsers = useMemo(() => Array.from(new Set(videos.map(v => v.createdBy).filter(Boolean) as string[])).sort(), [videos]);
+  const userOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    videos.forEach(v => {
+      if (v.createdBy) {
+        const label = v.creatorDisplayName ? `${v.creatorDisplayName} (${v.createdBy})` : v.createdBy;
+        map.set(v.createdBy, label);
+      }
+    });
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [videos]);
   const uniqueModels = useMemo(() => Array.from(new Set(videos.map(v => v.model).filter(Boolean) as string[])).sort(), [videos]);
   const uniqueTags = useMemo(() => Array.from(new Set(videos.flatMap(v => v.tags || []))).sort(), [videos]);
   const uniqueResolutions = useMemo(() => Array.from(new Set(videos.map(v => `${v.width}x${v.height}`))).sort(), [videos]);
   const uniqueLoras = useMemo(() => Array.from(new Set(videos.flatMap(v => v.loras?.map(l => l.name) || []))).sort(), [videos]);
+  const uniqueVaes = useMemo(() => Array.from(new Set(videos.map(v => v.videoVae).filter(Boolean) as string[])).sort(), [videos]);
+  const uniqueEncoders = useMemo(() => Array.from(new Set(videos.map(v => v.textEncoder).filter(Boolean) as string[])).sort(), [videos]);
+  const uniquePrecisions = useMemo(() => Array.from(new Set(videos.map(v => v.precision).filter(Boolean) as string[])).sort(), [videos]);
 
   const filteredVideos = useMemo(() => {
     return videos.filter(video => {
@@ -326,6 +428,11 @@ export default function App() {
           (video.loras && video.loras.some((l) => l.name.toLowerCase().includes(lower))) ||
           video.steps.toString().includes(lower) ||
           (video.shift !== undefined && video.shift.toString().includes(lower)) ||
+          (video.videoVae && video.videoVae.toLowerCase().includes(lower)) ||
+          (video.textEncoder && video.textEncoder.toLowerCase().includes(lower)) ||
+          (video.precision && video.precision.toLowerCase().includes(lower)) ||
+          (video.creatorDisplayName && video.creatorDisplayName.toLowerCase().includes(lower)) ||
+          (video.createdBy && video.createdBy.toLowerCase().includes(lower)) ||
           (video.hardware && video.hardware.gpu.toLowerCase().includes(lower));
 
         if (!matchesSearch) return false;
@@ -365,9 +472,18 @@ export default function App() {
         if (!video.loras || !video.loras.some(l => l.name === filterLora)) return false;
       }
 
+      // 10. VAE
+      if (filterVae !== 'Todos' && video.videoVae !== filterVae) return false;
+
+      // 11. Encoder
+      if (filterEncoder !== 'Todos' && video.textEncoder !== filterEncoder) return false;
+
+      // 12. Precision
+      if (filterPrecision !== 'Todas' && video.precision !== filterPrecision) return false;
+
       return true;
     });
-  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterOrientation, filterSource, filterTags, filterResolution, filterLora]);
+  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterOrientation, filterSource, filterTags, filterResolution, filterLora, filterVae, filterEncoder, filterPrecision]);
 
   const groupedVideos = useMemo(() => {
     if (!groupByFolder) return null;
@@ -655,7 +771,7 @@ export default function App() {
 
               <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
                 <option value="Todos">Todos los usuarios</option>
-                {uniqueUsers.map(u => <option key={u} value={u}>{u}</option>)}
+                {userOptions.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
                 <option value="Anónimo">Anónimo</option>
               </select>
 
@@ -663,6 +779,28 @@ export default function App() {
                 <option value="Todos">Todos los modelos</option>
                 {uniqueModels.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
+
+              {uniqueVaes.length > 0 && (
+                <select value={filterVae} onChange={e => setFilterVae(e.target.value)} className="bg-neutral-950 border border-purple-900/50 rounded-lg px-3 py-1.5 text-xs text-purple-300 focus:outline-none focus:border-purple-500">
+                  <option value="Todos">VAE (Todos)</option>
+                  {uniqueVaes.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+              )}
+
+              {uniqueEncoders.length > 0 && (
+                <select value={filterEncoder} onChange={e => setFilterEncoder(e.target.value)} className="bg-neutral-950 border border-blue-900/50 rounded-lg px-3 py-1.5 text-xs text-blue-300 focus:outline-none focus:border-blue-500">
+                  <option value="Todos">Encoder (Todos)</option>
+                  {uniqueEncoders.map(enc => <option key={enc} value={enc}>{enc}</option>)}
+                </select>
+              )}
+
+              {uniquePrecisions.length > 0 && (
+                <select value={filterPrecision} onChange={e => setFilterPrecision(e.target.value)} className="bg-neutral-950 border border-amber-900/50 rounded-lg px-3 py-1.5 text-xs text-amber-300 focus:outline-none focus:border-amber-500">
+                  <option value="Todas">Precisión (Todas)</option>
+                  {uniquePrecisions.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              )}
+
               <select value={filterResolution} onChange={e => setFilterResolution(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
                 <option value="Todas">Resolución (Todas)</option>
                 {uniqueResolutions.map(r => <option key={r} value={r}>{r}</option>)}

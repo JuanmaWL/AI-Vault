@@ -451,6 +451,38 @@ function CompareCard({
                 </span>
               </div>
             )}
+            {(video.creatorDisplayName || video.createdBy) && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">Autor</span>
+                <span className="text-teal-300 truncate text-right ml-2" title={video.createdBy || ''}>
+                  {video.creatorDisplayName || video.createdBy}
+                </span>
+              </div>
+            )}
+            {video.textEncoder && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">Encoder</span>
+                <span className="text-blue-300 truncate text-right ml-2" title={video.textEncoder}>
+                  {video.textEncoder}
+                </span>
+              </div>
+            )}
+            {video.videoVae && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">VAE</span>
+                <span className="text-purple-300 truncate text-right ml-2" title={video.videoVae}>
+                  {video.videoVae}
+                </span>
+              </div>
+            )}
+            {video.precision && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">Precisión</span>
+                <span className="text-amber-300 truncate text-right ml-2" title={video.precision}>
+                  {video.precision}
+                </span>
+              </div>
+            )}
             {video.fileSizeBytes && (
               <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
                 <span className="text-neutral-500">Tamaño</span>

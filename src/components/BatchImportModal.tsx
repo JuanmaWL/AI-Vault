@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, parseModelAndTags } from '../lib/utils';
+import { extractDriveFileId, calculateOrientation, extractTechnicalDetails } from '../lib/utils';
 import { X, Check, FileVideo, AlertCircle, Loader2 } from 'lucide-react';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
@@ -88,6 +88,9 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
           let shift = "5.0";
           let seed = "";
           let tagsInput = "Wan 2.1";
+          let videoVae: string | undefined = undefined;
+          let textEncoder: string | undefined = undefined;
+          let precision: string | undefined = undefined;
           let loras: Lora[] = [];
           let renderSeconds: number | undefined = undefined;
           let generatedAt: number | undefined = undefined;
@@ -105,13 +108,12 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
               if (parsed.num_inference_steps !== undefined) steps = Number(parsed.num_inference_steps);
               if (parsed.flow_shift !== undefined) shift = String(parsed.flow_shift);
 
-              if (parsed.model_type || parsed.type) {
-                const mt = parsed.model_type || '';
-                const td = parsed.type || '';
-                const { baseModel, newTags } = parseModelAndTags(mt, td);
-                model = baseModel;
-                if (newTags.length > 0) tagsInput = newTags.join(', ');
-              }
+              const techDetails = extractTechnicalDetails(parsed, commentRaw, parsed.model_type || parsed.type || '');
+              if (techDetails.baseModel) model = techDetails.baseModel;
+              if (techDetails.videoVae) videoVae = techDetails.videoVae;
+              if (techDetails.textEncoder) textEncoder = techDetails.textEncoder;
+              if (techDetails.precision) precision = techDetails.precision;
+              if (techDetails.tags.length > 0) tagsInput = techDetails.tags.join(', ');
 
               if (parsed.generation_time !== undefined) renderSeconds = Number(parsed.generation_time);
               if (parsed.creation_timestamp !== undefined) generatedAt = Number(parsed.creation_timestamp) * 1000;
@@ -128,7 +130,12 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
                   }
                 });
               }
-            } catch(e) {}
+            } catch(e) {
+              const techDetails = extractTechnicalDetails(undefined, commentRaw);
+              if (techDetails.videoVae) videoVae = techDetails.videoVae;
+              if (techDetails.textEncoder) textEncoder = techDetails.textEncoder;
+              if (techDetails.precision) precision = techDetails.precision;
+            }
           }
 
           const orientation = calculateOrientation(width, height);
@@ -151,6 +158,9 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
             seed: seed ? parseInt(seed) : undefined,
             fps: 24,
             durationSeconds,
+            videoVae,
+            textEncoder,
+            precision,
             loras,
             createdAt: Date.now(),
             createdBy: userEmail,

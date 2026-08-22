@@ -1,5 +1,7 @@
 import { useState, FormEvent } from 'react';
 import { updateProfile, User } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { X, User as UserIcon, Check } from 'lucide-react';
 
 interface SetNickModalProps {
@@ -28,6 +30,20 @@ export function SetNickModal({ user, onClose, onUpdated }: SetNickModalProps) {
       await updateProfile(user, {
         displayName: cleanNick
       });
+
+      if (db) {
+        try {
+          await setDoc(doc(db, 'users', user.uid), {
+            uid: user.uid,
+            email: user.email || '',
+            displayName: cleanNick,
+            updatedAt: Date.now()
+          }, { merge: true });
+        } catch (fsErr) {
+          console.warn('Could not sync nickname to Firestore:', fsErr);
+        }
+      }
+
       onUpdated(cleanNick);
       onClose();
     } catch (err: any) {

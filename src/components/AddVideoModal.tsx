@@ -1,7 +1,7 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, parseModelAndTags } from '../lib/utils';
-import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2 } from 'lucide-react';
+import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails } from '../lib/utils';
+import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers } from 'lucide-react';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 interface AddVideoModalProps {
@@ -39,6 +39,9 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [fps, setFps] = useState<string>(initialData?.fps?.toString() || '');
   const [durationSeconds, setDurationSeconds] = useState<string>(initialData?.durationSeconds?.toString() || '');
   const [fileSizeBytes, setFileSizeBytes] = useState<number | undefined>(initialData?.fileSizeBytes);
+  const [videoVae, setVideoVae] = useState<string>(initialData?.videoVae || '');
+  const [textEncoder, setTextEncoder] = useState<string>(initialData?.textEncoder || '');
+  const [precision, setPrecision] = useState<string>(initialData?.precision || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [loras, setLoras] = useState<Lora[]>(initialData?.loras || []);
   
@@ -129,15 +132,33 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
           if (parsed.num_inference_steps !== undefined) { setSteps(Number(parsed.num_inference_steps)); newAutoFilled.steps = true; foundSomething = true; }
           if (parsed.flow_shift !== undefined) { setShift(String(parsed.flow_shift)); newAutoFilled.shift = true; foundSomething = true; }
           
-          if (parsed.model_type || parsed.type) { 
-            const { baseModel, newTags } = parseModelAndTags(parsed.model_type || '', parsed.type || '');
-            setModel(baseModel); 
+          const techDetails = extractTechnicalDetails(parsed, commentRaw, parsed.model_type || parsed.type || '');
+          if (techDetails.baseModel) {
+            setModel(techDetails.baseModel);
             newAutoFilled.model = true;
-            if (newTags.length > 0) {
-              setTagsInput(newTags.join(', '));
-              newAutoFilled.tags = true;
-            }
-            foundSomething = true; 
+            foundSomething = true;
+          }
+          if (techDetails.videoVae) {
+            setVideoVae(techDetails.videoVae);
+            newAutoFilled.videoVae = true;
+            foundSomething = true;
+          }
+          if (techDetails.textEncoder) {
+            setTextEncoder(techDetails.textEncoder);
+            newAutoFilled.textEncoder = true;
+            foundSomething = true;
+          }
+          if (techDetails.precision) {
+            setPrecision(techDetails.precision);
+            newAutoFilled.precision = true;
+            foundSomething = true;
+          }
+          if (techDetails.tags.length > 0) {
+            const existingTags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
+            const merged = Array.from(new Set([...existingTags, ...techDetails.tags]));
+            setTagsInput(merged.join(', '));
+            newAutoFilled.tags = true;
+            foundSomething = true;
           }
           
           if (parsed.resolution && !newAutoFilled.width) {
@@ -193,6 +214,10 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
           
         } catch (e) {
           console.error("Error parsing JSON comment", e);
+          const techDetails = extractTechnicalDetails(undefined, commentRaw);
+          if (techDetails.videoVae) { setVideoVae(techDetails.videoVae); newAutoFilled.videoVae = true; foundSomething = true; }
+          if (techDetails.textEncoder) { setTextEncoder(techDetails.textEncoder); newAutoFilled.textEncoder = true; foundSomething = true; }
+          if (techDetails.precision) { setPrecision(techDetails.precision); newAutoFilled.precision = true; foundSomething = true; }
         }
       }
       
@@ -323,6 +348,9 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       createdBy: initialData?.createdBy || userEmail || undefined,
       renderSeconds: renderSeconds.trim() !== '' ? Number(renderSeconds) : undefined,
       fileSizeBytes,
+      videoVae: videoVae.trim() ? videoVae.trim() : undefined,
+      textEncoder: textEncoder.trim() ? textEncoder.trim() : undefined,
+      precision: precision.trim() ? precision.trim() : undefined,
       generatedAt,
       rawMetadata: rawMetadata.trim() !== '' ? rawMetadata : undefined,
       groupName: groupName.trim() !== '' ? groupName.trim() : undefined
@@ -792,6 +820,86 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   placeholder="Ej: 479"
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
                 />
+              </div>
+            </div>
+
+            {/* Componentes Técnicos: VAE, Text Encoder, Cuantización/Precisión */}
+            <div className="space-y-3 p-4 bg-neutral-950/60 rounded-xl border border-neutral-800">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-teal-400" />
+                <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
+                  Componentes & Precisión (Opcional)
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                    Video VAE
+                    <AutoFillBadge field="videoVae" />
+                  </label>
+                  <input 
+                    type="text" 
+                    list="vae-list"
+                    value={videoVae}
+                    onChange={e => setVideoVae(e.target.value)}
+                    placeholder="Ej: Wan 2.1 VAE, TAESD..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
+                  />
+                  <datalist id="vae-list">
+                    <option value="Wan 2.1 VAE" />
+                    <option value="Wan 2.2 VAE" />
+                    <option value="TAESD (Fast VAE)" />
+                    <option value="SDXL VAE" />
+                  </datalist>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                    Text Encoder
+                    <AutoFillBadge field="textEncoder" />
+                  </label>
+                  <input 
+                    type="text" 
+                    list="encoder-list"
+                    value={textEncoder}
+                    onChange={e => setTextEncoder(e.target.value)}
+                    placeholder="Ej: Qwen3-VL, umt5_xxl..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
+                  />
+                  <datalist id="encoder-list">
+                    <option value="Qwen3-VL" />
+                    <option value="Qwen2.5-VL" />
+                    <option value="umt5_xxl" />
+                    <option value="google/t5-v1_1-xxl" />
+                    <option value="CLIP-L" />
+                  </datalist>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
+                    Precisión / Cuant.
+                    <AutoFillBadge field="precision" />
+                  </label>
+                  <input 
+                    type="text" 
+                    list="precision-list"
+                    value={precision}
+                    onChange={e => setPrecision(e.target.value)}
+                    placeholder="Ej: GGUF Q4_K_M, FP8..."
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
+                  />
+                  <datalist id="precision-list">
+                    <option value="GGUF Q4_K_M" />
+                    <option value="GGUF Q4_K_S" />
+                    <option value="GGUF Q5_K_M" />
+                    <option value="GGUF Q8_0" />
+                    <option value="FP8 Mixed Precision" />
+                    <option value="FP8 (e4m3fn)" />
+                    <option value="BF16" />
+                    <option value="FP16" />
+                  </datalist>
+                </div>
               </div>
             </div>
 

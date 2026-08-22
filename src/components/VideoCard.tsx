@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { VideoRecord } from '../types';
 import { DriveVideoPlayer } from './DriveVideoPlayer';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu, HardDrive } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu, HardDrive, User, Sparkles, Gauge } from 'lucide-react';
 import { formatBytes } from '../lib/utils';
 
 interface VideoCardProps {
@@ -89,6 +89,16 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
               <span></span>
             )}
 
+            {(video.creatorDisplayName || video.createdBy) && (
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800/80 border border-neutral-700 text-neutral-300 w-fit text-xs font-medium"
+                title={`Creado por: ${video.creatorDisplayName || video.createdBy}${video.createdBy && video.creatorDisplayName ? ` (${video.createdBy})` : ''}`}
+              >
+                <User className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                <span className="truncate max-w-[170px]">{video.creatorDisplayName || video.createdBy}</span>
+              </div>
+            )}
+
             {video.renderSeconds !== undefined && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800/80 border border-neutral-700 text-teal-400 w-fit">
                 <Clock className="w-3.5 h-3.5" />
@@ -135,6 +145,41 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             </div>
 
             <div className="flex items-center gap-3">
+              {/* Badges Técnicos Específicos */}
+              {(video.textEncoder || video.videoVae || video.precision) && (
+                <div className="flex flex-wrap gap-1.5">
+                  {video.textEncoder && (
+                    <span 
+                      className="text-[11px] px-2 py-0.5 rounded-md bg-blue-950/40 border border-blue-800/60 text-blue-300 flex items-center gap-1 font-mono" 
+                      title={`Text Encoder: ${video.textEncoder}`}
+                    >
+                      <Sparkles className="w-2.5 h-2.5 text-blue-400" />
+                      <span className="text-[10px] text-blue-400/70 font-sans uppercase">Enc:</span>
+                      {video.textEncoder}
+                    </span>
+                  )}
+                  {video.videoVae && (
+                    <span 
+                      className="text-[11px] px-2 py-0.5 rounded-md bg-purple-950/40 border border-purple-800/60 text-purple-300 flex items-center gap-1 font-mono" 
+                      title={`Video VAE: ${video.videoVae}`}
+                    >
+                      <Cpu className="w-2.5 h-2.5 text-purple-400" />
+                      <span className="text-[10px] text-purple-400/70 font-sans uppercase">VAE:</span>
+                      {video.videoVae}
+                    </span>
+                  )}
+                  {video.precision && (
+                    <span 
+                      className="text-[11px] px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-800/60 text-amber-300 flex items-center gap-1 font-mono" 
+                      title={`Precisión / Cuantización: ${video.precision}`}
+                    >
+                      <Gauge className="w-2.5 h-2.5 text-amber-400" />
+                      {video.precision}
+                    </span>
+                  )}
+                </div>
+              )}
+
               {/* Badges de Tags */}
               {video.tags && video.tags.length > 0 && (
                 <div className="flex flex-wrap gap-1.5">
