@@ -30,10 +30,26 @@ export function formatBytes(bytes?: number, decimals = 2): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
+export const TEXT_ENCODER_OPTIONS = [
+  'Default',
+  'Qwen3-VL BF16',
+  'Qwen3-VL Quanto INT8',
+  'Qwen3-VL NVFP4 AWQ',
+  'Qwen3-VL GGUF Q4_K_M',
+  'Qwen3-VL GGUF Q2_K',
+  'Not Found',
+] as const;
+
+export const VIDEO_VAE_OPTIONS = [
+  'FP8 Mixed Precision',
+  'Original VAE',
+  'Not Found',
+] as const;
+
 export interface ExtractedTechnicalDetails {
   baseModel: string;
-  videoVae?: string;
-  textEncoder?: string;
+  videoVae: string;
+  textEncoder: string;
   precision?: string;
   tags: string[];
 }
@@ -65,104 +81,42 @@ export function extractTechnicalDetails(
     baseModel = 'HunyuanVideo';
   }
 
-  // 2. Video VAE Detection
-  let videoVae: string | undefined = undefined;
-  if (parsedJson?.video_vae) videoVae = String(parsedJson.video_vae);
-  else if (parsedJson?.vae) videoVae = String(parsedJson.vae);
-  else if (parsedJson?.vae_name) videoVae = String(parsedJson.vae_name);
-  else if (parsedJson?.vae_model) videoVae = String(parsedJson.vae_model);
-  else if (parsedJson?.vae_path) videoVae = String(parsedJson.vae_path);
+  // 2. Text Encoder Detection (Minimax H3 / Qwen3-VL specific options)
+  let textEncoder: string = 'Not Found';
+  const rawTextEnc = parsedJson?.text_encoder || parsedJson?.text_encoder_name || parsedJson?.text_encoder_path || parsedJson?.t5_path || parsedJson?.llm;
+  const textEncCombined = `${rawTextEnc || ''} ${combined}`.toLowerCase();
 
-  if (!videoVae) {
-    if (combined.includes('taesd')) {
-      videoVae = 'TAESD (Fast VAE)';
-    } else if (combined.includes('wan2.1_vae') || combined.includes('wan_2.1_vae') || combined.includes('wan 2.1 vae')) {
-      videoVae = 'Wan 2.1 VAE';
-    } else if (combined.includes('wan2.2_vae') || combined.includes('wan_2.2_vae')) {
-      videoVae = 'Wan 2.2 VAE';
-    } else if (combined.includes('sdxl_vae') || combined.includes('sdxl vae')) {
-      videoVae = 'SDXL VAE';
-    }
-  } else {
-    // Clean up path if present (e.g. "path/to/Wan2.1_VAE.pth" -> "Wan 2.1 VAE")
-    const fileName = videoVae.split(/[/\\]/).pop() || videoVae;
-    const cleanName = fileName.replace(/\.[^/.]+$/, "");
-    if (/wan.*2\.?1.*vae/i.test(cleanName)) {
-      videoVae = 'Wan 2.1 VAE';
-    } else if (/taesd/i.test(cleanName)) {
-      videoVae = 'TAESD';
-    } else {
-      videoVae = cleanName;
-    }
+  if (textEncCombined.includes('q4_k_m') || textEncCombined.includes('q4-k-m') || textEncCombined.includes('q4km')) {
+    textEncoder = 'Qwen3-VL GGUF Q4_K_M';
+  } else if (textEncCombined.includes('q2_k') || textEncCombined.includes('q2-k') || textEncCombined.includes('q2k')) {
+    textEncoder = 'Qwen3-VL GGUF Q2_K';
+  } else if (textEncCombined.includes('quanto int8') || textEncCombined.includes('quanto_int8') || textEncCombined.includes('int8')) {
+    textEncoder = 'Qwen3-VL Quanto INT8';
+  } else if (textEncCombined.includes('nvfp4') || textEncCombined.includes('awq') || textEncCombined.includes('nvfp4 awq')) {
+    textEncoder = 'Qwen3-VL NVFP4 AWQ';
+  } else if (textEncCombined.includes('qwen3-vl bf16') || textEncCombined.includes('qwen3_vl_bf16') || (textEncCombined.includes('qwen3') && textEncCombined.includes('bf16'))) {
+    textEncoder = 'Qwen3-VL BF16';
+  } else if (textEncCombined.includes('default') && (textEncCombined.includes('encoder') || textEncCombined.includes('text'))) {
+    textEncoder = 'Default';
+  } else if (textEncCombined.includes('qwen3-vl') || textEncCombined.includes('qwen3_vl') || textEncCombined.includes('qwen3')) {
+    textEncoder = 'Qwen3-VL GGUF Q4_K_M'; // Default to standard Q4_K_M if Qwen3-VL is present without explicit quantization
   }
 
-  // 3. Text Encoder Detection (e.g. Qwen3-VL, Qwen2.5-VL, umt5_xxl, T5)
-  let textEncoder: string | undefined = undefined;
-  if (parsedJson?.text_encoder) textEncoder = String(parsedJson.text_encoder);
-  else if (parsedJson?.text_encoder_name) textEncoder = String(parsedJson.text_encoder_name);
-  else if (parsedJson?.text_encoder_path) textEncoder = String(parsedJson.text_encoder_path);
-  else if (parsedJson?.t5_path || parsedJson?.t5_model) textEncoder = String(parsedJson.t5_path || parsedJson.t5_model);
-  else if (parsedJson?.llm) textEncoder = String(parsedJson.llm);
+  // 3. Video VAE Detection (FP8 Mixed Precision vs Original VAE)
+  let videoVae: string = 'Not Found';
+  const rawVae = parsedJson?.video_vae || parsedJson?.vae || parsedJson?.vae_name || parsedJson?.vae_model || parsedJson?.vae_path;
+  const vaeCombined = `${rawVae || ''} ${combined}`.toLowerCase();
 
-  if (!textEncoder) {
-    if (combined.includes('qwen3-vl') || combined.includes('qwen3_vl') || combined.includes('qwen3vl')) {
-      textEncoder = 'Qwen3-VL';
-    } else if (combined.includes('qwen2.5-vl') || combined.includes('qwen2.5_vl') || combined.includes('qwen2_5_vl')) {
-      textEncoder = 'Qwen2.5-VL';
-    } else if (combined.includes('qwen2-vl') || combined.includes('qwen2_vl')) {
-      textEncoder = 'Qwen2-VL';
-    } else if (combined.includes('umt5_xxl') || combined.includes('umt5-xxl') || combined.includes('umt5xxl')) {
-      textEncoder = 'umt5_xxl';
-    } else if (combined.includes('t5-v1_1-xxl') || combined.includes('t5_xxl') || combined.includes('t5xxl')) {
-      textEncoder = 'google/t5-v1_1-xxl';
-    } else if (combined.includes('clip-l') || combined.includes('clip_l')) {
-      textEncoder = 'CLIP-L';
-    }
-  } else {
-    const fileName = textEncoder.split(/[/\\]/).pop() || textEncoder;
-    const cleanName = fileName.replace(/\.[^/.]+$/, "");
-    if (/qwen3.*vl/i.test(cleanName)) textEncoder = 'Qwen3-VL';
-    else if (/qwen2\.?5.*vl/i.test(cleanName)) textEncoder = 'Qwen2.5-VL';
-    else if (/umt5.*xxl/i.test(cleanName)) textEncoder = 'umt5_xxl';
-    else textEncoder = cleanName;
+  if (vaeCombined.includes('fp8 mixed') || vaeCombined.includes('fp8_mixed') || vaeCombined.includes('mixed precision') || vaeCombined.includes('fp8')) {
+    videoVae = 'FP8 Mixed Precision';
+  } else if (vaeCombined.includes('original vae') || vaeCombined.includes('original_vae') || vaeCombined.includes('original') || vaeCombined.includes('wan2.1_vae') || vaeCombined.includes('wan 2.1 vae')) {
+    videoVae = 'Original VAE';
+  } else if (combined.includes('minimax') || combined.includes('wan')) {
+    // If not specified in a Minimax / Wan run, default to Original VAE
+    videoVae = 'Original VAE';
   }
 
-  // 4. Precision / Quantization Detection (e.g. GGUF Q4_K_M, FP8 Mixed Precision, BF16, etc.)
-  let precision: string | undefined = undefined;
-  if (parsedJson?.precision) precision = String(parsedJson.precision);
-  else if (parsedJson?.quantization) precision = String(parsedJson.quantization);
-  else if (parsedJson?.mixed_precision) precision = String(parsedJson.mixed_precision);
-  else if (parsedJson?.dtype) precision = String(parsedJson.dtype);
-
-  if (!precision) {
-    if (combined.includes('q4_k_m') || combined.includes('q4-k-m') || combined.includes('q4km')) {
-      precision = combined.includes('gguf') ? 'GGUF Q4_K_M' : 'Q4_K_M';
-    } else if (combined.includes('q4_k_s') || combined.includes('q4-k-s')) {
-      precision = combined.includes('gguf') ? 'GGUF Q4_K_S' : 'Q4_K_S';
-    } else if (combined.includes('q5_k_m') || combined.includes('q5-k-m')) {
-      precision = combined.includes('gguf') ? 'GGUF Q5_K_M' : 'Q5_K_M';
-    } else if (combined.includes('q5_k_s') || combined.includes('q5-k-s')) {
-      precision = combined.includes('gguf') ? 'GGUF Q5_K_S' : 'Q5_K_S';
-    } else if (combined.includes('q8_0') || combined.includes('q8-0')) {
-      precision = combined.includes('gguf') ? 'GGUF Q8_0' : 'Q8_0';
-    } else if (combined.includes('q4_0') || combined.includes('q4-0')) {
-      precision = combined.includes('gguf') ? 'GGUF Q4_0' : 'Q4_0';
-    } else if (combined.includes('fp8 mixed') || combined.includes('fp8_mixed') || combined.includes('mixed precision')) {
-      precision = 'FP8 Mixed Precision';
-    } else if (combined.includes('fp8_e4m3fn') || combined.includes('fp8-e4m3fn') || combined.includes('e4m3fn')) {
-      precision = 'FP8 (e4m3fn)';
-    } else if (combined.includes('fp8_e5m2') || combined.includes('e5m2')) {
-      precision = 'FP8 (e5m2)';
-    } else if (combined.includes('fp8')) {
-      precision = 'FP8';
-    } else if (combined.includes('bf16')) {
-      precision = 'BF16';
-    } else if (combined.includes('fp16')) {
-      precision = 'FP16';
-    }
-  }
-
-  // 5. Automatic Tag Enrichment
+  // 4. Automatic Tag Enrichment
   const tagsSet = new Set<string>();
   if (combined.includes('pruned')) tagsSet.add('pruned');
   if (combined.includes('distilled')) tagsSet.add('distilled');
@@ -174,33 +128,23 @@ export function extractTechnicalDetails(
   if (combined.includes('scail2')) tagsSet.add('SCAIL 2');
 
   // Precision / Format tags
-  if (precision) {
-    if (precision.includes('GGUF') || combined.includes('gguf')) tagsSet.add('GGUF');
-    if (precision.includes('Q4_K_M')) tagsSet.add('Q4_K_M');
-    if (precision.includes('Q5_K_M')) tagsSet.add('Q5_K_M');
-    if (precision.includes('Q8_0')) tagsSet.add('Q8_0');
-    if (precision.includes('FP8') || combined.includes('fp8')) tagsSet.add('FP8');
-    if (precision.includes('BF16') || combined.includes('bf16')) tagsSet.add('BF16');
+  if (textEncoder !== 'Not Found') {
+    if (textEncoder.includes('GGUF')) tagsSet.add('GGUF');
+    if (textEncoder.includes('Q4_K_M')) tagsSet.add('Q4_K_M');
+    if (textEncoder.includes('Q2_K')) tagsSet.add('Q2_K');
+    if (textEncoder.includes('INT8')) tagsSet.add('INT8');
+    if (textEncoder.includes('NVFP4')) tagsSet.add('NVFP4');
+    if (textEncoder.includes('BF16')) tagsSet.add('BF16');
   }
 
-  // Text Encoder tags
-  if (textEncoder) {
-    if (textEncoder.toLowerCase().includes('qwen3')) tagsSet.add('Qwen3-VL');
-    else if (textEncoder.toLowerCase().includes('qwen2.5')) tagsSet.add('Qwen2.5-VL');
-    else if (textEncoder.toLowerCase().includes('umt5')) tagsSet.add('umt5_xxl');
-  }
-
-  // Video VAE tags
-  if (videoVae) {
-    if (videoVae.toLowerCase().includes('taesd')) tagsSet.add('TAESD');
-    else if (videoVae.toLowerCase().includes('wan')) tagsSet.add('Wan VAE');
+  if (videoVae === 'FP8 Mixed Precision') {
+    tagsSet.add('FP8');
   }
 
   return {
     baseModel,
     videoVae,
     textEncoder,
-    precision,
     tags: Array.from(tagsSet)
   };
 }

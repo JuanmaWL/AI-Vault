@@ -15,6 +15,7 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
   const [importSource, setImportSource] = useState<VideoSource>('local');
   const [groupName, setGroupName] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [logs, setLogs] = useState<{ type: 'info' | 'success' | 'error'; msg: string }[]>([]);
   
@@ -25,7 +26,7 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
   };
 
   const handleProcess = async () => {
-    if (isProcessingRef.current) return;
+    if (isProcessingRef.current || isProcessing || isCompleted) return;
     
     const lines = urlsInput.split('\n').map(l => l.trim()).filter(l => l.startsWith('http'));
     if (lines.length === 0) {
@@ -45,7 +46,7 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
       for (let i = 0; i < lines.length; i++) {
         const url = lines[i];
         setProgress({ current: i + 1, total: lines.length });
-        addLog('info', `Procesando: ${url}`);
+        addLog('info', `Procesando (${i + 1}/${lines.length}): ${url}`);
 
         try {
           const response = await fetch(url);
@@ -88,9 +89,8 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
           let shift = "5.0";
           let seed = "";
           let tagsInput = "Wan 2.1";
-          let videoVae: string | undefined = undefined;
-          let textEncoder: string | undefined = undefined;
-          let precision: string | undefined = undefined;
+          let videoVae: string = 'Not Found';
+          let textEncoder: string = 'Not Found';
           let loras: Lora[] = [];
           let renderSeconds: number | undefined = undefined;
           let generatedAt: number | undefined = undefined;
@@ -110,9 +110,8 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
 
               const techDetails = extractTechnicalDetails(parsed, commentRaw, parsed.model_type || parsed.type || '');
               if (techDetails.baseModel) model = techDetails.baseModel;
-              if (techDetails.videoVae) videoVae = techDetails.videoVae;
-              if (techDetails.textEncoder) textEncoder = techDetails.textEncoder;
-              if (techDetails.precision) precision = techDetails.precision;
+              videoVae = techDetails.videoVae;
+              textEncoder = techDetails.textEncoder;
               if (techDetails.tags.length > 0) tagsInput = techDetails.tags.join(', ');
 
               if (parsed.generation_time !== undefined) renderSeconds = Number(parsed.generation_time);
@@ -132,9 +131,8 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
               }
             } catch(e) {
               const techDetails = extractTechnicalDetails(undefined, commentRaw);
-              if (techDetails.videoVae) videoVae = techDetails.videoVae;
-              if (techDetails.textEncoder) textEncoder = techDetails.textEncoder;
-              if (techDetails.precision) precision = techDetails.precision;
+              videoVae = techDetails.videoVae;
+              textEncoder = techDetails.textEncoder;
             }
           }
 
@@ -160,7 +158,6 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
             durationSeconds,
             videoVae,
             textEncoder,
-            precision,
             loras,
             createdAt: Date.now(),
             createdBy: userEmail,
@@ -171,7 +168,7 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
           };
 
           results.push(record);
-          addLog('success', `Exito: Metadatos extraídos (${model}, ${width}x${height})`);
+          addLog('success', `✓ Extraído: ${model} (${width}x${height}) | Text: ${textEncoder} | VAE: ${videoVae}`);
 
         } catch (e: any) {
           addLog('error', `Error en ${url}: ${e.message}`);
@@ -181,15 +178,19 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
       if (results.length > 0) {
         addLog('info', `Guardando ${results.length} vídeos en la base de datos...`);
         await onSaveBatch(results);
+        setIsCompleted(true);
         addLog('success', `¡Proceso completado! Se han guardado ${results.length} vídeos.`);
-        setTimeout(() => onClose(), 2000);
+        setTimeout(() => {
+          onClose();
+        }, 1600);
       } else {
         addLog('error', 'No se ha podido procesar ningún vídeo.');
+        setIsProcessing(false);
+        isProcessingRef.current = false;
       }
 
     } catch (e: any) {
       addLog('error', `Fallo general: ${e.message}`);
-    } finally {
       setIsProcessing(false);
       isProcessingRef.current = false;
     }
@@ -286,23 +287,27 @@ export function BatchImportModal({ onClose, onSaveBatch, userEmail }: BatchImpor
         <div className="p-6 border-t border-neutral-800 bg-neutral-900/80 flex items-center justify-between">
           <div className="text-sm text-neutral-400 font-medium">
             {isProcessing && `Procesando: ${progress.current} / ${progress.total}`}
+            {isCompleted && <span className="text-teal-400">✓ Guardado finalizado. Cerrando...</span>}
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              disabled={isProcessing}
+              disabled={isProcessing || isCompleted}
               className="px-5 py-2.5 rounded-lg text-sm font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
+              type="button"
               onClick={handleProcess}
-              disabled={isProcessing || !urlsInput.trim()}
-              className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-neutral-950 px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 shadow-[0_0_20px_rgba(20,184,166,0.2)]"
+              disabled={isProcessing || isCompleted || !urlsInput.trim()}
+              className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-neutral-950 px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(20,184,166,0.2)]"
             >
               {isProcessing ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Procesando...</>
+                <><Loader2 className="w-4 h-4 animate-spin" /> Procesando {progress.current}/{progress.total}...</>
+              ) : isCompleted ? (
+                <><Check className="w-4 h-4 text-neutral-950" /> Guardado con éxito</>
               ) : (
                 <><Check className="w-4 h-4" /> Importar Batch</>
               )}

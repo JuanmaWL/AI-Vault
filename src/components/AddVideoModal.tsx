@@ -1,6 +1,6 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails } from '../lib/utils';
+import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
 import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers } from 'lucide-react';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
@@ -823,82 +823,64 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               </div>
             </div>
 
-            {/* Componentes Técnicos: VAE, Text Encoder, Cuantización/Precisión */}
+            {/* Componentes Técnicos: Text Encoder y Video VAE */}
             <div className="space-y-3 p-4 bg-neutral-950/60 rounded-xl border border-neutral-800">
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-teal-400" />
                 <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
-                  Componentes & Precisión (Opcional)
+                  Encoders & Arquitectura (Minimax / Wan)
                 </label>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
-                    Video VAE
-                    <AutoFillBadge field="videoVae" />
-                  </label>
-                  <input 
-                    type="text" 
-                    list="vae-list"
-                    value={videoVae}
-                    onChange={e => setVideoVae(e.target.value)}
-                    placeholder="Ej: Wan 2.1 VAE, TAESD..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
-                  />
-                  <datalist id="vae-list">
-                    <option value="Wan 2.1 VAE" />
-                    <option value="Wan 2.2 VAE" />
-                    <option value="TAESD (Fast VAE)" />
-                    <option value="SDXL VAE" />
-                  </datalist>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
-                    Text Encoder
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                {/* Text Encoder */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-1.5 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-800/60">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                      Text Encoder
+                    </label>
                     <AutoFillBadge field="textEncoder" />
-                  </label>
-                  <input 
-                    type="text" 
-                    list="encoder-list"
-                    value={textEncoder}
-                    onChange={e => setTextEncoder(e.target.value)}
-                    placeholder="Ej: Qwen3-VL, umt5_xxl..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
-                  />
-                  <datalist id="encoder-list">
-                    <option value="Qwen3-VL" />
-                    <option value="Qwen2.5-VL" />
-                    <option value="umt5_xxl" />
-                    <option value="google/t5-v1_1-xxl" />
-                    <option value="CLIP-L" />
-                  </datalist>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={textEncoder || 'Not Found'}
+                      onChange={e => setTextEncoder(e.target.value)}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-blue-500/50 appearance-none font-sans"
+                    >
+                      {TEXT_ENCODER_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400">
+                      ▼
+                    </div>
+                  </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider flex items-center gap-1">
-                    Precisión / Cuant.
-                    <AutoFillBadge field="precision" />
-                  </label>
-                  <input 
-                    type="text" 
-                    list="precision-list"
-                    value={precision}
-                    onChange={e => setPrecision(e.target.value)}
-                    placeholder="Ej: GGUF Q4_K_M, FP8..."
-                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50"
-                  />
-                  <datalist id="precision-list">
-                    <option value="GGUF Q4_K_M" />
-                    <option value="GGUF Q4_K_S" />
-                    <option value="GGUF Q5_K_M" />
-                    <option value="GGUF Q8_0" />
-                    <option value="FP8 Mixed Precision" />
-                    <option value="FP8 (e4m3fn)" />
-                    <option value="BF16" />
-                    <option value="FP16" />
-                  </datalist>
+                {/* Video VAE */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-purple-400 uppercase tracking-wider flex items-center gap-1.5 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/60">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                      Video VAE
+                    </label>
+                    <AutoFillBadge field="videoVae" />
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={videoVae || 'Not Found'}
+                      onChange={e => setVideoVae(e.target.value)}
+                      className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-purple-500/50 appearance-none font-sans"
+                    >
+                      {VIDEO_VAE_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-400">
+                      ▼
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

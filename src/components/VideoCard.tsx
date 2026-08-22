@@ -60,66 +60,90 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
           </div>
         )}
         
-        <div className="mt-3 flex items-start justify-between text-xs text-neutral-400 px-1">
-          <div className="flex flex-col gap-1.5">
-            {video.hardware ? (
-              <div 
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border font-medium ${
-                  video.hardware.gpu.toLowerCase().includes('rtx') || video.hardware.gpu.toLowerCase().includes('nvidia') || video.hardware.gpu.toLowerCase().includes('gtx')
-                    ? 'bg-[#76b900]/10 border-[#76b900]/30 text-[#76b900]' 
-                    : 'bg-indigo-950/40 border-indigo-900/50 text-indigo-300'
-                }`}
-                title={`${video.hardware.gpu} • ${video.hardware.vram}GB VRAM • ${video.hardware.ram}GB RAM`}
-              >
-                {(video.hardware.gpu.toLowerCase().includes('rtx') || video.hardware.gpu.toLowerCase().includes('nvidia') || video.hardware.gpu.toLowerCase().includes('gtx')) ? (
-                  <span className="font-black italic pr-1.5 text-[10px] tracking-widest border-r border-[#76b900]/30 mr-0.5">NVIDIA</span>
-                ) : (
-                  <Cpu className="w-3.5 h-3.5" />
-                )}
-                <span>
-                  {video.hardware.gpu} <span className="opacity-80 font-mono text-[10px] ml-1">{video.hardware.vram}GB • {video.hardware.ram}GB RAM</span>
-                </span>
-              </div>
-            ) : formattedDate ? (
-              <span className="flex items-center gap-1.5 text-neutral-500 h-6">
-                <Calendar className="w-3.5 h-3.5" />
-                {formattedDate}
-              </span>
-            ) : (
-              <span></span>
-            )}
+        <div className="mt-3 p-3 bg-neutral-950/70 rounded-xl border border-neutral-800/90 text-xs text-neutral-300">
+          <div className="grid grid-cols-2 gap-2.5">
+            {/* Columna 1: Usuario & Hardware */}
+            <div className="flex flex-col gap-1.5 min-w-0">
+              {/* Nick / Autor */}
+              {(video.creatorDisplayName || video.createdBy) ? (
+                <div 
+                  className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-300 text-[11px] font-medium"
+                  title={`Creado por: ${video.creatorDisplayName || video.createdBy}${video.createdBy && video.creatorDisplayName ? ` (${video.createdBy})` : ''}`}
+                >
+                  <User className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <span className="truncate">{video.creatorDisplayName || video.createdBy}</span>
+                </div>
+              ) : formattedDate ? (
+                <div className="flex items-center gap-1.5 px-2 py-1 text-neutral-500 text-[11px]">
+                  <Calendar className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{formattedDate}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-2 py-1 text-neutral-600 text-[11px]">
+                  <User className="w-3.5 h-3.5 shrink-0 opacity-40" />
+                  <span>Anónimo</span>
+                </div>
+              )}
 
-            {(video.creatorDisplayName || video.createdBy) && (
-              <div 
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800/80 border border-neutral-700 text-neutral-300 w-fit text-xs font-medium"
-                title={`Creado por: ${video.creatorDisplayName || video.createdBy}${video.createdBy && video.creatorDisplayName ? ` (${video.createdBy})` : ''}`}
-              >
-                <User className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                <span className="truncate max-w-[170px]">{video.creatorDisplayName || video.createdBy}</span>
-              </div>
-            )}
+              {/* GPU & Memoria */}
+              {video.hardware ? (
+                <div 
+                  className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-medium ${
+                    video.hardware.gpu.toLowerCase().includes('rtx') || video.hardware.gpu.toLowerCase().includes('nvidia') || video.hardware.gpu.toLowerCase().includes('gtx')
+                      ? 'bg-[#76b900]/10 border-[#76b900]/30 text-[#76b900]' 
+                      : 'bg-indigo-950/40 border-indigo-900/50 text-indigo-300'
+                  }`}
+                  title={`${video.hardware.gpu} • ${video.hardware.vram}GB VRAM • ${video.hardware.ram}GB RAM`}
+                >
+                  {(video.hardware.gpu.toLowerCase().includes('rtx') || video.hardware.gpu.toLowerCase().includes('nvidia') || video.hardware.gpu.toLowerCase().includes('gtx')) ? (
+                    <span className="font-black italic text-[9px] tracking-wider shrink-0">NV</span>
+                  ) : (
+                    <Cpu className="w-3.5 h-3.5 shrink-0" />
+                  )}
+                  <span className="truncate font-mono">
+                    {video.hardware.gpu} <span className="opacity-75 text-[10px]">({video.hardware.vram}G/{video.hardware.ram}G)</span>
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-2 py-1 text-neutral-600 text-[11px]">
+                  <Cpu className="w-3.5 h-3.5 shrink-0 opacity-40" />
+                  <span>HW no reg.</span>
+                </div>
+              )}
+            </div>
 
-            {video.renderSeconds !== undefined && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800/80 border border-neutral-700 text-teal-400 w-fit">
-                <Clock className="w-3.5 h-3.5" />
-                <span className="font-medium">Render: {Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span>
+            {/* Columna 2: Render Time, Peso de archivo & Link */}
+            <div className="flex flex-col gap-1.5 min-w-0">
+              {/* Render Time */}
+              {video.renderSeconds !== undefined ? (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-teal-400 text-[11px] font-medium font-mono">
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s render</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-2 py-1 text-neutral-600 text-[11px]">
+                  <Clock className="w-3.5 h-3.5 shrink-0 opacity-40" />
+                  <span>Render N/D</span>
+                </div>
+              )}
+
+              {/* Peso & Enlace Drive / Original */}
+              <div className="flex items-center justify-between gap-1.5 px-2 py-1 rounded-md bg-neutral-900 border border-neutral-800 text-[11px]">
+                <div className="flex items-center gap-1.5 text-neutral-300 font-mono truncate">
+                  <HardDrive className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span>{video.fileSizeBytes ? formatBytes(video.fileSizeBytes) : 'N/D'}</span>
+                </div>
+                <a
+                  href={video.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-teal-400 hover:text-teal-300 transition-colors font-medium text-[10px] ml-auto shrink-0"
+                >
+                  {video.driveFileId ? 'Drive' : 'Link'} <ExternalLink className="w-2.5 h-2.5" />
+                </a>
               </div>
-            )}
-            {video.fileSizeBytes && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800/80 border border-neutral-700 text-neutral-400 w-fit">
-                <HardDrive className="w-3.5 h-3.5" />
-                <span className="font-medium">{formatBytes(video.fileSizeBytes)}</span>
-              </div>
-            )}
+            </div>
           </div>
-          <a
-            href={video.videoUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1 text-neutral-400 hover:text-teal-400 transition-colors pt-1"
-          >
-            {video.driveFileId ? 'Drive' : 'Original'} <ExternalLink className="w-3 h-3" />
-          </a>
         </div>
       </div>
 
@@ -146,35 +170,34 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
 
             <div className="flex items-center gap-3">
               {/* Badges Técnicos Específicos */}
-              {(video.textEncoder || video.videoVae || video.precision) && (
+              {(video.textEncoder || video.videoVae) && (
                 <div className="flex flex-wrap gap-1.5">
                   {video.textEncoder && (
                     <span 
-                      className="text-[11px] px-2 py-0.5 rounded-md bg-blue-950/40 border border-blue-800/60 text-blue-300 flex items-center gap-1 font-mono" 
+                      className={`text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono ${
+                        video.textEncoder === 'Not Found'
+                          ? 'bg-neutral-800/60 border-neutral-700 text-neutral-400'
+                          : 'bg-blue-950/40 border-blue-800/60 text-blue-300'
+                      }`}
                       title={`Text Encoder: ${video.textEncoder}`}
                     >
                       <Sparkles className="w-2.5 h-2.5 text-blue-400" />
-                      <span className="text-[10px] text-blue-400/70 font-sans uppercase">Enc:</span>
+                      <span className="text-[10px] text-blue-400/70 font-sans uppercase">Text:</span>
                       {video.textEncoder}
                     </span>
                   )}
                   {video.videoVae && (
                     <span 
-                      className="text-[11px] px-2 py-0.5 rounded-md bg-purple-950/40 border border-purple-800/60 text-purple-300 flex items-center gap-1 font-mono" 
+                      className={`text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono ${
+                        video.videoVae === 'Not Found'
+                          ? 'bg-neutral-800/60 border-neutral-700 text-neutral-400'
+                          : 'bg-purple-950/40 border-purple-800/60 text-purple-300'
+                      }`}
                       title={`Video VAE: ${video.videoVae}`}
                     >
                       <Cpu className="w-2.5 h-2.5 text-purple-400" />
-                      <span className="text-[10px] text-purple-400/70 font-sans uppercase">VAE:</span>
+                      <span className="text-[10px] text-purple-400/70 font-sans uppercase">Video:</span>
                       {video.videoVae}
-                    </span>
-                  )}
-                  {video.precision && (
-                    <span 
-                      className="text-[11px] px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-800/60 text-amber-300 flex items-center gap-1 font-mono" 
-                      title={`Precisión / Cuantización: ${video.precision}`}
-                    >
-                      <Gauge className="w-2.5 h-2.5 text-amber-400" />
-                      {video.precision}
                     </span>
                   )}
                 </div>
