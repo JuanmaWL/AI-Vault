@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { VideoRecord } from '../types';
 import { DriveVideoPlayer } from './DriveVideoPlayer';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical } from 'lucide-react';
 import { formatBytes } from '../lib/utils';
 
 interface VideoCardProps {
@@ -11,13 +11,52 @@ interface VideoCardProps {
   onToggleSelect?: () => void;
   onDeleteClick?: () => void;
   onEditClick?: () => void;
-  onDuplicateClick?: () => void;
   onCompareClick?: () => void;
 }
 
-export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onDuplicateClick, onCompareClick }: VideoCardProps) {
+export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onCompareClick }: VideoCardProps) {
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [copiedNegative, setCopiedNegative] = useState(false);
+
+  const handleCopyPrompt = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(video.prompt);
+      setCopiedPrompt(true);
+      setTimeout(() => setCopiedPrompt(false), 2000);
+    } catch {
+      // Fallback
+      const textArea = document.createElement('textarea');
+      textArea.value = video.prompt;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedPrompt(true);
+      setTimeout(() => setCopiedPrompt(false), 2000);
+    }
+  };
+
+  const handleCopyNegative = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!video.negativePrompt) return;
+    try {
+      await navigator.clipboard.writeText(video.negativePrompt);
+      setCopiedNegative(true);
+      setTimeout(() => setCopiedNegative(false), 2000);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = video.negativePrompt;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopiedNegative(true);
+      setTimeout(() => setCopiedNegative(false), 2000);
+    }
+  };
 
   const formattedDate = video.createdAt
     ? new Intl.DateTimeFormat('es-ES', {
@@ -231,15 +270,6 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                       <SplitSquareVertical className="w-4 h-4" />
                     </button>
                   )}
-                  {onDuplicateClick && (
-                    <button
-                      onClick={onDuplicateClick}
-                      className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-teal-950/30 rounded-lg transition-colors border border-transparent hover:border-teal-900/50"
-                      title="Duplicar vídeo"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                  )}
                   {onEditClick && (
                     <button
                       onClick={onEditClick}
@@ -265,10 +295,33 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
 
           {/* Prompt */}
           <div>
-            <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-2 mb-2">
-              <PlaySquare className="w-3.5 h-3.5 text-teal-400" /> Prompt
-            </h3>
-            <div className="bg-neutral-950/70 p-4 rounded-xl border border-neutral-800/80">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <h3 className="text-xs font-bold text-neutral-400 uppercase tracking-widest flex items-center gap-2">
+                <PlaySquare className="w-3.5 h-3.5 text-teal-400" /> Prompt
+              </h3>
+              <button
+                onClick={handleCopyPrompt}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  copiedPrompt
+                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+                    : 'bg-neutral-800/80 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700/60'
+                }`}
+                title="Copiar prompt completo al portapapeles"
+              >
+                {copiedPrompt ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-teal-400 animate-in zoom-in" />
+                    <span className="font-semibold text-teal-300">¡Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                    <span>Copiar prompt</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="bg-neutral-950/70 p-4 rounded-xl border border-neutral-800/80 relative group">
               <p className="text-neutral-200 text-sm sm:text-base leading-relaxed font-normal select-text whitespace-pre-wrap">
                 {isPromptExpanded || !isPromptLong 
                   ? video.prompt 
@@ -292,9 +345,32 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
           {/* Negative Prompt si existe */}
           {video.negativePrompt && (
             <div>
-              <h4 className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider mb-1.5">
-                Negative Prompt
-              </h4>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <h4 className="text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                  Negative Prompt
+                </h4>
+                <button
+                  onClick={handleCopyNegative}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-all ${
+                    copiedNegative
+                      ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                      : 'bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                  }`}
+                  title="Copiar negative prompt"
+                >
+                  {copiedNegative ? (
+                    <>
+                      <Check className="w-3 h-3 text-teal-400" />
+                      <span>Copiado</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3 text-neutral-500" />
+                      <span>Copiar</span>
+                    </>
+                  )}
+                </button>
+              </div>
               <div className="bg-neutral-950/40 p-3 rounded-lg border border-neutral-800/60">
                 <p className="text-neutral-400 text-xs leading-relaxed italic select-text whitespace-pre-wrap">
                   {isNegativeExpanded || !isNegativeLong

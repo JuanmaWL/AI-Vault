@@ -14,7 +14,7 @@ import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical } from 'lucide-react';
+import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check } from 'lucide-react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -591,12 +591,6 @@ export default function App() {
     return false;
   };
 
-  const handleDuplicateVideo = (video: VideoRecord) => {
-    const { id, videoUrl, driveFileId, createdAt, rawMetadata, createdBy, creatorUid, creatorDisplayName, ...rest } = video;
-    setEditingVideo({ ...rest, schemaVersion: 2 } as VideoRecord);
-    setIsModalOpen(true);
-  };
-
   const handleOpenDualCompare = (videoA: VideoRecord, videoB?: VideoRecord) => {
     if (videoB) {
       setDualComparePair({ videoA, videoB });
@@ -759,100 +753,58 @@ export default function App() {
                 </button>
               )}
 
-              {/* Botones de acción y nuevo registro */}
+              {/* Botones de acción principales */}
               {currentUser || usingLocal ? (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      setSelectionMode(!selectionMode);
-                      setSelectedVideoIds(new Set());
+                      if (selectionMode) {
+                        setSelectionMode(false);
+                        setSelectedVideoIds(new Set());
+                      } else {
+                        setSelectionMode(true);
+                      }
                     }}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition-all shadow-md border ${
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold transition-all border ${
                        selectionMode 
-                        ? 'bg-neutral-800 text-neutral-200 border-neutral-700' 
-                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800 text-neutral-400'
+                        ? 'bg-teal-950/70 text-teal-300 border-teal-600 shadow-md shadow-teal-950/40' 
+                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 text-neutral-300'
                     }`}
+                    title="Activar/desactivar modo de selección para borrar o comparar"
                   >
-                    <CheckSquare className="w-4 h-4" />
-                    <span className="hidden xl:inline">{selectionMode ? 'Cancelar' : 'Seleccionar'}</span>
+                    <CheckSquare className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{selectionMode ? 'Seleccionando...' : 'Seleccionar'}</span>
+                    {selectedVideoIds.size > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
+                        {selectedVideoIds.size}
+                      </span>
+                    )}
                   </button>
 
-                  {selectionMode && (
-                    <>
-                      <button
-                         onClick={() => {
-                           if (selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0) {
-                             setSelectedVideoIds(new Set());
-                           } else {
-                             setSelectedVideoIds(new Set(filteredVideos.map(v => v.id!).filter(Boolean)));
-                           }
-                         }}
-                         className="flex items-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 hover:border-neutral-700 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
-                      >
-                         <span>{selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}</span>
-                      </button>
-
-                      {filteredVideos.some(v => !isVideoOwner(v)) && filteredVideos.some(isVideoOwner) && (
-                        <button
-                          onClick={() => {
-                            const myIds = filteredVideos.filter(isVideoOwner).map(v => v.id!).filter(Boolean);
-                            setSelectedVideoIds(new Set(myIds));
-                          }}
-                          className="flex items-center gap-2 px-4 py-2.5 bg-teal-950/40 hover:bg-teal-900/50 text-teal-300 border border-teal-800/50 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
-                          title="Seleccionar solo los vídeos que puedes borrar o editar"
-                        >
-                          <span>Marcar mis vídeos ({filteredVideos.filter(isVideoOwner).length})</span>
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {selectionMode && selectedVideoIds.size === 2 && (
-                    <button
-                       onClick={() => {
-                         const selected = Array.from(selectedVideoIds).map(id => videos.find(v => v.id === id)).filter(Boolean) as VideoRecord[];
-                         if (selected.length === 2) {
-                           setDualComparePair({ videoA: selected[0], videoB: selected[1] });
-                         }
-                       }}
-                       className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-neutral-950 font-bold rounded-full text-sm transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] hover:scale-105 active:scale-95 animate-in fade-in"
-                       title="Comparar los 2 vídeos seleccionados a pantalla completa"
-                    >
-                       <Sparkles className="w-4 h-4 text-neutral-950" />
-                       <span>Comparar 1 vs 1</span>
-                    </button>
-                  )}
-
-                  {selectionMode && selectedVideoIds.size > 0 && (
-                    <button
-                       onClick={() => setVideosToDelete(Array.from(selectedVideoIds))}
-                       className="flex items-center gap-2 px-4 py-2.5 bg-rose-950/50 hover:bg-rose-900/50 text-rose-400 border border-rose-900/50 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
-                    >
-                       <Trash2 className="w-4 h-4" />
-                       <span className="hidden xl:inline">Borrar ({selectedVideoIds.size})</span>
-                    </button>
-                  )}
-                  
                   <button
                     onClick={() => setIsBatchModalOpen(true)}
-                    className="flex items-center gap-2 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white border border-neutral-700 px-4 py-2.5 rounded-full text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-md"
+                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-neutral-950 px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all hover:scale-105 active:scale-95 shadow-md shadow-teal-950/40"
                     title="Importar varios vídeos desde URLs"
                   >
-                    <Database className="w-4 h-4" /> <span className="hidden sm:inline">Batch Import</span>
+                    <Database className="w-4 h-4" /> <span>Batch Import</span>
                   </button>
 
                   <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 bg-white text-black hover:bg-neutral-200 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                    onClick={() => {
+                      setEditingVideo(undefined);
+                      setIsModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 px-3 py-2 rounded-full text-xs sm:text-sm font-medium transition-all"
+                    title="Crear registro individual de vídeo manualmente"
                   >
-                    <Plus className="w-4 h-4" /> <span className="hidden sm:inline">Nuevo Registro</span>
+                    <Plus className="w-4 h-4" /> <span className="hidden md:inline">Nuevo Registro</span>
                   </button>
                 </div>
               ) : (
                 <div className="relative group">
                   <button
                     disabled
-                    className="flex items-center gap-2 bg-neutral-900/50 border border-neutral-800/80 text-neutral-600 px-4 py-2.5 rounded-full text-sm font-medium cursor-not-allowed"
+                    className="flex items-center gap-2 bg-neutral-900/50 border border-neutral-800/80 text-neutral-600 px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4 text-neutral-600" /> Nuevo Registro
                   </button>
@@ -1064,7 +1016,6 @@ export default function App() {
                                 setEditingVideo(video);
                                 setIsModalOpen(true);
                               } : undefined}
-                              onDuplicateClick={!selectionMode ? () => handleDuplicateVideo(video) : undefined}
                             />
                           </div>
                         ))}
@@ -1075,7 +1026,7 @@ export default function App() {
               })}
             </div>
           ) : (
-            <div className="flex flex-col gap-6 pb-12">
+            <div className="flex flex-col gap-6 pb-24">
               {filteredVideos.map((video) => (
                 <div key={video.id || video.videoUrl}>
                   <VideoCard 
@@ -1089,7 +1040,6 @@ export default function App() {
                       setEditingVideo(video);
                       setIsModalOpen(true);
                     } : undefined}
-                    onDuplicateClick={!selectionMode ? () => handleDuplicateVideo(video) : undefined}
                   />
                 </div>
               ))}
@@ -1097,6 +1047,94 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Floating Bottom Bulk Action Toolbar */}
+      {selectionMode && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-4xl w-[92%] sm:w-auto animate-in slide-in-from-bottom-5 duration-200">
+          <div className="bg-neutral-900/95 backdrop-blur-md border border-teal-500/40 px-4 py-3 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.6)] flex flex-wrap items-center justify-between sm:justify-start gap-3 text-sm">
+            {/* Contador de seleccionados */}
+            <div className="flex items-center gap-2 pr-2 border-r border-neutral-800">
+              <span className="flex h-2.5 w-2.5 rounded-full bg-teal-400 animate-pulse" />
+              <span className="font-bold text-white text-xs sm:text-sm whitespace-nowrap">
+                {selectedVideoIds.size} {selectedVideoIds.size === 1 ? 'vídeo seleccionado' : 'vídeos seleccionados'}
+              </span>
+            </div>
+
+            {/* Acciones de selección rápida */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => {
+                  if (selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0) {
+                    setSelectedVideoIds(new Set());
+                  } else {
+                    setSelectedVideoIds(new Set(filteredVideos.map(v => v.id!).filter(Boolean)));
+                  }
+                }}
+                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 hover:text-white rounded-lg text-xs font-medium transition-colors border border-neutral-700/60"
+              >
+                {selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}
+              </button>
+
+              {filteredVideos.some(v => !isVideoOwner(v)) && filteredVideos.some(isVideoOwner) && (
+                <button
+                  onClick={() => {
+                    const myIds = filteredVideos.filter(isVideoOwner).map(v => v.id!).filter(Boolean);
+                    setSelectedVideoIds(new Set(myIds));
+                  }}
+                  className="px-3 py-1.5 bg-teal-950/60 hover:bg-teal-900/60 text-teal-300 border border-teal-800/60 rounded-lg text-xs font-medium transition-colors"
+                  title="Seleccionar solo los vídeos que puedes borrar o editar"
+                >
+                  Marcar mis vídeos ({filteredVideos.filter(isVideoOwner).length})
+                </button>
+              )}
+            </div>
+
+            {/* Separador */}
+            <div className="hidden sm:block h-5 w-px bg-neutral-800" />
+
+            {/* Acciones con los elementos seleccionados */}
+            <div className="flex items-center gap-2 flex-wrap ml-auto sm:ml-0">
+              {selectedVideoIds.size === 2 && (
+                <button
+                  onClick={() => {
+                    const selected = Array.from(selectedVideoIds).map(id => videos.find(v => v.id === id)).filter(Boolean) as VideoRecord[];
+                    if (selected.length === 2) {
+                      setDualComparePair({ videoA: selected[0], videoB: selected[1] });
+                    }
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-neutral-950 font-bold rounded-lg text-xs transition-all shadow-md hover:scale-105 active:scale-95"
+                  title="Comparar los 2 vídeos seleccionados a pantalla completa"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Comparar 1 vs 1</span>
+                </button>
+              )}
+
+              {selectedVideoIds.size > 0 && (
+                <button
+                  onClick={() => setVideosToDelete(Array.from(selectedVideoIds))}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-rose-100 border border-rose-800/80 rounded-lg text-xs font-semibold transition-all shadow-sm"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Eliminar ({selectedVideoIds.size})</span>
+                </button>
+              )}
+
+              {/* Botón cerrar/salir modo selección */}
+              <button
+                onClick={() => {
+                  setSelectionMode(false);
+                  setSelectedVideoIds(new Set());
+                }}
+                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+                title="Salir del modo selección"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pie de Página */}
       <footer className="border-t border-neutral-800/80 bg-neutral-950/90 py-6 px-6 text-xs text-neutral-500">
