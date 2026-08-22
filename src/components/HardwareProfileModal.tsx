@@ -38,7 +38,7 @@ export function HardwareProfileModal({ initialData, onClose, onSave, isMandatory
       });
     } catch (err: any) {
       console.error(err);
-      setErrorMsg('Error al guardar. ¿Has actualizado las reglas de Firestore?');
+      setErrorMsg('Error al guardar el perfil localmente.');
       setIsSaving(false);
     }
   };

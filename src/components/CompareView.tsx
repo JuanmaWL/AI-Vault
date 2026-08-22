@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { VideoRecord } from '../types';
 import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
+import { formatBytes } from '../lib/utils';
 
 interface CompareViewProps {
   videos: VideoRecord[];
@@ -440,6 +441,20 @@ function CompareCard({
               <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
                 <span className="text-neutral-500">Tiempo Render</span>
                 <span className="text-teal-400">{Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span>
+              </div>
+            )}
+            {video.hardware && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">Hardware</span>
+                <span className="text-indigo-400 truncate text-right ml-2" title={`${video.hardware.gpu} • ${video.hardware.vram}GB VRAM • ${video.hardware.ram}GB RAM`}>
+                  {video.hardware.gpu} ({video.hardware.vram}GB)
+                </span>
+              </div>
+            )}
+            {video.fileSizeBytes && (
+              <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
+                <span className="text-neutral-500">Tamaño</span>
+                <span>{formatBytes(video.fileSizeBytes)}</span>
               </div>
             )}
             {video.seed !== undefined && (

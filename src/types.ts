@@ -46,6 +46,7 @@ export interface VideoRecord {
   seed?: number;
   fps?: number;
   durationSeconds?: number;
+  fileSizeBytes?: number;
   loras: Lora[];
 
   notes?: string;

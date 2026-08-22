@@ -1,6 +1,6 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation } from '../lib/utils';
+import { extractDriveFileId, calculateOrientation, parseModelAndTags } from '../lib/utils';
 import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2 } from 'lucide-react';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
@@ -27,17 +27,18 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
   const [prompt, setPrompt] = useState(initialData?.prompt || '');
   const [negativePrompt, setNegativePrompt] = useState(initialData?.negativePrompt || '');
-  const [model, setModel] = useState(initialData?.model || 'Wan 2.1');
+  const [model, setModel] = useState(initialData?.model || '');
   const [source, setSource] = useState<VideoSource>(initialData?.source || 'local');
-  const [tagsInput, setTagsInput] = useState(initialData?.tags?.join(', ') || 'Wan 2.1');
-  const [groupName, setGroupName] = useState(initialData?.groupName || localStorage.getItem('ai_video_vault_last_group') || '');
-  const [width, setWidth] = useState<number | ''>(initialData?.width || 1920);
-  const [height, setHeight] = useState<number | ''>(initialData?.height || 1080);
-  const [steps, setSteps] = useState<number | ''>(initialData?.steps || 30);
-  const [shift, setShift] = useState<string>(initialData?.shift?.toString() || '5.0');
+  const [tagsInput, setTagsInput] = useState(initialData?.tags?.join(', ') || '');
+  const [groupName, setGroupName] = useState(initialData?.groupName || '');
+  const [width, setWidth] = useState<number | ''>(initialData?.width || '');
+  const [height, setHeight] = useState<number | ''>(initialData?.height || '');
+  const [steps, setSteps] = useState<number | ''>(initialData?.steps || '');
+  const [shift, setShift] = useState<string>(initialData?.shift?.toString() || '');
   const [seed, setSeed] = useState<string>(initialData?.seed?.toString() || '');
-  const [fps, setFps] = useState<string>(initialData?.fps?.toString() || '24');
-  const [durationSeconds, setDurationSeconds] = useState<string>(initialData?.durationSeconds?.toString() || '5');
+  const [fps, setFps] = useState<string>(initialData?.fps?.toString() || '');
+  const [durationSeconds, setDurationSeconds] = useState<string>(initialData?.durationSeconds?.toString() || '');
+  const [fileSizeBytes, setFileSizeBytes] = useState<number | undefined>(initialData?.fileSizeBytes);
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [loras, setLoras] = useState<Lora[]>(initialData?.loras || []);
   
@@ -54,49 +55,11 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [extractError, setExtractError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isSubmittingRef = useRef(false);
 
   const detectedFileId = useMemo(() => extractDriveFileId(videoUrl), [videoUrl]);
   const isDirectMp4 = useMemo(() => videoUrl.toLowerCase().includes('.mp4'), [videoUrl]);
   const currentOrientation = useMemo(() => calculateOrientation(Number(width) || 0, Number(height) || 0), [width, height]);
-
-  const parseModelAndTags = (modelType: string, typeDesc: string = '') => {
-    const combined = `${modelType} ${typeDesc}`.toLowerCase();
-    let baseModel = modelType;
-    let newTags: string[] = [];
-
-    if (combined.includes('minimax') || combined.includes('h3')) {
-        baseModel = 'Minimax H3';
-    } else if (combined.includes('scail2')) {
-        baseModel = 'Wan 2.1';
-        newTags.push('SCAIL 2');
-    } else if (combined.includes('wan 2.1') || combined.includes('wan_2.1') || combined.includes('wan2.1')) {
-        baseModel = 'Wan 2.1';
-    } else if (combined.includes('wan 2.2') || combined.includes('wan_2.2') || combined.includes('wan2.2')) {
-        baseModel = 'Wan 2.2';
-    } else if (combined.includes('ltx 2.5') || combined.includes('ltx_2.5') || combined.includes('ltx2.5') || combined.includes('ltx2_25')) {
-        baseModel = 'LTX 2.5';
-    } else if (combined.includes('ltx 2.3') || combined.includes('ltx_2.3') || combined.includes('ltx2.3') || combined.includes('ltx2')) {
-        baseModel = 'LTX 2.3';
-    } else if (combined.includes('hunyuan')) {
-        baseModel = 'HunyuanVideo';
-    }
-
-    if (baseModel.includes('LTX')) newTags.push('LTX');
-    if (baseModel.includes('Wan 2.1')) newTags.push('Wan 2.1');
-
-    if (combined.includes('pruned')) newTags.push('pruned');
-    if (combined.includes('distilled')) newTags.push('distilled');
-    if (combined.includes('33b')) newTags.push('33B');
-    if (combined.includes('22b')) newTags.push('22B');
-    if (combined.includes('20b')) newTags.push('20B');
-    if (combined.includes('14b')) newTags.push('14B');
-    if (combined.includes('ref2va')) newTags.push('ref2va');
-    if (combined.includes('fl2va')) newTags.push('fl2va');
-    if (combined.includes('int8')) newTags.push('int8');
-    if (combined.includes('fp8')) newTags.push('fp8');
-
-    return { baseModel, newTags: Array.from(new Set(newTags)) };
-  };
 
   const processLocalFile = async (file: File) => {
     setExtracting(true);
@@ -134,6 +97,11 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       
       let newAutoFilled: Record<string, boolean> = {};
       let foundSomething = false;
+
+      if (file.size) {
+        setFileSizeBytes(file.size);
+        newAutoFilled.fileSizeBytes = true;
+      }
 
       if (videoTrack?.Width) {
         setWidth(Number(videoTrack.Width));
@@ -309,6 +277,8 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     
     // Filtrar loras vacíos
@@ -352,16 +322,19 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       createdAt: initialData?.createdAt || Date.now(),
       createdBy: initialData?.createdBy || userEmail || undefined,
       renderSeconds: renderSeconds.trim() !== '' ? Number(renderSeconds) : undefined,
+      fileSizeBytes,
       generatedAt,
       rawMetadata: rawMetadata.trim() !== '' ? rawMetadata : undefined,
       groupName: groupName.trim() !== '' ? groupName.trim() : undefined
     };
 
-    localStorage.setItem('ai_video_vault_last_group', groupName.trim());
-
-    await onSave(record);
-    setIsSubmitting(false);
-    onClose();
+    try {
+      await onSave(record);
+      onClose();
+    } finally {
+      setIsSubmitting(false);
+      isSubmittingRef.current = false;
+    }
   };
 
   return (

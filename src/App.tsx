@@ -7,6 +7,7 @@ import { VideoCard } from './components/VideoCard';
 import { CompareView } from './components/CompareView';
 import { DashboardView } from './components/DashboardView';
 import { AddVideoModal } from './components/AddVideoModal';
+import { BatchImportModal } from './components/BatchImportModal';
 import { LoginModal } from './components/LoginModal';
 import { SetNickModal } from './components/SetNickModal';
 import { HardwareProfileModal } from './components/HardwareProfileModal';
@@ -50,8 +51,10 @@ function normalizeRecord(raw: any): VideoRecord {
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
     createdBy: raw.createdBy,
     renderSeconds: typeof raw.renderSeconds === 'number' ? raw.renderSeconds : undefined,
+    fileSizeBytes: typeof raw.fileSizeBytes === 'number' ? raw.fileSizeBytes : undefined,
     generatedAt: typeof raw.generatedAt === 'number' ? raw.generatedAt : undefined,
-    rawMetadata: typeof raw.rawMetadata === 'string' ? raw.rawMetadata : undefined
+    rawMetadata: typeof raw.rawMetadata === 'string' ? raw.rawMetadata : undefined,
+    hardware: raw.hardware
   };
 }
 
@@ -84,6 +87,7 @@ export default function App() {
   const [videos, setVideos] = useState<VideoRecord[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingVideo, setEditingVideo] = useState<VideoRecord | undefined>(undefined);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isNickModalOpen, setIsNickModalOpen] = useState(false);
@@ -115,26 +119,17 @@ export default function App() {
 
   // Fetch or create user profile
   const fetchUserProfile = async (user: User) => {
-    if (!db) return;
+    let localHardware: UserHardware | undefined;
     try {
-      const docRef = doc(db, 'users', user.uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data() as UserProfile;
-        setUserProfile(data);
-        if (!data.hardware) {
-          setIsHardwareModalOpen(true);
-        }
-      } else {
-        const newProfile: UserProfile = { uid: user.uid, email: user.email || '' };
-        await setDoc(docRef, newProfile);
-        setUserProfile(newProfile);
-        setIsHardwareModalOpen(true);
-      }
-    } catch (err) {
-      console.error('Error fetching user profile', err);
-      // Fallback para que la app no se rompa si fallan los permisos
-      setUserProfile({ uid: user.uid, email: user.email || '' });
+      const stored = localStorage.getItem('ai_video_vault_hardware');
+      if (stored) localHardware = JSON.parse(stored);
+    } catch {}
+
+    const baseProfile: UserProfile = { uid: user.uid, email: user.email || '', hardware: localHardware };
+    setUserProfile(baseProfile);
+
+    if (!localHardware) {
+      setIsHardwareModalOpen(true);
     }
   };
 
@@ -160,9 +155,12 @@ export default function App() {
   }, []);
 
   const handleSaveHardware = async (hardware: UserHardware) => {
-    if (!currentUser || !db) return;
-    const docRef = doc(db, 'users', currentUser.uid);
-    await setDoc(docRef, { hardware }, { merge: true });
+    if (!currentUser) return;
+    try {
+      localStorage.setItem('ai_video_vault_hardware', JSON.stringify(hardware));
+    } catch (err) {
+      console.error('Error saving hardware to local storage', err);
+    }
     setUserProfile(prev => {
       if (prev) return { ...prev, hardware };
       return { uid: currentUser.uid, email: currentUser.email || '', hardware };
@@ -228,6 +226,33 @@ export default function App() {
 
   const cleanUndefined = (obj: any) => {
     return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
+  };
+
+  const handleSaveBatch = async (records: VideoRecord[]) => {
+    if (db && !usingLocal) {
+      try {
+        const batchPromises = records.map(record => {
+          if (!record.hardware && userProfile?.hardware) {
+            record.hardware = { ...userProfile.hardware };
+          }
+          const cleanRecord = cleanUndefined(record);
+          return addDoc(collection(db, COLLECTION_NAME), cleanRecord);
+        });
+        await Promise.all(batchPromises);
+      } catch (err) {
+        console.error("Error al escribir en Firestore batch", err);
+      }
+    } else {
+      const recordsWithIds = records.map(r => {
+        if (!r.hardware && userProfile?.hardware) r.hardware = { ...userProfile.hardware };
+        return { ...r, id: `local_${crypto.randomUUID()}` };
+      });
+      const newVids = [...recordsWithIds, ...videos];
+      setVideos(newVids);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newVids));
+      } catch {}
+    }
   };
 
   const handleAddVideo = async (record: VideoRecord) => {
@@ -518,6 +543,21 @@ export default function App() {
                     <span className="hidden xl:inline">{selectionMode ? 'Cancelar' : 'Seleccionar'}</span>
                   </button>
 
+                  {selectionMode && (
+                    <button
+                       onClick={() => {
+                         if (selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0) {
+                           setSelectedVideoIds(new Set());
+                         } else {
+                           setSelectedVideoIds(new Set(filteredVideos.map(v => v.id!)));
+                         }
+                       }}
+                       className="flex items-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 hover:border-neutral-700 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
+                    >
+                       <span className="hidden xl:inline">{selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}</span>
+                    </button>
+                  )}
+
                   {selectionMode && selectedVideoIds.size > 0 && (
                     <button
                        onClick={() => setVideosToDelete(Array.from(selectedVideoIds))}
@@ -528,6 +568,14 @@ export default function App() {
                     </button>
                   )}
                   
+                  <button
+                    onClick={() => setIsBatchModalOpen(true)}
+                    className="flex items-center gap-2 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white border border-neutral-700 px-4 py-2.5 rounded-full text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-md"
+                    title="Importar varios vídeos desde URLs"
+                  >
+                    <Database className="w-4 h-4" /> <span className="hidden sm:inline">Batch Import</span>
+                  </button>
+
                   <button
                     onClick={() => setIsModalOpen(true)}
                     className="flex items-center gap-2 bg-white text-black hover:bg-neutral-200 px-5 py-2.5 rounded-full text-sm font-semibold transition-all hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
@@ -783,6 +831,14 @@ export default function App() {
           userEmail={userDisplayName || currentUser?.email || undefined}
           initialData={editingVideo}
           existingGroups={uniqueGroups}
+        />
+      )}
+
+      {isBatchModalOpen && (
+        <BatchImportModal 
+          onClose={() => setIsBatchModalOpen(false)}
+          onSaveBatch={handleSaveBatch}
+          userEmail={userDisplayName || currentUser?.email || undefined}
         />
       )}
 

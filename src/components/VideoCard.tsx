@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { VideoRecord } from '../types';
 import { DriveVideoPlayer } from './DriveVideoPlayer';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu, HardDrive } from 'lucide-react';
+import { formatBytes } from '../lib/utils';
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -24,10 +25,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
       }).format(new Date(video.createdAt))
     : null;
 
-  const fpsDurationText = [
-    video.fps ? `${video.fps} fps` : null,
-    video.durationSeconds ? `${video.durationSeconds}s` : null,
-  ].filter(Boolean).join(' • ');
+  const fpsText = video.fps ? `${video.fps}` : null;
 
   const PROMPT_LIMIT = 150;
   const isPromptLong = video.prompt.length > PROMPT_LIMIT;
@@ -62,22 +60,55 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
           </div>
         )}
         
-        <div className="mt-3 flex items-center justify-between text-xs text-neutral-400 px-1">
-          {formattedDate ? (
-            <span className="flex items-center gap-1.5 text-neutral-500">
-              <Calendar className="w-3.5 h-3.5" />
-              {formattedDate}
-            </span>
-          ) : (
-            <span></span>
-          )}
+        <div className="mt-3 flex items-start justify-between text-xs text-neutral-400 px-1">
+          <div className="flex flex-col gap-1.5">
+            {video.hardware ? (
+              <div 
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border font-medium ${
+                  video.hardware.gpu.toLowerCase().includes('rtx') || video.hardware.gpu.toLowerCase().includes('nvidia') || video.hardware.gpu.toLowerCase().includes('gtx')
+                    ? 'bg-[#76b900]/10 border-[#76b900]/30 text-[#76b900]' 
+                    : 'bg-indigo-950/40 border-indigo-900/50 text-indigo-300'
+                }`}
+                title={`${video.hardware.gpu} • ${video.hardware.vram}GB VRAM • ${video.hardware.ram}GB RAM`}
+              >
+                {(video.hardware.gpu.toLowerCase().includes('rtx') || video.hardware.gpu.toLowerCase().includes('nvidia') || video.hardware.gpu.toLowerCase().includes('gtx')) ? (
+                  <span className="font-black italic pr-1.5 text-[10px] tracking-widest border-r border-[#76b900]/30 mr-0.5">NVIDIA</span>
+                ) : (
+                  <Cpu className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {video.hardware.gpu} <span className="opacity-80 font-mono text-[10px] ml-1">{video.hardware.vram}GB • {video.hardware.ram}GB RAM</span>
+                </span>
+              </div>
+            ) : formattedDate ? (
+              <span className="flex items-center gap-1.5 text-neutral-500 h-6">
+                <Calendar className="w-3.5 h-3.5" />
+                {formattedDate}
+              </span>
+            ) : (
+              <span></span>
+            )}
+
+            {video.renderSeconds !== undefined && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800/80 border border-neutral-700 text-teal-400 w-fit">
+                <Clock className="w-3.5 h-3.5" />
+                <span className="font-medium">Render: {Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span>
+              </div>
+            )}
+            {video.fileSizeBytes && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-800/80 border border-neutral-700 text-neutral-400 w-fit">
+                <HardDrive className="w-3.5 h-3.5" />
+                <span className="font-medium">{formatBytes(video.fileSizeBytes)}</span>
+              </div>
+            )}
+          </div>
           <a
             href={video.videoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 text-neutral-400 hover:text-teal-400 transition-colors"
+            className="flex items-center gap-1 text-neutral-400 hover:text-teal-400 transition-colors pt-1"
           >
-            {video.driveFileId ? 'Abrir en Google Drive' : 'Abrir original'} <ExternalLink className="w-3 h-3" />
+            {video.driveFileId ? 'Drive' : 'Original'} <ExternalLink className="w-3 h-3" />
           </a>
         </div>
       </div>
@@ -101,21 +132,6 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
               >
                 {video.source === 'local' ? 'Local (Wan2GP)' : 'Cloud'}
               </span>
-              {video.hardware && (
-                <span 
-                  className="text-[11px] font-semibold tracking-wider px-2 py-0.5 rounded-full border bg-indigo-950/40 border-indigo-900/50 text-indigo-300 flex items-center gap-1.5"
-                  title={`${video.hardware.gpu} • ${video.hardware.vram}GB VRAM • ${video.hardware.ram}GB RAM`}
-                >
-                  <Cpu className="w-3 h-3" />
-                  {video.hardware.gpu}
-                </span>
-              )}
-              {video.renderSeconds !== undefined && (
-                <span className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-neutral-800/80 border border-neutral-700 text-teal-400 flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-3">
@@ -223,56 +239,56 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
         {/* Métricas técnicas */}
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/50">
-              <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-neutral-400" /> Resolución
+            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-blue-950/20 border border-blue-900/30">
+              <span className="text-[11px] text-blue-500/80 flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-blue-400" /> Resolución
               </span>
-              <span className="text-xs sm:text-sm font-semibold text-neutral-200 font-mono">
+              <span className="text-xs sm:text-sm font-semibold text-blue-100 font-mono">
                 {video.width}x{video.height}
               </span>
             </div>
             
-            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/50">
-              <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-neutral-400" /> Proporción
+            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-violet-950/20 border border-violet-900/30">
+              <span className="text-[11px] text-violet-500/80 flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-violet-400" /> Proporción
               </span>
-              <span className="text-xs sm:text-sm font-semibold text-neutral-200 font-mono">
+              <span className="text-xs sm:text-sm font-semibold text-violet-100 font-mono">
                 {video.orientation}
               </span>
             </div>
 
-            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/50">
-              <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
-                <Settings className="w-3.5 h-3.5 text-neutral-400" /> Steps
+            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-900/30">
+              <span className="text-[11px] text-emerald-500/80 flex items-center gap-1.5">
+                <Settings className="w-3.5 h-3.5 text-emerald-400" /> Steps
               </span>
-              <span className="text-xs sm:text-sm font-semibold text-neutral-200 font-mono">{video.steps}</span>
+              <span className="text-xs sm:text-sm font-semibold text-emerald-100 font-mono">{video.steps}</span>
             </div>
 
-            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/50">
-              <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
-                <Workflow className="w-3.5 h-3.5 text-neutral-400" /> Shift
+            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/30">
+              <span className="text-[11px] text-amber-500/80 flex items-center gap-1.5">
+                <Workflow className="w-3.5 h-3.5 text-amber-400" /> Shift
               </span>
-              <span className="text-xs sm:text-sm font-semibold text-neutral-200 font-mono">
+              <span className="text-xs sm:text-sm font-semibold text-amber-100 font-mono">
                 {video.shift !== undefined ? video.shift : '—'}
               </span>
             </div>
 
-            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-neutral-950/40 border border-neutral-800/50">
-              <span className="text-[11px] text-neutral-500 flex items-center gap-1.5">
-                <Hash className="w-3.5 h-3.5 text-neutral-400" /> Seed
+            <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-rose-950/20 border border-rose-900/30">
+              <span className="text-[11px] text-rose-500/80 flex items-center gap-1.5">
+                <Hash className="w-3.5 h-3.5 text-rose-400" /> Seed
               </span>
-              <span className="text-xs sm:text-sm font-semibold text-neutral-200 font-mono truncate" title={String(video.seed || '')}>
+              <span className="text-xs sm:text-sm font-semibold text-rose-100 font-mono truncate" title={String(video.seed || '')}>
                 {video.seed !== undefined ? video.seed : '—'}
               </span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 text-xs text-neutral-400 px-1">
-            {fpsDurationText && (
+            {fpsText && (
               <div className="flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-neutral-500" />
-                <span>Timing / Cuadros:</span>
-                <span className="text-neutral-200 font-medium font-mono">{fpsDurationText}</span>
+                <span>FPS:</span>
+                <span className="text-neutral-200 font-medium font-mono">{fpsText}</span>
               </div>
             )}
           </div>
