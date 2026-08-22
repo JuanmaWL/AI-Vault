@@ -9,6 +9,8 @@ interface BatchImportModalProps {
   onClose: () => void;
   onSaveBatch: (videos: VideoRecord[]) => Promise<void>;
   userEmail?: string;
+  userDisplayName?: string;
+  userUid?: string;
   availableCategories?: string[];
   onAddCategory?: (category: string) => void;
 }
@@ -19,6 +21,8 @@ export function BatchImportModal({
   onClose, 
   onSaveBatch, 
   userEmail,
+  userDisplayName,
+  userUid,
   availableCategories = [],
   onAddCategory,
 }: BatchImportModalProps) {
@@ -215,8 +219,9 @@ export function BatchImportModal({
           const orientation = calculateOrientation(width, height);
           const driveFileId = extractDriveFileId(url) || '';
 
-          // Creator attribution: prefer userEmail, fallback to author extracted from URL
-          const creatorDisplayName = userEmail || urlInfo.username || undefined;
+          // Creator attribution: prefer current session identity, fallback to author extracted from URL
+          const resolvedDisplayName = userDisplayName || userEmail || urlInfo.username || undefined;
+          const resolvedCreatedBy = userEmail || userDisplayName || (urlInfo.username ? `@${urlInfo.username}` : undefined);
 
           const record: VideoRecord = {
             schemaVersion: 2,
@@ -239,8 +244,9 @@ export function BatchImportModal({
             textEncoder,
             loras,
             createdAt: Date.now(),
-            createdBy: userEmail,
-            creatorDisplayName,
+            createdBy: resolvedCreatedBy,
+            creatorUid: userUid,
+            creatorDisplayName: resolvedDisplayName,
             renderSeconds,
             fileSizeBytes,
             generatedAt,

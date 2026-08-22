@@ -325,6 +325,7 @@ export default function App() {
   const handleSaveBatch = async (records: VideoRecord[]) => {
     const activeNick = userDisplayName || currentUser?.displayName || userProfile?.displayName;
     const activeEmail = currentUser?.email || userProfile?.email;
+    const activeUid = currentUser?.uid || userProfile?.uid;
 
     records.forEach(record => {
       if (!record.hardware && userProfile?.hardware) {
@@ -333,8 +334,8 @@ export default function App() {
       if (!record.createdBy && activeEmail) {
         record.createdBy = activeEmail;
       }
-      if (!record.creatorUid && currentUser?.uid) {
-        record.creatorUid = currentUser.uid;
+      if (!record.creatorUid && activeUid) {
+        record.creatorUid = activeUid;
       }
       if (!record.creatorDisplayName && activeNick) {
         record.creatorDisplayName = activeNick;
@@ -350,11 +351,16 @@ export default function App() {
         await Promise.all(batchPromises);
       } catch (err) {
         console.error("Error al escribir en Firestore batch", err);
+        const recordsWithIds = records.map(r => ({ ...r, id: `local_${crypto.randomUUID()}` }));
+        const newVids = [...recordsWithIds, ...videos];
+        setVideos(newVids);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(newVids));
+        } catch {}
+        setUsingLocal(true);
       }
     } else {
-      const recordsWithIds = records.map(r => {
-        return { ...r, id: `local_${crypto.randomUUID()}` };
-      });
+      const recordsWithIds = records.map(r => ({ ...r, id: `local_${crypto.randomUUID()}` }));
       const newVids = [...recordsWithIds, ...videos];
       setVideos(newVids);
       try {
@@ -371,8 +377,8 @@ export default function App() {
     if (!record.createdBy && (currentUser?.email || userProfile?.email)) {
       record.createdBy = currentUser?.email || userProfile?.email;
     }
-    if (!record.creatorUid && currentUser?.uid) {
-      record.creatorUid = currentUser.uid;
+    if (!record.creatorUid && (currentUser?.uid || userProfile?.uid)) {
+      record.creatorUid = currentUser?.uid || userProfile?.uid;
     }
     const activeNick = userDisplayName || currentUser?.displayName || userProfile?.displayName;
     if (!record.creatorDisplayName && activeNick) {
@@ -540,13 +546,48 @@ export default function App() {
   }, [filteredVideos, filterGroup]);
 
   const isVideoOwner = (video: VideoRecord): boolean => {
-    if (!currentUser) return false;
-    if (video.creatorUid && currentUser.uid && video.creatorUid === currentUser.uid) {
+    // If in local mode without user auth, local user has full rights on local storage
+    if (usingLocal && !currentUser) {
       return true;
     }
-    if (video.createdBy && currentUser.email && video.createdBy.toLowerCase() === currentUser.email.toLowerCase()) {
+
+    const currentUid = currentUser?.uid || userProfile?.uid;
+    const currentEmail = (currentUser?.email || userProfile?.email || '').trim().toLowerCase();
+    const currentNick = (userDisplayName || currentUser?.displayName || userProfile?.displayName || '').trim().toLowerCase();
+
+    // 1. Match by Firebase UID
+    if (currentUid && video.creatorUid && video.creatorUid === currentUid) {
       return true;
     }
+
+    // 2. Match by Email in createdBy
+    if (currentEmail && video.createdBy) {
+      const videoCreatedBy = video.createdBy.trim().toLowerCase();
+      if (videoCreatedBy === currentEmail) {
+        return true;
+      }
+    }
+
+    // 3. Match by Nickname / Display Name in creatorDisplayName or createdBy
+    if (currentNick) {
+      if (video.creatorDisplayName && video.creatorDisplayName.trim().toLowerCase() === currentNick) {
+        return true;
+      }
+      if (video.createdBy && video.createdBy.trim().toLowerCase() === currentNick) {
+        return true;
+      }
+    }
+
+    // 4. Local or mock videos
+    if (video.id?.startsWith('local_') || video.id?.startsWith('mock')) {
+      return true;
+    }
+
+    // 5. If user is logged in / identified and video has no author assigned (legacy record)
+    if ((currentUser || userDisplayName) && !video.creatorUid && !video.createdBy) {
+      return true;
+    }
+
     return false;
   };
 
@@ -581,30 +622,42 @@ export default function App() {
     // Security check: Only delete videos created by current user
     const targetVideos = videos.filter(v => ids.includes(v.id!));
     const authorizedVideos = targetVideos.filter(isVideoOwner);
-    const authorizedIds = authorizedVideos.map(v => v.id!);
+    const authorizedIds = authorizedVideos.map(v => v.id!).filter(Boolean);
 
     if (authorizedIds.length === 0) {
-      setSelectedVideoIds(new Set());
-      setSelectionMode(false);
       setVideosToDelete(null);
       return;
     }
 
-    if (db && !usingLocal) {
+    // Separate Firestore IDs vs local IDs
+    const firestoreIds = authorizedIds.filter(id => !id.startsWith('local_') && !id.startsWith('mock'));
+
+    // Optimistically update state & local storage immediately
+    const updated = videos.filter(v => !authorizedIds.includes(v.id!));
+    setVideos(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch {}
+
+    // Delete authorized records from Firestore
+    if (db && !usingLocal && firestoreIds.length > 0) {
       try {
-        await Promise.all(authorizedIds.map(id => deleteDoc(doc(db, COLLECTION_NAME, id))));
+        await Promise.all(firestoreIds.map(id => deleteDoc(doc(db, COLLECTION_NAME, id))));
       } catch (err) {
         console.error("Error al borrar de Firestore", err);
       }
-    } else {
-      const updated = videos.filter(v => !authorizedIds.includes(v.id));
-      setVideos(updated);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
     }
-    setSelectedVideoIds(new Set());
-    setSelectionMode(false);
+
+    // Update selected IDs
+    setSelectedVideoIds(prev => {
+      const next = new Set(prev);
+      authorizedIds.forEach(id => next.delete(id));
+      return next;
+    });
+
+    if (selectionMode && authorizedIds.length >= ids.length) {
+      setSelectionMode(false);
+    }
     setVideosToDelete(null);
   };
 
@@ -706,8 +759,8 @@ export default function App() {
                 </button>
               )}
 
-              {/* Botón Nuevo Registro (condicional a estar autenticado) */}
-              {currentUser ? (
+              {/* Botones de acción y nuevo registro */}
+              {currentUser || usingLocal ? (
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
@@ -725,18 +778,33 @@ export default function App() {
                   </button>
 
                   {selectionMode && (
-                    <button
-                       onClick={() => {
-                         if (selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0) {
-                           setSelectedVideoIds(new Set());
-                         } else {
-                           setSelectedVideoIds(new Set(filteredVideos.map(v => v.id!)));
-                         }
-                       }}
-                       className="flex items-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 hover:border-neutral-700 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
-                    >
-                       <span className="hidden xl:inline">{selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}</span>
-                    </button>
+                    <>
+                      <button
+                         onClick={() => {
+                           if (selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0) {
+                             setSelectedVideoIds(new Set());
+                           } else {
+                             setSelectedVideoIds(new Set(filteredVideos.map(v => v.id!).filter(Boolean)));
+                           }
+                         }}
+                         className="flex items-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 border border-neutral-800 hover:border-neutral-700 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
+                      >
+                         <span>{selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}</span>
+                      </button>
+
+                      {filteredVideos.some(v => !isVideoOwner(v)) && filteredVideos.some(isVideoOwner) && (
+                        <button
+                          onClick={() => {
+                            const myIds = filteredVideos.filter(isVideoOwner).map(v => v.id!).filter(Boolean);
+                            setSelectedVideoIds(new Set(myIds));
+                          }}
+                          className="flex items-center gap-2 px-4 py-2.5 bg-teal-950/40 hover:bg-teal-900/50 text-teal-300 border border-teal-800/50 rounded-full text-sm font-semibold transition-all shadow-md animate-in fade-in"
+                          title="Seleccionar solo los vídeos que puedes borrar o editar"
+                        >
+                          <span>Marcar mis vídeos ({filteredVideos.filter(isVideoOwner).length})</span>
+                        </button>
+                      )}
+                    </>
                   )}
 
                   {selectionMode && selectedVideoIds.size === 2 && (
@@ -991,12 +1059,12 @@ export default function App() {
                               isSelected={selectedVideoIds.has(video.id!)}
                               onToggleSelect={() => toggleSelection(video.id!)}
                               onCompareClick={() => handleOpenDualCompare(video)}
-                              onDeleteClick={currentUser && isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                              onEditClick={currentUser && isVideoOwner(video) && !selectionMode ? () => {
+                              onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                              onEditClick={isVideoOwner(video) && !selectionMode ? () => {
                                 setEditingVideo(video);
                                 setIsModalOpen(true);
                               } : undefined}
-                              onDuplicateClick={currentUser && !selectionMode ? () => handleDuplicateVideo(video) : undefined}
+                              onDuplicateClick={!selectionMode ? () => handleDuplicateVideo(video) : undefined}
                             />
                           </div>
                         ))}
@@ -1016,12 +1084,12 @@ export default function App() {
                     isSelected={selectedVideoIds.has(video.id!)}
                     onToggleSelect={() => toggleSelection(video.id!)}
                     onCompareClick={() => handleOpenDualCompare(video)}
-                    onDeleteClick={currentUser && isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                    onEditClick={currentUser && isVideoOwner(video) && !selectionMode ? () => {
+                    onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                    onEditClick={isVideoOwner(video) && !selectionMode ? () => {
                       setEditingVideo(video);
                       setIsModalOpen(true);
                     } : undefined}
-                    onDuplicateClick={currentUser && !selectionMode ? () => handleDuplicateVideo(video) : undefined}
+                    onDuplicateClick={!selectionMode ? () => handleDuplicateVideo(video) : undefined}
                   />
                 </div>
               ))}
@@ -1049,13 +1117,23 @@ export default function App() {
         </div>
       </footer>
 
-      {videosToDelete && (
-        <DeleteConfirmModal
-          count={videosToDelete.length}
-          onConfirm={() => handleDeleteConfirm(videosToDelete)}
-          onCancel={() => setVideosToDelete(null)}
-        />
-      )}
+      {videosToDelete && (() => {
+        const targetList = videos.filter(v => videosToDelete.includes(v.id!));
+        const authorized = targetList.filter(isVideoOwner);
+        const unauthorized = targetList.length - authorized.length;
+        const activeUserLabel = userDisplayName || currentUser?.displayName || currentUser?.email || userProfile?.displayName || undefined;
+
+        return (
+          <DeleteConfirmModal
+            totalCount={videosToDelete.length}
+            authorizedCount={authorized.length}
+            unauthorizedCount={unauthorized}
+            authorIdentifier={activeUserLabel}
+            onConfirm={() => handleDeleteConfirm(videosToDelete)}
+            onCancel={() => setVideosToDelete(null)}
+          />
+        );
+      })()}
 
       {isModalOpen && (
         <AddVideoModal 
@@ -1064,7 +1142,7 @@ export default function App() {
             setEditingVideo(undefined);
           }} 
           onSave={editingVideo ? handleEditVideo : handleAddVideo}
-          userEmail={userDisplayName || currentUser?.email || undefined}
+          userEmail={currentUser?.email || userProfile?.email || undefined}
           initialData={editingVideo}
           existingGroups={uniqueGroups}
           onAddCategory={handleAddCategory}
@@ -1075,7 +1153,9 @@ export default function App() {
         <BatchImportModal 
           onClose={() => setIsBatchModalOpen(false)}
           onSaveBatch={handleSaveBatch}
-          userEmail={userDisplayName || currentUser?.email || undefined}
+          userEmail={currentUser?.email || userProfile?.email || undefined}
+          userDisplayName={userDisplayName || currentUser?.displayName || userProfile?.displayName || undefined}
+          userUid={currentUser?.uid || userProfile?.uid || undefined}
           availableCategories={uniqueGroups}
           onAddCategory={handleAddCategory}
         />
