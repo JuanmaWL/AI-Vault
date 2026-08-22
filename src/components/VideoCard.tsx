@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { VideoRecord } from '../types';
 import { DriveVideoPlayer } from './DriveVideoPlayer';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu, HardDrive, User, Sparkles, Gauge } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical } from 'lucide-react';
 import { formatBytes } from '../lib/utils';
 
 interface VideoCardProps {
@@ -12,9 +12,10 @@ interface VideoCardProps {
   onDeleteClick?: () => void;
   onEditClick?: () => void;
   onDuplicateClick?: () => void;
+  onCompareClick?: () => void;
 }
 
-export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onDuplicateClick }: VideoCardProps) {
+export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onDuplicateClick, onCompareClick }: VideoCardProps) {
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
 
@@ -221,6 +222,15 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
               {/* Botones de acción */}
               {!selectionMode && (
                 <div className="flex items-center gap-1">
+                  {onCompareClick && (
+                    <button
+                      onClick={onCompareClick}
+                      className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-teal-950/30 rounded-lg transition-colors border border-transparent hover:border-teal-900/50"
+                      title="Comparar este vídeo (1 vs 1)"
+                    >
+                      <SplitSquareVertical className="w-4 h-4" />
+                    </button>
+                  )}
                   {onDuplicateClick && (
                     <button
                       onClick={onDuplicateClick}

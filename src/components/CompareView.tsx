@@ -1,19 +1,19 @@
 import { useState, useRef, useEffect } from 'react';
 import { VideoRecord } from '../types';
-import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2, Sparkles, SplitSquareVertical } from 'lucide-react';
 import { formatBytes } from '../lib/utils';
 
 interface CompareViewProps {
   videos: VideoRecord[];
   sharedPrompt: string | null;
   onNavigateToVideo: (id: string) => void;
+  onOpenDualCompare?: (videoA: VideoRecord, videoB: VideoRecord) => void;
 }
 
 type GridSize = 'compact' | 'medium' | 'large';
 type InfoLevel = 'minimal' | 'technical';
 
-export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: CompareViewProps) {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+export function CompareView({ videos, sharedPrompt, onNavigateToVideo, onOpenDualCompare }: CompareViewProps) {
   const [gridSize, setGridSize] = useState<GridSize>('medium');
   const [infoLevel, setInfoLevel] = useState<InfoLevel>('minimal');
   const [isMuted, setIsMuted] = useState(true);
@@ -30,8 +30,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
     setReadyCount(0);
 
     const preloadVideos = async () => {
-      // Esperar a que los refs se llenen (renderizado inicial de tarjetas)
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 400));
       if (isCancelled) return;
 
       const vids = videos.map(v => videoRefs.current.get(v.id!)).filter(Boolean) as HTMLVideoElement[];
@@ -46,7 +45,6 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
           continue;
         }
 
-        // Si no está listo, ordenamos carga
         vid.preload = 'auto';
         
         await new Promise<void>(resolve => {
@@ -59,16 +57,13 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
           vid.addEventListener('error', onReady);
           
           if (vid.readyState === 0) vid.load();
-          
-          // Timeout de 2.5s por vídeo si se queda atascado o es lento
           setTimeout(onReady, 2500);
         });
 
         if (!isCancelled) {
           loaded++;
           setReadyCount(loaded);
-          // Retraso entre vídeos para no saltar el cortafuegos de DigiStorage
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 250));
         }
       }
     };
@@ -84,11 +79,6 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
       vid.playbackRate = playbackRate;
     });
   }, [playbackRate]);
-
-  // Seleccionar todos por defecto al cambiar la lista de videos filtrados
-  useEffect(() => {
-    setSelectedIds(new Set(videos.map(v => v.id!)));
-  }, [videos]);
 
   // Atajo de teclado (Barra espaciadora) para Reproducir/Pausar
   useEffect(() => {
@@ -106,19 +96,10 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPlaying, selectedIds]);
-
-  const toggleSelect = (id: string) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedIds(newSet);
-  };
+  }, [isPlaying, videos]);
 
   const handlePlayAll = async () => {
-    const vids = Array.from(selectedIds)
-      .map(id => videoRefs.current.get(id))
-      .filter(Boolean) as HTMLVideoElement[];
+    const vids = Array.from(videoRefs.current.values()).filter(Boolean);
     
     if (vids.length > 8 && readyCount < videos.length) {
       setRateLimitWarning(true);
@@ -128,7 +109,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
     // Asegurar que los vídeos tienen metadatos cargados antes de sincronizar
     await Promise.all(vids.map(vid => {
       return new Promise<void>(resolve => {
-        if (vid.readyState >= 1) { // HAVE_METADATA
+        if (vid.readyState >= 1) {
           resolve();
         } else {
           const onLoaded = () => { 
@@ -136,39 +117,32 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
             resolve(); 
           };
           vid.addEventListener('loadedmetadata', onLoaded);
-          vid.load(); // Forzar carga
+          vid.load();
         }
       });
     }));
 
     setIsPlaying(true);
     
-    // Si todos los vídeos ya están precargados (listos), reproducir a la vez para sincronización perfecta
     if (readyCount === videos.length) {
       vids.forEach(vid => vid.play().catch(e => console.warn('Autoplay bloqueado', e)));
     } else {
-      // Carga escalonada (Staggered playback) como fallback si no habían terminado de precargar
       for (let i = 0; i < vids.length; i++) {
         vids[i].play().catch(e => console.warn('Autoplay bloqueado', e));
         if (i < vids.length - 1) {
-          // Pausa de 150ms entre cada petición de reproducción
-          await new Promise(r => setTimeout(r, 150));
+          await new Promise(r => setTimeout(r, 120));
         }
       }
     }
   };
 
   const handleRewindAll = () => {
-    const vids = Array.from(selectedIds)
-      .map(id => videoRefs.current.get(id))
-      .filter(Boolean) as HTMLVideoElement[];
+    const vids = Array.from(videoRefs.current.values()).filter(Boolean);
     vids.forEach(vid => vid.currentTime = 0);
   };
 
   const handlePauseAll = () => {
-    const vids = Array.from(selectedIds)
-      .map(id => videoRefs.current.get(id))
-      .filter(Boolean) as HTMLVideoElement[];
+    const vids = Array.from(videoRefs.current.values()).filter(Boolean);
     vids.forEach(vid => vid.pause());
     setIsPlaying(false);
   };
@@ -224,7 +198,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
           <div>
             <h4 className="text-sm font-semibold text-amber-500">Carga Escalonada Activada</h4>
             <p className="text-xs text-neutral-400 mt-1">
-              Estás reproduciendo más de 8 vídeos a la vez. Los vídeos se cargarán con un ligero retraso entre ellos (efecto cascada) para evitar que tu proveedor (ej. DigiStorage) bloquee tu IP por exceso de peticiones simultáneas.
+              Estás reproduciendo más de 8 vídeos a la vez. Los vídeos se cargarán con un ligero retraso entre ellos para evitar que el proveedor limite la conexión.
             </p>
           </div>
         </div>
@@ -238,7 +212,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
             <div>
               <h4 className="text-sm font-semibold text-indigo-400">Preparando vídeos para sincronización...</h4>
               <p className="text-xs text-neutral-400 mt-1">
-                Precargando para asegurar reproducción simultánea sin cortes.
+                Precargando para asegurar reproducción simultánea fluida.
               </p>
             </div>
           </div>
@@ -277,13 +251,23 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
             <option value={0.25}>0.25x</option>
             <option value={0.5}>0.5x</option>
             <option value={1}>1x</option>
-            <option value={1.5}>1.5x</option>
             <option value={2}>2x</option>
           </select>
 
           <button onClick={toggleMuteAll} className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors ml-1 sm:ml-2" title={isMuted ? "Activar sonido" : "Silenciar"}>
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
+
+          {onOpenDualCompare && videos.length >= 2 && (
+            <button
+              onClick={() => onOpenDualCompare(videos[0], videos[1])}
+              className="flex items-center gap-2 bg-gradient-to-r from-teal-500/20 to-blue-500/20 hover:from-teal-500/30 hover:to-blue-500/30 text-teal-300 border border-teal-500/40 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ml-2"
+              title="Comparar 2 vídeos a pantalla completa con selector de catálogo y análisis de diferencias"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+              <span>Comparativa 1 vs 1</span>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -294,7 +278,7 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
                 onClick={() => setInfoLevel(level)}
                 className={`px-3 py-1.5 rounded-md text-xs font-medium capitalize transition-colors ${infoLevel === level ? 'bg-neutral-700 text-white shadow-sm' : 'text-neutral-500 hover:text-neutral-300'}`}
               >
-                {level === 'minimal' ? 'Detalle: Minimalista' : 'Detalle: Técnico'}
+                {level === 'minimal' ? 'Básico' : 'Técnico'}
               </button>
             ))}
           </div>
@@ -318,18 +302,20 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
           <CompareCard 
             key={video.id!}
             video={video}
-            isSelected={selectedIds.has(video.id!)}
-            onToggle={() => toggleSelect(video.id!)}
             videoRef={(el) => {
               if (el) {
                 videoRefs.current.set(video.id!, el);
-                el.playbackRate = playbackRate; // Aplicar velocidad actual
+                el.playbackRate = playbackRate;
               }
               else videoRefs.current.delete(video.id!);
             }}
             isGlobalMuted={isMuted}
             infoLevel={infoLevel}
             onNavigateToVideo={() => onNavigateToVideo(video.id!)}
+            onOpenDualCompare={onOpenDualCompare ? (v) => {
+              const other = videos.find(otherVid => otherVid.id !== v.id) || v;
+              onOpenDualCompare(v, other);
+            } : undefined}
           />
         ))}
       </div>
@@ -339,44 +325,42 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo }: Compare
 
 function CompareCard({ 
   video, 
-  isSelected, 
-  onToggle, 
   videoRef, 
   isGlobalMuted,
   infoLevel,
-  onNavigateToVideo
+  onNavigateToVideo,
+  onOpenDualCompare,
 }: { 
   video: VideoRecord; 
-  isSelected: boolean; 
-  onToggle: () => void; 
   videoRef: (el: HTMLVideoElement | null) => void; 
   isGlobalMuted: boolean;
   infoLevel: InfoLevel;
   onNavigateToVideo: () => void;
+  onOpenDualCompare?: (video: VideoRecord) => void;
 }) {
   const [hasError, setHasError] = useState(false);
   
-  // Endpoint de Google Drive para descarga/streaming directo, o el enlace MP4 directo
   const directUrl = video.driveFileId 
     ? `https://drive.google.com/uc?id=${video.driveFileId}&export=download`
     : video.videoUrl;
 
   return (
-    <div className={`relative flex flex-col bg-neutral-900 border ${isSelected ? 'border-teal-500/50 ring-1 ring-teal-500/30' : 'border-neutral-800'} rounded-xl overflow-hidden transition-all h-full`}>
-      {/* Checkbox Overlay */}
-      <div className="absolute top-2 left-2 z-10 bg-neutral-950/80 rounded-md p-1 backdrop-blur-sm border border-neutral-800">
-        <label className="flex items-center cursor-pointer">
-          <input 
-            type="checkbox" 
-            checked={isSelected}
-            onChange={onToggle}
-            className="w-4 h-4 rounded border-neutral-600 bg-neutral-900 text-teal-500 focus:ring-0 cursor-pointer"
-          />
-        </label>
-      </div>
+    <div className="relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden transition-all h-full group/card hover:border-neutral-700">
+      {/* Botón flotante para 1 vs 1 */}
+      {onOpenDualCompare && (
+        <div className="absolute top-2 right-2 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity">
+          <button
+            onClick={() => onOpenDualCompare(video)}
+            className="flex items-center gap-1 bg-neutral-950/90 hover:bg-teal-950 border border-neutral-700 hover:border-teal-600 text-neutral-300 hover:text-teal-300 px-2.5 py-1 rounded-lg text-[11px] font-bold shadow-lg transition-all"
+            title="Comparar este vídeo en 1 vs 1 a pantalla completa"
+          >
+            <SplitSquareVertical className="w-3.5 h-3.5 text-teal-400" />
+            <span>1 vs 1</span>
+          </button>
+        </div>
+      )}
 
       {/* Video Container */}
-      {/* Usamos aspect-[4/3] para forzar altura uniforme en la cuadrícula y acomodar tanto 16:9 como 9:16 con object-contain */}
       <div className="relative w-full aspect-[4/3] bg-black flex items-center justify-center border-b border-neutral-800">
         {hasError ? (
           <div className="flex flex-col items-center justify-center p-4 text-center">

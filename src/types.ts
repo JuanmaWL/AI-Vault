@@ -56,6 +56,7 @@ export interface VideoRecord {
   notes?: string;
   createdAt: number;
   createdBy?: string;       // email del usuario autenticado que creó el registro
+  creatorUid?: string;      // UID del usuario autenticado en Firebase
   creatorDisplayName?: string; // Apodo o nombre para mostrar del usuario
   
   // Metadatos adicionales importados

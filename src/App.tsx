@@ -12,8 +12,9 @@ import { LoginModal } from './components/LoginModal';
 import { SetNickModal } from './components/SetNickModal';
 import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
+import { DualCompareModal } from './components/DualCompareModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu } from 'lucide-react';
+import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical } from 'lucide-react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -122,6 +123,7 @@ export default function App() {
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
+  const [dualComparePair, setDualComparePair] = useState<{ videoA: VideoRecord; videoB: VideoRecord } | null>(null);
   const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
 
   // Fetch or create user profile with Firestore multi-device sync
@@ -310,6 +312,9 @@ export default function App() {
       if (!record.createdBy && activeEmail) {
         record.createdBy = activeEmail;
       }
+      if (!record.creatorUid && currentUser?.uid) {
+        record.creatorUid = currentUser.uid;
+      }
       if (!record.creatorDisplayName && activeNick) {
         record.creatorDisplayName = activeNick;
       }
@@ -344,6 +349,9 @@ export default function App() {
     }
     if (!record.createdBy && (currentUser?.email || userProfile?.email)) {
       record.createdBy = currentUser?.email || userProfile?.email;
+    }
+    if (!record.creatorUid && currentUser?.uid) {
+      record.creatorUid = currentUser.uid;
     }
     const activeNick = userDisplayName || currentUser?.displayName || userProfile?.displayName;
     if (!record.creatorDisplayName && activeNick) {
@@ -507,10 +515,32 @@ export default function App() {
     return allMatch ? firstPrompt : null;
   }, [filteredVideos, filterGroup]);
 
+  const isVideoOwner = (video: VideoRecord): boolean => {
+    if (!currentUser) return false;
+    if (video.creatorUid && currentUser.uid && video.creatorUid === currentUser.uid) {
+      return true;
+    }
+    if (video.createdBy && currentUser.email && video.createdBy.toLowerCase() === currentUser.email.toLowerCase()) {
+      return true;
+    }
+    return false;
+  };
+
   const handleDuplicateVideo = (video: VideoRecord) => {
-    const { id, videoUrl, driveFileId, createdAt, rawMetadata, ...rest } = video;
+    const { id, videoUrl, driveFileId, createdAt, rawMetadata, createdBy, creatorUid, creatorDisplayName, ...rest } = video;
     setEditingVideo({ ...rest, schemaVersion: 2 } as VideoRecord);
     setIsModalOpen(true);
+  };
+
+  const handleOpenDualCompare = (videoA: VideoRecord, videoB?: VideoRecord) => {
+    if (videoB) {
+      setDualComparePair({ videoA, videoB });
+    } else {
+      const other = filteredVideos.find(v => v.id !== videoA.id) || videos.find(v => v.id !== videoA.id);
+      if (other) {
+        setDualComparePair({ videoA, videoB: other });
+      }
+    }
   };
 
   const toggleSelection = (id: string) => {
@@ -524,15 +554,26 @@ export default function App() {
   };
 
   const handleDeleteConfirm = async (ids: string[]) => {
+    // Security check: Only delete videos created by current user
+    const targetVideos = videos.filter(v => ids.includes(v.id!));
+    const authorizedVideos = targetVideos.filter(isVideoOwner);
+    const authorizedIds = authorizedVideos.map(v => v.id!);
+
+    if (authorizedIds.length === 0) {
+      setSelectedVideoIds(new Set());
+      setSelectionMode(false);
+      setVideosToDelete(null);
+      return;
+    }
+
     if (db && !usingLocal) {
       try {
-        await Promise.all(ids.map(id => deleteDoc(doc(db, COLLECTION_NAME, id))));
+        await Promise.all(authorizedIds.map(id => deleteDoc(doc(db, COLLECTION_NAME, id))));
       } catch (err) {
         console.error("Error al borrar de Firestore", err);
-        // Fallback local visual, pero puede que las reglas rechacen si no eres el autor
       }
     } else {
-      const updated = videos.filter(v => !ids.includes(v.id));
+      const updated = videos.filter(v => !authorizedIds.includes(v.id));
       setVideos(updated);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
@@ -674,6 +715,22 @@ export default function App() {
                     </button>
                   )}
 
+                  {selectionMode && selectedVideoIds.size === 2 && (
+                    <button
+                       onClick={() => {
+                         const selected = Array.from(selectedVideoIds).map(id => videos.find(v => v.id === id)).filter(Boolean) as VideoRecord[];
+                         if (selected.length === 2) {
+                           setDualComparePair({ videoA: selected[0], videoB: selected[1] });
+                         }
+                       }}
+                       className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-neutral-950 font-bold rounded-full text-sm transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] hover:scale-105 active:scale-95 animate-in fade-in"
+                       title="Comparar los 2 vídeos seleccionados a pantalla completa"
+                    >
+                       <Sparkles className="w-4 h-4 text-neutral-950" />
+                       <span>Comparar 1 vs 1</span>
+                    </button>
+                  )}
+
                   {selectionMode && selectedVideoIds.size > 0 && (
                     <button
                        onClick={() => setVideosToDelete(Array.from(selectedVideoIds))}
@@ -738,6 +795,16 @@ export default function App() {
               >
                 Métricas y Rendimiento
               </button>
+              {videos.length >= 2 && (
+                <button 
+                  onClick={() => handleOpenDualCompare(videos[0], videos[1])} 
+                  className="px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1.5 ml-auto shadow-sm"
+                  title="Abrir comparativa 1 vs 1 a pantalla completa (permite elegir cualquier vídeo del catálogo)"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Comparativa 1 vs 1</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -847,7 +914,12 @@ export default function App() {
           {view === 'dashboard' ? (
             <DashboardView videos={filteredVideos} />
           ) : view === 'compare' ? (
-            <CompareView videos={filteredVideos} sharedPrompt={sharedPrompt} onNavigateToVideo={handleNavigateToVideo} />
+            <CompareView 
+              videos={filteredVideos} 
+              sharedPrompt={sharedPrompt} 
+              onNavigateToVideo={handleNavigateToVideo}
+              onOpenDualCompare={(vA, vB) => setDualComparePair({ videoA: vA, videoB: vB })}
+            />
           ) : loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="w-8 h-8 border-2 border-neutral-800 border-t-white rounded-full animate-spin"></div>
@@ -894,8 +966,9 @@ export default function App() {
                               selectionMode={selectionMode}
                               isSelected={selectedVideoIds.has(video.id!)}
                               onToggleSelect={() => toggleSelection(video.id!)}
-                              onDeleteClick={currentUser && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                              onEditClick={currentUser && !selectionMode ? () => {
+                              onCompareClick={() => handleOpenDualCompare(video)}
+                              onDeleteClick={currentUser && isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                              onEditClick={currentUser && isVideoOwner(video) && !selectionMode ? () => {
                                 setEditingVideo(video);
                                 setIsModalOpen(true);
                               } : undefined}
@@ -918,8 +991,9 @@ export default function App() {
                     selectionMode={selectionMode}
                     isSelected={selectedVideoIds.has(video.id!)}
                     onToggleSelect={() => toggleSelection(video.id!)}
-                    onDeleteClick={currentUser && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                    onEditClick={currentUser && !selectionMode ? () => {
+                    onCompareClick={() => handleOpenDualCompare(video)}
+                    onDeleteClick={currentUser && isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                    onEditClick={currentUser && isVideoOwner(video) && !selectionMode ? () => {
                       setEditingVideo(video);
                       setIsModalOpen(true);
                     } : undefined}
@@ -1002,6 +1076,15 @@ export default function App() {
           isMandatory={!userProfile?.hardware}
           onClose={() => setIsHardwareModalOpen(false)}
           onSave={handleSaveHardware}
+        />
+      )}
+
+      {dualComparePair && (
+        <DualCompareModal
+          initialVideoA={dualComparePair.videoA}
+          initialVideoB={dualComparePair.videoB}
+          allVideos={videos}
+          onClose={() => setDualComparePair(null)}
         />
       )}
     </div>
