@@ -9,6 +9,7 @@ export interface UserProfile {
   email: string;
   displayName?: string;
   hardware?: UserHardware;
+  role?: 'admin' | 'viewer';
 }
 
 export interface Lora {

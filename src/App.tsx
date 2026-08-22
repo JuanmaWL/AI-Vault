@@ -102,6 +102,9 @@ export default function App() {
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
+  
+  const isAdmin = userProfile?.role === 'admin';
+  
   const [customCategories, setCustomCategories] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('ai_video_vault_custom_categories');
@@ -157,6 +160,7 @@ export default function App() {
 
     let firestoreHardware: UserHardware | undefined;
     let firestoreDisplayName: string | undefined;
+    let firestoreRole: 'admin' | 'viewer' | undefined;
 
     if (db) {
       try {
@@ -165,6 +169,7 @@ export default function App() {
           const data = userDoc.data();
           if (data.hardware) firestoreHardware = data.hardware as UserHardware;
           if (data.displayName) firestoreDisplayName = data.displayName as string;
+          if (data.role) firestoreRole = data.role as 'admin' | 'viewer';
         }
       } catch (e) {
         console.warn('Could not fetch user profile from Firestore', e);
@@ -203,7 +208,8 @@ export default function App() {
       uid: user.uid, 
       email: user.email || '', 
       displayName: activeDisplayName,
-      hardware: activeHardware 
+      hardware: activeHardware,
+      role: firestoreRole
     };
     setUserProfile(baseProfile);
 
@@ -546,49 +552,17 @@ export default function App() {
   }, [filteredVideos, filterGroup]);
 
   const isVideoOwner = (video: VideoRecord): boolean => {
-    // If in local mode without user auth, local user has full rights on local storage
+    // Si estamos en modo local y no hay usuario, permitir (para desarrollo/pruebas)
     if (usingLocal && !currentUser) {
       return true;
     }
-
-    const currentUid = currentUser?.uid || userProfile?.uid;
-    const currentEmail = (currentUser?.email || userProfile?.email || '').trim().toLowerCase();
-    const currentNick = (userDisplayName || currentUser?.displayName || userProfile?.displayName || '').trim().toLowerCase();
-
-    // 1. Match by Firebase UID
-    if (currentUid && video.creatorUid && video.creatorUid === currentUid) {
-      return true;
-    }
-
-    // 2. Match by Email in createdBy
-    if (currentEmail && video.createdBy) {
-      const videoCreatedBy = video.createdBy.trim().toLowerCase();
-      if (videoCreatedBy === currentEmail) {
-        return true;
-      }
-    }
-
-    // 3. Match by Nickname / Display Name in creatorDisplayName or createdBy
-    if (currentNick) {
-      if (video.creatorDisplayName && video.creatorDisplayName.trim().toLowerCase() === currentNick) {
-        return true;
-      }
-      if (video.createdBy && video.createdBy.trim().toLowerCase() === currentNick) {
-        return true;
-      }
-    }
-
-    // 4. Local or mock videos
+    
+    // Solo el administrador (y registros locales/mock para preview) tiene permisos de edición/borrado
     if (video.id?.startsWith('local_') || video.id?.startsWith('mock')) {
       return true;
     }
 
-    // 5. If user is logged in / identified and video has no author assigned (legacy record)
-    if ((currentUser || userDisplayName) && !video.creatorUid && !video.createdBy) {
-      return true;
-    }
-
-    return false;
+    return isAdmin;
   };
 
   const handleOpenDualCompare = (videoA: VideoRecord, videoB?: VideoRecord) => {
@@ -711,29 +685,41 @@ export default function App() {
               {/* Botón de Autenticación / Estado de Usuario */}
               {currentUser ? (
                 <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 rounded-full pl-3 pr-1.5 py-1 group/user">
-                  <button
-                    onClick={() => setIsNickModalOpen(true)}
-                    title="Haz clic para cambiar tu apodo"
-                    className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors"
-                  >
-                    <UserIcon className="w-3.5 h-3.5 text-teal-400" />
-                    <span className="max-w-[140px] truncate font-medium">
-                      {userDisplayName || currentUser.email}
-                    </span>
-                    <Edit3 className="w-3 h-3 text-neutral-500 opacity-0 group-hover/user:opacity-100 transition-opacity" />
-                  </button>
+                  {isAdmin ? (
+                    <button
+                      onClick={() => setIsNickModalOpen(true)}
+                      title="Haz clic para cambiar tu apodo"
+                      className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors"
+                    >
+                      <UserIcon className="w-3.5 h-3.5 text-teal-400" />
+                      <span className="max-w-[140px] truncate font-medium">
+                        {userDisplayName || currentUser.email}
+                      </span>
+                      <Edit3 className="w-3 h-3 text-neutral-500 opacity-0 group-hover/user:opacity-100 transition-opacity" />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-300 px-1">
+                      <UserIcon className="w-3.5 h-3.5 text-neutral-400" />
+                      <span className="max-w-[140px] truncate font-medium">
+                        {userDisplayName || currentUser.email}
+                      </span>
+                    </div>
+                  )}
 
                   <div className="h-3 w-px bg-neutral-800" />
                   
-                  <button
-                    onClick={() => setIsHardwareModalOpen(true)}
-                    title="Perfil de Hardware"
-                    className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors px-1"
-                  >
-                    <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
-                  </button>
-
-                  <div className="h-3 w-px bg-neutral-800" />
+                  {isAdmin && (
+                    <>
+                      <button
+                        onClick={() => setIsHardwareModalOpen(true)}
+                        title="Perfil de Hardware"
+                        className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors px-1"
+                      >
+                        <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
+                      </button>
+                      <div className="h-3 w-px bg-neutral-800" />
+                    </>
+                  )}
 
                   <button
                     onClick={handleLogout}
@@ -754,65 +740,67 @@ export default function App() {
               )}
 
               {/* Botones de acción principales */}
-              {currentUser || usingLocal ? (
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (selectionMode) {
-                        setSelectionMode(false);
-                        setSelectedVideoIds(new Set());
-                      } else {
-                        setSelectionMode(true);
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold transition-all border ${
-                       selectionMode 
-                        ? 'bg-teal-950/70 text-teal-300 border-teal-600 shadow-md shadow-teal-950/40' 
-                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 text-neutral-300'
-                    }`}
-                    title="Activar/desactivar modo de selección para borrar o comparar"
-                  >
-                    <CheckSquare className="w-3.5 h-3.5 text-teal-400" />
-                    <span>{selectionMode ? 'Seleccionando...' : 'Seleccionar'}</span>
-                    {selectedVideoIds.size > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
-                        {selectedVideoIds.size}
-                      </span>
-                    )}
-                  </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    if (selectionMode) {
+                      setSelectionMode(false);
+                      setSelectedVideoIds(new Set());
+                    } else {
+                      setSelectionMode(true);
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold transition-all border ${
+                     selectionMode 
+                      ? 'bg-teal-950/70 text-teal-300 border-teal-600 shadow-md shadow-teal-950/40' 
+                      : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 text-neutral-300'
+                  }`}
+                  title="Activar/desactivar modo de selección para borrar o comparar"
+                >
+                  <CheckSquare className="w-3.5 h-3.5 text-teal-400" />
+                  <span>{selectionMode ? 'Seleccionando...' : 'Seleccionar'}</span>
+                  {selectedVideoIds.size > 0 && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
+                      {selectedVideoIds.size}
+                    </span>
+                  )}
+                </button>
 
-                  <button
-                    onClick={() => setIsBatchModalOpen(true)}
-                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-neutral-950 px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all hover:scale-105 active:scale-95 shadow-md shadow-teal-950/40"
-                    title="Importar varios vídeos desde URLs"
-                  >
-                    <Database className="w-4 h-4" /> <span>Batch Import</span>
-                  </button>
+                {isAdmin ? (
+                  <>
+                    <button
+                      onClick={() => setIsBatchModalOpen(true)}
+                      className="flex items-center gap-2 bg-teal-600 hover:bg-teal-500 text-neutral-950 px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition-all hover:scale-105 active:scale-95 shadow-md shadow-teal-950/40"
+                      title="Importar varios vídeos desde URLs"
+                    >
+                      <Database className="w-4 h-4" /> <span>Batch Import</span>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      setEditingVideo(undefined);
-                      setIsModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 px-3 py-2 rounded-full text-xs sm:text-sm font-medium transition-all"
-                    title="Crear registro individual de vídeo manualmente"
-                  >
-                    <Plus className="w-4 h-4" /> <span className="hidden md:inline">Nuevo Registro</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="relative group">
-                  <button
-                    disabled
-                    className="flex items-center gap-2 bg-neutral-900/50 border border-neutral-800/80 text-neutral-600 px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed"
-                  >
-                    <Plus className="w-4 h-4 text-neutral-600" /> Nuevo Registro
-                  </button>
-                  <div className="absolute right-0 top-full mt-2 hidden group-hover:block z-50 whitespace-nowrap bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs px-3 py-1.5 rounded-lg shadow-xl">
-                    Inicia sesión para añadir vídeos
+                    <button
+                      onClick={() => {
+                        setEditingVideo(undefined);
+                        setIsModalOpen(true);
+                      }}
+                      className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 px-3 py-2 rounded-full text-xs sm:text-sm font-medium transition-all"
+                      title="Crear registro individual de vídeo manualmente"
+                    >
+                      <Plus className="w-4 h-4" /> <span className="hidden md:inline">Nuevo Registro</span>
+                    </button>
+                  </>
+                ) : (
+                  <div className="relative group">
+                    <button
+                      disabled
+                      className="flex items-center gap-2 bg-neutral-900/50 border border-neutral-800/80 text-neutral-600 px-4 py-2 rounded-full text-sm font-medium cursor-not-allowed"
+                    >
+                      <Plus className="w-4 h-4 text-neutral-600" /> Nuevo Registro
+                    </button>
+                    <div className="absolute right-0 top-full mt-2 hidden group-hover:block z-50 whitespace-nowrap bg-neutral-900 border border-neutral-800 text-neutral-300 text-xs px-3 py-1.5 rounded-lg shadow-xl">
+                      Solo los administradores pueden añadir vídeos
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </header>
