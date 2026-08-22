@@ -102,6 +102,27 @@ export default function App() {
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
+  const [customCategories, setCustomCategories] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('ai_video_vault_custom_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const handleAddCategory = (newCat: string) => {
+    const trimmed = newCat.trim();
+    if (!trimmed) return;
+    setCustomCategories(prev => {
+      if (prev.includes(trimmed)) return prev;
+      const next = [...prev, trimmed].sort();
+      try {
+        localStorage.setItem('ai_video_vault_custom_categories', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
 
   // View state
   const [view, setView] = useState<'detail' | 'compare' | 'dashboard'>('detail');
@@ -405,8 +426,11 @@ export default function App() {
     }
   };
 
-  // Extract unique values for filters
-  const uniqueGroups = useMemo(() => Array.from(new Set(videos.map(v => v.groupName).filter(Boolean) as string[])).sort(), [videos]);
+  // Extract unique values for filters and category selectors
+  const uniqueGroups = useMemo(() => {
+    const fromVideos = videos.map(v => v.groupName).filter(Boolean) as string[];
+    return Array.from(new Set([...fromVideos, ...customCategories])).sort();
+  }, [videos, customCategories]);
   const userOptions = useMemo(() => {
     const map = new Map<string, string>();
     videos.forEach(v => {
@@ -1043,6 +1067,7 @@ export default function App() {
           userEmail={userDisplayName || currentUser?.email || undefined}
           initialData={editingVideo}
           existingGroups={uniqueGroups}
+          onAddCategory={handleAddCategory}
         />
       )}
 
@@ -1051,6 +1076,8 @@ export default function App() {
           onClose={() => setIsBatchModalOpen(false)}
           onSaveBatch={handleSaveBatch}
           userEmail={userDisplayName || currentUser?.email || undefined}
+          availableCategories={uniqueGroups}
+          onAddCategory={handleAddCategory}
         />
       )}
 

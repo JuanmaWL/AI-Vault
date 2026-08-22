@@ -452,3 +452,99 @@ export function diffWords(strA: string = '', strB: string = ''): {
     hasDifferences: true,
   };
 }
+
+export interface ParsedVideoUrlInfo {
+  isHuggingFace: boolean;
+  username?: string;
+  repoName?: string;
+  repoType?: string; // 'datasets' | 'models' | 'spaces'
+  branch?: string; // 'main'
+  category?: string; // decoded folder name (e.g. 'Ezio & Thanos')
+  fileName?: string;
+  suggestedGroupName?: string;
+}
+
+export function parseVideoUrlInfo(url: string): ParsedVideoUrlInfo {
+  if (!url || typeof url !== 'string') {
+    return { isHuggingFace: false };
+  }
+  const cleanUrl = url.trim();
+
+  // Check if Hugging Face URL
+  // Matches: huggingface.co/(datasets|models|spaces)?/([username])/([repo])/(resolve|raw|blob)/([branch])/([rest...])
+  const hfRegex = /huggingface\.co\/(?:(datasets|models|spaces)\/)?([^/]+)\/([^/]+)\/(?:resolve|raw|blob)\/([^/]+)\/(.+)$/i;
+  const match = cleanUrl.match(hfRegex);
+
+  if (match) {
+    const repoType = match[1] || 'models';
+    const rawUsername = match[2];
+    const rawRepoName = match[3];
+    const branch = match[4];
+    const pathAfterBranch = match[5]; // e.g. "Ezio%20%26%20Thanos/2026-08-22...mp4"
+
+    let username = rawUsername;
+    let repoName = rawRepoName;
+    try {
+      username = decodeURIComponent(rawUsername);
+      repoName = decodeURIComponent(rawRepoName);
+    } catch {
+      // fallback
+    }
+
+    // Split pathAfterBranch by '/'
+    const pathSegments = pathAfterBranch.split('/').map(seg => {
+      try {
+        return decodeURIComponent(seg);
+      } catch {
+        return seg;
+      }
+    });
+
+    const fileName = pathSegments[pathSegments.length - 1];
+    // Any intermediate segments before fileName represent the folder structure / category
+    const folderSegments = pathSegments.slice(0, -1);
+    const category = folderSegments.length > 0 ? folderSegments.join(' / ') : '';
+
+    const suggestedGroupName = category || repoName;
+
+    return {
+      isHuggingFace: true,
+      username,
+      repoName,
+      repoType,
+      branch,
+      category,
+      fileName,
+      suggestedGroupName,
+    };
+  }
+
+  // Generic URL parsing (extract folder if any, or filename)
+  try {
+    const parsed = new URL(cleanUrl);
+    const segments = parsed.pathname.split('/').filter(Boolean).map(s => {
+      try {
+        return decodeURIComponent(s);
+      } catch {
+        return s;
+      }
+    });
+    if (segments.length >= 2) {
+      const fileName = segments[segments.length - 1];
+      const folder = segments[segments.length - 2];
+      // If folder is not standard web keywords (like 'resolve', 'main', 'raw', 'd', 'uc', 'view', 'api')
+      const ignoredFolders = new Set(['resolve', 'main', 'raw', 'blob', 'd', 'uc', 'view', 'api', 'v1', 'v2', 'download', 'export', 'videos', 'uploads']);
+      const category = !ignoredFolders.has(folder.toLowerCase()) ? folder : '';
+      return {
+        isHuggingFace: false,
+        category,
+        fileName,
+        suggestedGroupName: category,
+      };
+    }
+  } catch {
+    // Ignore invalid url format
+  }
+
+  return { isHuggingFace: false };
+}

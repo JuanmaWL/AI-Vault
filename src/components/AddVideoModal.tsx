@@ -1,7 +1,8 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
-import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers } from 'lucide-react';
+import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseVideoUrlInfo, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
+import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder } from 'lucide-react';
+import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 interface AddVideoModalProps {
@@ -10,6 +11,7 @@ interface AddVideoModalProps {
   userEmail?: string;
   initialData?: VideoRecord;
   existingGroups: string[];
+  onAddCategory?: (category: string) => void;
 }
 
 const COMMON_MODELS = [
@@ -23,7 +25,7 @@ const COMMON_MODELS = [
   'Luma Dream Machine'
 ];
 
-export function AddVideoModal({ onClose, onSave, userEmail, initialData, existingGroups }: AddVideoModalProps) {
+export function AddVideoModal({ onClose, onSave, userEmail, initialData, existingGroups, onAddCategory }: AddVideoModalProps) {
   const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
   const [prompt, setPrompt] = useState(initialData?.prompt || '');
   const [negativePrompt, setNegativePrompt] = useState(initialData?.negativePrompt || '');
@@ -63,6 +65,16 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const detectedFileId = useMemo(() => extractDriveFileId(videoUrl), [videoUrl]);
   const isDirectMp4 = useMemo(() => videoUrl.toLowerCase().includes('.mp4'), [videoUrl]);
   const currentOrientation = useMemo(() => calculateOrientation(Number(width) || 0, Number(height) || 0), [width, height]);
+  const parsedUrlInfo = useMemo(() => parseVideoUrlInfo(videoUrl), [videoUrl]);
+
+  const handleVideoUrlChange = (newUrl: string) => {
+    setVideoUrl(newUrl);
+    const info = parseVideoUrlInfo(newUrl);
+    if (info.suggestedGroupName && !groupName) {
+      setGroupName(info.suggestedGroupName);
+      setAutoFilled(prev => ({ ...prev, groupName: true }));
+    }
+  };
 
   const processLocalFile = async (file: File) => {
     setExtracting(true);
@@ -356,6 +368,10 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       groupName: groupName.trim() !== '' ? groupName.trim() : undefined
     };
 
+    if (groupName.trim() && onAddCategory) {
+      onAddCategory(groupName.trim());
+    }
+
     try {
       await onSave(record);
       onClose();
@@ -460,8 +476,8 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   type="url" 
                   required
                   value={videoUrl}
-                  onChange={e => setVideoUrl(e.target.value)}
-                  placeholder="Drive o DigiStorage (ej: https://digistorage.es/links/...)"
+                  onChange={e => handleVideoUrlChange(e.target.value)}
+                  placeholder="Drive, Hugging Face o DigiStorage (ej: https://huggingface.co/...)"
                   className={`w-full ${wandSuccess ? 'bg-teal-950/40 border-teal-400 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'bg-neutral-950 border-neutral-800'} rounded-xl pl-4 ${videoUrl.includes('digistorage.es/links/') && !isDirectMp4 ? 'pr-12' : 'pr-4'} py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all duration-300 font-mono`}
                 />
                 {videoUrl.includes('digistorage.es/links/') && !isDirectMp4 && (
@@ -475,6 +491,35 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   </button>
                 )}
               </div>
+
+              {/* Hugging Face URL Detection Badge */}
+              {parsedUrlInfo.isHuggingFace && (
+                <div className="flex items-center justify-between gap-2 text-xs text-amber-300 bg-amber-950/40 border border-amber-800/60 px-3 py-2 rounded-xl animate-in fade-in duration-200">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="truncate">
+                      Hugging Face: <strong className="text-amber-200">@{parsedUrlInfo.username}</strong> / <strong className="text-amber-200">{parsedUrlInfo.repoName}</strong>
+                      {parsedUrlInfo.category && (
+                        <span className="text-teal-300 ml-1">
+                          · Carpeta: <strong>"{parsedUrlInfo.category}"</strong>
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  {parsedUrlInfo.suggestedGroupName && parsedUrlInfo.suggestedGroupName !== groupName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGroupName(parsedUrlInfo.suggestedGroupName!);
+                        setAutoFilled(prev => ({ ...prev, groupName: true }));
+                      }}
+                      className="shrink-0 px-2 py-0.5 rounded bg-teal-900/80 hover:bg-teal-800 text-teal-200 text-[11px] font-bold border border-teal-700 transition-colors cursor-pointer"
+                    >
+                      Asignar categoría
+                    </button>
+                  )}
+                </div>
+              )}
               
               {/* Mini Preview Video */}
               {videoUrl && (detectedFileId || isDirectMp4) && (
@@ -602,24 +647,34 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               />
             </div>
 
-            {/* Grupo / Carpeta */}
+            {/* Grupo / Carpeta / Categoría */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">
-                Carpeta / grupo de comparación (opcional)
-              </label>
-              <input 
-                type="text" 
-                list="groups-list"
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-teal-400" />
+                  Categoría / Carpeta (opcional)
+                  <AutoFillBadge field="groupName" />
+                </label>
+                {parsedUrlInfo.suggestedGroupName && parsedUrlInfo.suggestedGroupName !== groupName && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupName(parsedUrlInfo.suggestedGroupName!);
+                      setAutoFilled(prev => ({ ...prev, groupName: true }));
+                    }}
+                    className="text-[11px] text-teal-400 hover:text-teal-300 underline cursor-pointer"
+                  >
+                    Usar detectada: "{parsedUrlInfo.suggestedGroupName}"
+                  </button>
+                )}
+              </div>
+              <CategorySelector
                 value={groupName}
-                onChange={e => setGroupName(e.target.value)}
-                placeholder="Ej: Test Wan vs Minimax"
-                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm text-neutral-300 focus:outline-none focus:border-neutral-600 transition-all"
+                onChange={setGroupName}
+                categories={existingGroups}
+                onCreateCategory={onAddCategory}
+                placeholder="Seleccionar o crear categoría..."
               />
-              <datalist id="groups-list">
-                {existingGroups.map(g => (
-                  <option key={g} value={g} />
-                ))}
-              </datalist>
             </div>
 
             {/* Resolución y Orientación */}
