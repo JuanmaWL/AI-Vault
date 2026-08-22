@@ -8,13 +8,13 @@ import { CompareView } from './components/CompareView';
 import { DashboardView } from './components/DashboardView';
 import { AddVideoModal } from './components/AddVideoModal';
 import { BatchImportModal } from './components/BatchImportModal';
-import { LoginModal } from './components/LoginModal';
+import { AccessGate } from './components/AccessGate';
 import { SetNickModal } from './components/SetNickModal';
 import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogIn, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check } from 'lucide-react';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check } from 'lucide-react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -94,13 +94,13 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
   const [editingVideo, setEditingVideo] = useState<VideoRecord | undefined>(undefined);
-  const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isNickModalOpen, setIsNickModalOpen] = useState(false);
   const [userDisplayName, setUserDisplayName] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
   
   const isAdmin = userProfile?.role === 'admin';
@@ -213,7 +213,7 @@ export default function App() {
     };
     setUserProfile(baseProfile);
 
-    if (!activeHardware) {
+    if (!activeHardware && firestoreRole === 'admin') {
       setIsHardwareModalOpen(true);
     }
   };
@@ -232,10 +232,12 @@ export default function App() {
         } else {
           setUserProfile(null);
         }
+        setAuthLoading(false);
       });
       return () => unsubscribe();
     } else {
       setCurrentUser(null);
+      setAuthLoading(false);
     }
   }, []);
 
@@ -272,6 +274,9 @@ export default function App() {
     if (auth) {
       try {
         await signOut(auth);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem('ai_video_vault_hardware');
+        setVideos([]);
       } catch (err) {
         console.error('Error al cerrar sesión', err);
       }
@@ -297,6 +302,8 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (!currentUser) return;
+
     if (db) {
       try {
         const q = query(collection(db, COLLECTION_NAME), orderBy('createdAt', 'desc'));
@@ -322,7 +329,7 @@ export default function App() {
     } else {
       fallbackToLocal();
     }
-  }, []);
+  }, [currentUser]);
 
   const cleanUndefined = (obj: any) => {
     return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
@@ -649,6 +656,18 @@ export default function App() {
     }, 100);
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4">
+        <div className="w-8 h-8 border-2 border-teal-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <AccessGate />;
+  }
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 font-sans selection:bg-teal-900/50 flex flex-col justify-between">
       <div>
@@ -683,61 +702,50 @@ export default function App() {
 
             <div className="flex items-center gap-3 shrink-0">
               {/* Botón de Autenticación / Estado de Usuario */}
-              {currentUser ? (
-                <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 rounded-full pl-3 pr-1.5 py-1 group/user">
-                  {isAdmin ? (
-                    <button
-                      onClick={() => setIsNickModalOpen(true)}
-                      title="Haz clic para cambiar tu apodo"
-                      className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors"
-                    >
-                      <UserIcon className="w-3.5 h-3.5 text-teal-400" />
-                      <span className="max-w-[140px] truncate font-medium">
-                        {userDisplayName || currentUser.email}
-                      </span>
-                      <Edit3 className="w-3 h-3 text-neutral-500 opacity-0 group-hover/user:opacity-100 transition-opacity" />
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-300 px-1">
-                      <UserIcon className="w-3.5 h-3.5 text-neutral-400" />
-                      <span className="max-w-[140px] truncate font-medium">
-                        {userDisplayName || currentUser.email}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="h-3 w-px bg-neutral-800" />
-                  
-                  {isAdmin && (
-                    <>
-                      <button
-                        onClick={() => setIsHardwareModalOpen(true)}
-                        title="Perfil de Hardware"
-                        className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors px-1"
-                      >
-                        <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
-                      </button>
-                      <div className="h-3 w-px bg-neutral-800" />
-                    </>
-                  )}
-
+              <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 rounded-full pl-3 pr-1.5 py-1 group/user">
+                {isAdmin ? (
                   <button
-                    onClick={handleLogout}
-                    title="Cerrar sesión"
-                    className="p-1.5 rounded-full text-neutral-400 hover:text-rose-400 hover:bg-neutral-800 transition-colors"
+                    onClick={() => setIsNickModalOpen(true)}
+                    title="Haz clic para cambiar tu apodo"
+                    className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
+                    <UserIcon className="w-3.5 h-3.5 text-teal-400" />
+                    <span className="max-w-[140px] truncate font-medium">
+                      {userDisplayName || currentUser.email}
+                    </span>
+                    <Edit3 className="w-3 h-3 text-neutral-500 opacity-0 group-hover/user:opacity-100 transition-opacity" />
                   </button>
-                </div>
-              ) : (
+                ) : (
+                  <div className="flex items-center gap-1.5 text-xs text-neutral-300 px-1">
+                    <UserIcon className="w-3.5 h-3.5 text-neutral-400" />
+                    <span className="max-w-[140px] truncate font-medium">
+                      {userDisplayName || currentUser.email}
+                    </span>
+                  </div>
+                )}
+                <div className="h-3 w-px bg-neutral-800" />
+                
+                {isAdmin && (
+                  <>
+                    <button
+                      onClick={() => setIsHardwareModalOpen(true)}
+                      title="Perfil de Hardware"
+                      className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors px-1"
+                    >
+                      <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
+                    </button>
+                    <div className="h-3 w-px bg-neutral-800" />
+                  </>
+                )}
+
                 <button
-                  onClick={() => setIsLoginOpen(true)}
-                  className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 hover:border-neutral-700 hover:bg-neutral-800 text-neutral-300 px-3.5 py-2 rounded-full text-xs font-medium transition-colors"
+                  onClick={handleLogout}
+                  title="Cerrar sesión"
+                  className="p-1.5 rounded-full text-neutral-400 hover:text-rose-400 hover:bg-neutral-800 transition-colors"
                 >
-                  <LogIn className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Iniciar sesión</span>
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
-              )}
+              </div>
 
               {/* Botones de acción principales */}
               <div className="flex items-center gap-2">
@@ -1184,12 +1192,6 @@ export default function App() {
           userUid={currentUser?.uid || userProfile?.uid || undefined}
           availableCategories={uniqueGroups}
           onAddCategory={handleAddCategory}
-        />
-      )}
-
-      {isLoginOpen && (
-        <LoginModal
-          onClose={() => setIsLoginOpen(false)}
         />
       )}
 
