@@ -47,7 +47,7 @@ export const VIDEO_VAE_OPTIONS = [
 ] as const;
 
 export interface ExtractedTechnicalDetails {
-  baseModel: string;
+  baseModel?: string;
   modelSizeB?: number;
   modelVariant?: string;
   videoVae: string;
@@ -139,75 +139,91 @@ export function extractTechnicalDetails(
   modelType: string = '',
   typeDesc: string = ''
 ): ExtractedTechnicalDetails {
-  const jsonStr = typeof parsedJson === 'object' ? JSON.stringify(parsedJson) : '';
-  const combined = `${modelType} ${typeDesc} ${rawComment} ${jsonStr}`.toLowerCase();
+  // 1. Technical string restricted ONLY to technical model metadata fields.
+  // Never search narrative prompt, general comments, or full serialized JSON to prevent accidental false positives.
+  const technicalModelStr = [
+    modelType,
+    typeDesc,
+    parsedJson?.model_type,
+    parsedJson?.type,
+    parsedJson?.model_filename,
+    parsedJson?.filename
+  ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
   
   // 1. Base Model Detection
-  let baseModel = modelType.trim() || 'Wan 2.1';
-  if (combined.includes('minimax') || combined.includes('h3')) {
+  // Currently recognized model: Minimax H3.
+  // (Se pueden añadir más ramas de modelos reconocidos aquí en el futuro según se utilicen nuevos modelos)
+  let baseModel: string | undefined = undefined;
+  if (technicalModelStr.includes('minimax') || technicalModelStr.includes('h3')) {
     baseModel = 'Minimax H3';
-  } else if (combined.includes('scail2')) {
-    baseModel = 'Wan 2.1';
-  } else if (combined.includes('wan 2.1') || combined.includes('wan_2.1') || combined.includes('wan2.1')) {
-    baseModel = 'Wan 2.1';
-  } else if (combined.includes('wan 2.2') || combined.includes('wan_2.2') || combined.includes('wan2.2')) {
-    baseModel = 'Wan 2.2';
-  } else if (combined.includes('ltx 2.5') || combined.includes('ltx_2.5') || combined.includes('ltx2.5') || combined.includes('ltx2_25')) {
-    baseModel = 'LTX 2.5';
-  } else if (combined.includes('ltx 2.3') || combined.includes('ltx_2.3') || combined.includes('ltx2.3') || combined.includes('ltx2')) {
-    baseModel = 'LTX 2.3';
-  } else if (combined.includes('hunyuan')) {
-    baseModel = 'HunyuanVideo';
   }
 
-  // Model size in Billions (modelSizeB)
+  // Model size in Billions (modelSizeB) strictly from type/model_filename fields
   const typeField = parsedJson?.type || typeDesc;
   const modelFilename = parsedJson?.model_filename || parsedJson?.filename;
   const modelSizeB = extractModelSizeB(typeField, modelFilename);
 
-  // Model Variant (structured field: FL2VA, Ref2VA, SCAIL 2...)
+  // Model Variant (FL2VA, Ref2VA, SCAIL 2...) restricted to technical model and variant fields
   let modelVariant: string | undefined = undefined;
-  if (combined.includes('fl2va')) {
+  const variantStr = [
+    technicalModelStr,
+    parsedJson?.model_variant,
+    parsedJson?.variant
+  ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
+
+  if (variantStr.includes('fl2va')) {
     modelVariant = 'FL2VA';
-  } else if (combined.includes('ref2va')) {
+  } else if (variantStr.includes('ref2va')) {
     modelVariant = 'Ref2VA';
-  } else if (combined.includes('scail2') || combined.includes('scail 2')) {
+  } else if (variantStr.includes('scail2') || variantStr.includes('scail 2')) {
     modelVariant = 'SCAIL 2';
   }
 
-  // 2. Text Encoder Detection (Minimax H3 / Qwen3-VL specific options)
+  // 2. Text Encoder Detection (restricted strictly to text encoder technical fields)
   let textEncoder: string = 'Not Found';
-  const rawTextEnc = parsedJson?.text_encoder || parsedJson?.text_encoder_name || parsedJson?.text_encoder_path || parsedJson?.t5_path || parsedJson?.llm;
-  const textEncCombined = `${rawTextEnc || ''} ${combined}`.toLowerCase();
+  const rawTextEnc = [
+    parsedJson?.text_encoder,
+    parsedJson?.text_encoder_name,
+    parsedJson?.text_encoder_path,
+    parsedJson?.t5_path,
+    parsedJson?.llm,
+    parsedJson?.encoder
+  ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
-  if (textEncCombined.includes('q4_k_m') || textEncCombined.includes('q4-k-m') || textEncCombined.includes('q4km')) {
-    textEncoder = 'Qwen3-VL GGUF Q4_K_M';
-  } else if (textEncCombined.includes('q2_k') || textEncCombined.includes('q2-k') || textEncCombined.includes('q2k')) {
-    textEncoder = 'Qwen3-VL GGUF Q2_K';
-  } else if (textEncCombined.includes('quanto int8') || textEncCombined.includes('quanto_int8') || textEncCombined.includes('int8')) {
-    textEncoder = 'Qwen3-VL Quanto INT8';
-  } else if (textEncCombined.includes('nvfp4') || textEncCombined.includes('awq') || textEncCombined.includes('nvfp4 awq')) {
-    textEncoder = 'Qwen3-VL NVFP4 AWQ';
-  } else if (textEncCombined.includes('qwen3-vl bf16') || textEncCombined.includes('qwen3_vl_bf16') || (textEncCombined.includes('qwen3') && textEncCombined.includes('bf16'))) {
-    textEncoder = 'Qwen3-VL BF16';
-  } else if (textEncCombined.includes('default') && (textEncCombined.includes('encoder') || textEncCombined.includes('text'))) {
-    textEncoder = 'Default';
-  } else if (textEncCombined.includes('qwen3-vl') || textEncCombined.includes('qwen3_vl') || textEncCombined.includes('qwen3')) {
-    textEncoder = 'Qwen3-VL GGUF Q4_K_M'; // Default to standard Q4_K_M if Qwen3-VL is present without explicit quantization
+  if (rawTextEnc.length > 0) {
+    if (rawTextEnc.includes('q4_k_m') || rawTextEnc.includes('q4-k-m') || rawTextEnc.includes('q4km')) {
+      textEncoder = 'Qwen3-VL GGUF Q4_K_M';
+    } else if (rawTextEnc.includes('q2_k') || rawTextEnc.includes('q2-k') || rawTextEnc.includes('q2k')) {
+      textEncoder = 'Qwen3-VL GGUF Q2_K';
+    } else if (rawTextEnc.includes('quanto') || rawTextEnc.includes('int8')) {
+      textEncoder = 'Qwen3-VL Quanto INT8';
+    } else if (rawTextEnc.includes('nvfp4') || rawTextEnc.includes('awq')) {
+      textEncoder = 'Qwen3-VL NVFP4 AWQ';
+    } else if (rawTextEnc.includes('bf16')) {
+      textEncoder = 'Qwen3-VL BF16';
+    } else if (rawTextEnc.includes('default')) {
+      textEncoder = 'Default';
+    } else if (rawTextEnc.includes('qwen3-vl') || rawTextEnc.includes('qwen3_vl') || rawTextEnc.includes('qwen3')) {
+      textEncoder = 'Qwen3-VL GGUF Q4_K_M';
+    }
   }
 
-  // 3. Video VAE Detection (FP8 Mixed Precision vs Original VAE)
+  // 3. Video VAE Detection (restricted strictly to VAE technical fields)
   let videoVae: string = 'Not Found';
-  const rawVae = parsedJson?.video_vae || parsedJson?.vae || parsedJson?.vae_name || parsedJson?.vae_model || parsedJson?.vae_path;
-  const vaeCombined = `${rawVae || ''} ${combined}`.toLowerCase();
+  const rawVae = [
+    parsedJson?.video_vae,
+    parsedJson?.vae,
+    parsedJson?.vae_name,
+    parsedJson?.vae_model,
+    parsedJson?.vae_path
+  ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
-  if (vaeCombined.includes('fp8 mixed') || vaeCombined.includes('fp8_mixed') || vaeCombined.includes('mixed precision') || vaeCombined.includes('fp8')) {
-    videoVae = 'FP8 Mixed Precision';
-  } else if (vaeCombined.includes('original vae') || vaeCombined.includes('original_vae') || vaeCombined.includes('original') || vaeCombined.includes('wan2.1_vae') || vaeCombined.includes('wan 2.1 vae')) {
-    videoVae = 'Original VAE';
-  } else if (combined.includes('minimax') || combined.includes('wan')) {
-    // If not specified in a Minimax / Wan run, default to Original VAE
-    videoVae = 'Original VAE';
+  if (rawVae.length > 0) {
+    if (rawVae.includes('fp8')) {
+      videoVae = 'FP8 Mixed Precision';
+    } else if (rawVae.includes('original') || rawVae.includes('default') || rawVae.includes('wan2.1_vae') || rawVae.includes('wan 2.1 vae')) {
+      videoVae = 'Original VAE';
+    }
   }
 
   // Tags are reserved for custom user tags; structured details live in their dedicated fields
@@ -229,7 +245,7 @@ export interface ParsedWanGpMetadata {
   seed?: string;
   steps?: number;
   shift?: string;
-  baseModel: string;
+  baseModel?: string;
   modelSizeB?: number;
   modelVariant?: string;
   videoVae: string;
@@ -325,7 +341,7 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
   }
 }
 
-export function parseModelAndTags(modelType: string, typeDesc: string = ''): { baseModel: string, newTags: string[] } {
+export function parseModelAndTags(modelType: string, typeDesc: string = ''): { baseModel?: string, newTags: string[] } {
   const details = extractTechnicalDetails(undefined, '', modelType, typeDesc);
   return { baseModel: details.baseModel, newTags: details.tags };
 }

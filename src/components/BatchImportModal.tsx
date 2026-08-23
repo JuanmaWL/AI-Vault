@@ -192,7 +192,7 @@ export function BatchImportModal({
           let width = 1920;
           let height = 1080;
           let prompt = "Importado desde URL";
-          let model = "Wan 2.1";
+          let model = "Desconocido";
           let modelSizeB: number | undefined = undefined;
           let modelVariant: string | undefined = undefined;
           let title: string | undefined = undefined;
@@ -200,7 +200,7 @@ export function BatchImportModal({
           let steps = 30;
           let shift = "5.0";
           let seed = "";
-          let tagsInput = "Wan 2.1";
+          let tagsInput = "";
           let videoVae: string = 'Not Found';
           let textEncoder: string = 'Not Found';
           let loras: Lora[] = [];
