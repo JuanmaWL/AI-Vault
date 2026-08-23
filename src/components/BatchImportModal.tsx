@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
 import { extractDriveFileId, calculateOrientation, extractTechnicalDetails, parseVideoUrlInfo, ParsedVideoUrlInfo } from '../lib/utils';
-import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Wand2, ArrowRight, Layers, User } from 'lucide-react';
+import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Wand2, ArrowRight, Layers, User, Upload, FileText } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
@@ -27,6 +27,8 @@ export function BatchImportModal({
   onAddCategory,
 }: BatchImportModalProps) {
   const [urlsInput, setUrlsInput] = useState('');
+  const [fileWarning, setFileWarning] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [importSource, setImportSource] = useState<VideoSource>('local');
   const [categoryStrategy, setCategoryStrategy] = useState<CategoryStrategy>('auto');
   const [fixedCategory, setFixedCategory] = useState('');
@@ -36,6 +38,33 @@ export function BatchImportModal({
   const [logs, setLogs] = useState<{ type: 'info' | 'success' | 'error'; msg: string }[]>([]);
   
   const isProcessingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File) => {
+    setFileWarning(null);
+
+    // Check if file is .txt
+    const isTxt = file.name.toLowerCase().endsWith('.txt') || file.type === 'text/plain';
+    if (!isTxt) {
+      setFileWarning(`El archivo "${file.name}" no es un archivo .txt.`);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const content = (e.target?.result as string) || '';
+      setUrlsInput(content);
+
+      const hasHttp = content.split('\n').some(line => line.trim().startsWith('http'));
+      if (!hasHttp) {
+        setFileWarning('El archivo no contiene ninguna línea que empiece por "http".');
+      }
+    };
+    reader.onerror = () => {
+      setFileWarning('Error al leer el archivo seleccionado.');
+    };
+    reader.readAsText(file);
+  };
 
   const addLog = (type: 'info' | 'success' | 'error', msg: string) => {
     setLogs(prev => [...prev, { type, msg }]);
@@ -431,8 +460,8 @@ export function BatchImportModal({
             </div>
           )}
 
-          {/* URLs Input */}
-          <div className="flex flex-col gap-2">
+          {/* URLs Input & Drop Zone */}
+          <div className="flex flex-col gap-2.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
                 URLs de los vídeos (Una por línea)
@@ -443,9 +472,105 @@ export function BatchImportModal({
                 </span>
               )}
             </div>
+
+            {/* Drop Zone */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isProcessing) setIsDragging(true);
+              }}
+              onDragEnter={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isProcessing) setIsDragging(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragging(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsDragging(false);
+                if (isProcessing) return;
+                const file = e.dataTransfer.files?.[0];
+                if (file) {
+                  handleFile(file);
+                }
+              }}
+              className={`relative border-2 border-dashed rounded-xl p-3.5 sm:p-4 text-center transition-all flex flex-col sm:flex-row items-center justify-between gap-3 ${
+                isDragging
+                  ? 'border-teal-400 bg-teal-950/40 shadow-[0_0_20px_rgba(20,184,166,0.15)] scale-[1.01]'
+                  : 'border-neutral-800 bg-neutral-950/70 hover:border-neutral-700'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,text/plain"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                  e.target.value = '';
+                }}
+                className="hidden"
+                disabled={isProcessing}
+              />
+              
+              <div className="flex items-center gap-2.5 text-left">
+                <div className={`p-2 rounded-lg border transition-colors ${
+                  isDragging 
+                    ? 'bg-teal-500/20 text-teal-300 border-teal-500/40' 
+                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                }`}>
+                  <Upload className="w-4 h-4" />
+                </div>
+                <div className="text-xs">
+                  <p className="text-neutral-300 font-medium">
+                    Arrastra aquí un .txt con URLs (una por línea), o pega/escribe abajo
+                  </p>
+                  <p className="text-[11px] text-neutral-500">
+                    Lectura local instantánea de archivos de texto plano (.txt)
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessing}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-teal-400 hover:text-teal-300 border border-neutral-700 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                Seleccionar archivo .txt
+              </button>
+            </div>
+
+            {/* File Warning Notice (non-blocking) */}
+            {fileWarning && (
+              <div className="p-2.5 bg-amber-950/40 border border-amber-800/60 rounded-xl text-xs text-amber-300 flex items-center justify-between gap-2 animate-in fade-in duration-150">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>{fileWarning}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFileWarning(null)}
+                  className="text-amber-400 hover:text-amber-200 p-0.5 rounded cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             <textarea
               value={urlsInput}
-              onChange={(e) => setUrlsInput(e.target.value)}
+              onChange={(e) => {
+                setUrlsInput(e.target.value);
+                if (fileWarning) setFileWarning(null);
+              }}
               disabled={isProcessing}
               placeholder="https://huggingface.co/datasets/Usuario/Repo/resolve/main/Carpeta%20Categoria/video1.mp4&#10;https://huggingface.co/datasets/Usuario/Repo/resolve/main/Carpeta%20Categoria/video2.mp4"
               className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-xs text-neutral-200 focus:outline-none focus:border-teal-500 transition-colors placeholder:text-neutral-600 font-mono resize-none h-32 custom-scrollbar"
