@@ -33,7 +33,8 @@ export function DualCompareModal({
   const [videoBId, setVideoBId] = useState<string>(initialVideoB.id || '');
   
   // Visual Video Picker Modal State
-  const [pickerTarget, setPickerTarget] = useState<'A' | 'B' | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<'A' | 'B' | 'both' | null>(null);
+  const [pickerSelectionBoth, setPickerSelectionBoth] = useState<[VideoRecord | null, VideoRecord | null]>([null, null]);
   const [pickerSearch, setPickerSearch] = useState('');
   const [pickerModelFilter, setPickerModelFilter] = useState('all');
   const [pickerAuthorFilter, setPickerAuthorFilter] = useState('all');
@@ -297,10 +298,19 @@ export function DualCompareModal({
   const handleSelectFromPicker = (vid: VideoRecord) => {
     if (pickerTarget === 'A') {
       setVideoAId(vid.id || '');
+      setPickerTarget(null);
     } else if (pickerTarget === 'B') {
       setVideoBId(vid.id || '');
+      setPickerTarget(null);
+    } else if (pickerTarget === 'both') {
+      if (pickerSelectionBoth[0] && pickerSelectionBoth[0].id === vid.id) {
+        setPickerSelectionBoth([null, null]);
+      } else if (!pickerSelectionBoth[0]) {
+        setPickerSelectionBoth([vid, null]);
+      } else if (!pickerSelectionBoth[1] && pickerSelectionBoth[0].id !== vid.id) {
+        setPickerSelectionBoth([pickerSelectionBoth[0], vid]);
+      }
     }
-    setPickerTarget(null);
   };
 
   // Slider Mouse/Touch Drag Handlers for Wipe Compare
@@ -541,26 +551,17 @@ export function DualCompareModal({
 
         {/* Center: Interactive Slot Selectors & Swap Button */}
         <div className="flex items-center gap-2 max-w-2xl flex-1 justify-center">
-          {/* Slot Button Video A */}
+          {/* Choose Videos Button */}
           <button
-            onClick={() => setPickerTarget('A')}
-            className="flex items-center gap-2.5 bg-neutral-900/90 hover:bg-neutral-850 border border-blue-500/50 hover:border-blue-400 rounded-xl px-3 py-1.5 transition-all text-left group min-w-0 max-w-[240px] sm:max-w-[280px] shadow-sm cursor-pointer"
-            title="Haz clic para elegir visualmente cualquier vídeo para el Slot A"
+            onClick={() => {
+              setPickerSelectionBoth([null, null]);
+              setPickerTarget('both');
+            }}
+            className="flex items-center gap-2 bg-teal-900/40 hover:bg-teal-800/60 border border-teal-500/50 hover:border-teal-400 rounded-xl px-4 py-2 transition-all text-neutral-200 hover:text-white shadow-sm cursor-pointer"
+            title="Elegir nuevos vídeos para comparar"
           >
-            <span className="text-[11px] font-bold text-blue-400 px-2 py-0.5 rounded bg-blue-950 border border-blue-800 shrink-0 group-hover:bg-blue-900">
-              A
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-neutral-200 truncate group-hover:text-blue-300">
-                {videoA.model}
-              </div>
-              <div className="text-[10px] text-neutral-400 truncate flex items-center gap-1">
-                <span>{videoA.steps}st</span>
-                <span>·</span>
-                <span>{videoA.width}x{videoA.height}</span>
-              </div>
-            </div>
-            <Film className="w-3.5 h-3.5 text-blue-400 shrink-0 opacity-60 group-hover:opacity-100" />
+            <Layers className="w-4 h-4 text-teal-400" />
+            <span className="font-bold text-sm">Elegir Vídeos</span>
           </button>
 
           {/* Swap Button */}
@@ -570,28 +571,6 @@ export function DualCompareModal({
             title="Intercambiar Vídeo A y Vídeo B"
           >
             <ArrowLeftRight className="w-4 h-4" />
-          </button>
-
-          {/* Slot Button Video B */}
-          <button
-            onClick={() => setPickerTarget('B')}
-            className="flex items-center gap-2.5 bg-neutral-900/90 hover:bg-neutral-850 border border-purple-500/50 hover:border-purple-400 rounded-xl px-3 py-1.5 transition-all text-left group min-w-0 max-w-[240px] sm:max-w-[280px] shadow-sm cursor-pointer"
-            title="Haz clic para elegir visualmente cualquier vídeo para el Slot B"
-          >
-            <span className="text-[11px] font-bold text-purple-400 px-2 py-0.5 rounded bg-purple-950 border border-purple-800 shrink-0 group-hover:bg-purple-900">
-              B
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-xs font-bold text-neutral-200 truncate group-hover:text-purple-300">
-                {videoB.model}
-              </div>
-              <div className="text-[10px] text-neutral-400 truncate flex items-center gap-1">
-                <span>{videoB.steps}st</span>
-                <span>·</span>
-                <span>{videoB.width}x{videoB.height}</span>
-              </div>
-            </div>
-            <Film className="w-3.5 h-3.5 text-purple-400 shrink-0 opacity-60 group-hover:opacity-100" />
           </button>
         </div>
 
@@ -1096,12 +1075,16 @@ export function DualCompareModal({
             {/* Modal Header */}
             <div className="p-4 sm:px-6 border-b border-neutral-800 flex items-center justify-between gap-4 bg-neutral-900/90 shrink-0">
               <div className="flex items-center gap-3">
-                <div className={`px-3 py-1.5 rounded-xl border font-bold text-xs uppercase tracking-wider ${
-                  pickerTarget === 'A' 
-                    ? 'bg-blue-950 text-blue-300 border-blue-700' 
-                    : 'bg-purple-950 text-purple-300 border-purple-700'
+                <div className={`px-3 py-1.5 rounded-xl border font-bold text-xs uppercase tracking-wider transition-colors ${
+                  (pickerTarget === 'A' || (pickerTarget === 'both' && !pickerSelectionBoth[0]))
+                    ? 'bg-blue-950 text-blue-300 border-blue-700 shadow-[0_0_10px_rgba(37,99,235,0.3)]' 
+                    : (pickerTarget === 'B' || (pickerTarget === 'both' && pickerSelectionBoth[0]))
+                    ? 'bg-purple-950 text-purple-300 border-purple-700 shadow-[0_0_10px_rgba(147,51,234,0.3)]'
+                    : 'bg-teal-950 text-teal-300 border-teal-700'
                 }`}>
-                  Asignar a Slot {pickerTarget}
+                  {pickerTarget === 'both' 
+                    ? (!pickerSelectionBoth[0] ? 'Elige el primer vídeo (A)' : 'Elige el segundo vídeo (B)')
+                    : `Asignar a Slot ${pickerTarget}`}
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-neutral-100 flex items-center gap-2">
@@ -1291,12 +1274,154 @@ export function DualCompareModal({
                     Restablecer todos los filtros
                   </button>
                 </div>
+              ) : pickerTarget === 'both' && pickerSelectionBoth[0] && pickerSelectionBoth[1] ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in-95 duration-200 overflow-y-auto">
+                  <h4 className="text-2xl sm:text-3xl font-black uppercase tracking-[0.2em] mb-8 text-transparent bg-clip-text bg-gradient-to-r from-teal-300 via-white to-teal-300 animate-pulse drop-shadow-[0_0_10px_rgba(20,184,166,0.5)]">
+                    Confirma la comparación
+                  </h4>
+                  <style>{`
+                    @keyframes fire-rise {
+                      0% { transform: translateY(10px) scale(1); opacity: 0; }
+                      20% { opacity: 1; }
+                      100% { transform: translateY(-160px) scale(0); opacity: 0; }
+                    }
+                    @keyframes fire-rise-left {
+                      0% { transform: translate(0, 10px) scale(1); opacity: 0; }
+                      20% { opacity: 1; }
+                      100% { transform: translate(-40px, -180px) scale(0); opacity: 0; }
+                    }
+                    @keyframes fire-rise-right {
+                      0% { transform: translate(0, 10px) scale(1); opacity: 0; }
+                      20% { opacity: 1; }
+                      100% { transform: translate(40px, -150px) scale(0); opacity: 0; }
+                    }
+                  `}</style>
+                  <div className="flex items-center gap-2 sm:gap-6 max-w-4xl w-full">
+                    {/* Video 1 */}
+                    <div className="flex-1 relative rounded-2xl bg-neutral-900/80 border border-blue-500/50 p-4 sm:p-5 shadow-2xl shadow-blue-900/30 flex flex-col items-center overflow-hidden group">
+                      {/* Dynamic Backgrounds - Fire & Particles */}
+                      <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none mix-blend-screen opacity-80">
+                        {/* Base Fire Glow */}
+                        <div className="absolute bottom-0 left-0 w-full h-[60%] bg-gradient-to-t from-blue-600/40 via-blue-500/10 to-transparent" />
+                        {/* Rising Particles */}
+                        <div className="absolute bottom-[-10px] left-[15%] w-1.5 h-1.5 bg-blue-300 rounded-full blur-[1px] animate-[fire-rise_2s_linear_infinite]" />
+                        <div className="absolute bottom-[-10px] left-[35%] w-2 h-2 bg-cyan-300 rounded-full blur-[1px] animate-[fire-rise-left_2.5s_linear_infinite_0.3s]" />
+                        <div className="absolute bottom-[-10px] left-[55%] w-1 h-1 bg-blue-200 rounded-full blur-[0.5px] animate-[fire-rise-right_1.8s_linear_infinite_0.7s]" />
+                        <div className="absolute bottom-[-10px] left-[75%] w-2.5 h-2.5 bg-cyan-200 rounded-full blur-[2px] animate-[fire-rise_2.2s_linear_infinite_0.1s]" />
+                        <div className="absolute bottom-[-10px] left-[85%] w-1.5 h-1.5 bg-blue-400 rounded-full blur-[1px] animate-[fire-rise-left_2.7s_linear_infinite_0.5s]" />
+                        <div className="absolute bottom-[-10px] left-[25%] w-2 h-2 bg-cyan-400 rounded-full blur-[1px] animate-[fire-rise-right_2.1s_linear_infinite_0.8s]" />
+                        <div className="absolute bottom-[-10px] left-[45%] w-1 h-1 bg-blue-100 rounded-full animate-[fire-rise_1.5s_linear_infinite_0.2s]" />
+                        <div className="absolute bottom-[-10px] left-[65%] w-2 h-2 bg-cyan-100 rounded-full blur-[1px] animate-[fire-rise-left_2.4s_linear_infinite_0.6s]" />
+                      </div>
+
+                      <span className="relative z-10 bg-blue-600 text-white font-black w-8 h-8 rounded-full flex items-center justify-center mb-4 text-sm shadow-[0_0_15px_rgba(37,99,235,0.8)] border border-blue-400">A</span>
+                      
+                      <div className="relative z-10 w-full aspect-video rounded-xl bg-black mb-4 overflow-hidden ring-1 ring-blue-500/30">
+                        <video src={pickerSelectionBoth[0].driveFileId ? `https://drive.google.com/uc?id=${pickerSelectionBoth[0].driveFileId}&export=download` : pickerSelectionBoth[0].videoUrl} className="w-full h-full object-cover opacity-90" autoPlay loop muted playsInline />
+                      </div>
+                      
+                      <div className="relative z-10 text-sm sm:text-base font-bold text-neutral-100 text-center mb-2">{pickerSelectionBoth[0].model}</div>
+                      <div className="relative z-10 flex flex-wrap items-center justify-center gap-2">
+                        <span className="px-2 py-1 rounded bg-black/80 border border-neutral-700/50 text-[10px] sm:text-xs text-neutral-300 font-mono flex items-center gap-1.5 shadow-sm">
+                          <Maximize2 className="w-3 h-3 text-neutral-500" />
+                          {pickerSelectionBoth[0].width}x{pickerSelectionBoth[0].height}
+                        </span>
+                        <span className="px-2 py-1 rounded bg-blue-950/80 border border-blue-800/50 text-[10px] sm:text-xs text-blue-300 font-medium flex items-center gap-1.5 shadow-sm">
+                          <Layers className="w-3 h-3 text-blue-500" />
+                          {pickerSelectionBoth[0].steps} steps
+                        </span>
+                        {pickerSelectionBoth[0].renderSeconds !== undefined && pickerSelectionBoth[0].renderSeconds > 0 && (
+                          <span className="px-2 py-1 rounded bg-amber-950/60 border border-amber-800/50 text-[10px] sm:text-xs text-amber-300 font-medium flex items-center gap-1.5 shadow-sm">
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            {pickerSelectionBoth[0].renderSeconds < 60 ? `${pickerSelectionBoth[0].renderSeconds}s` : `${Math.floor(pickerSelectionBoth[0].renderSeconds / 60)}m ${pickerSelectionBoth[0].renderSeconds % 60}s`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="shrink-0 flex flex-col items-center justify-center gap-3 hidden sm:flex z-10 relative">
+                      <div className="w-[2px] h-20 bg-gradient-to-b from-transparent via-neutral-700 to-transparent"></div>
+                      <div className="relative flex items-center justify-center group/vs z-20">
+                        <div className="absolute inset-0 bg-teal-500 blur-lg opacity-40 animate-pulse transition-opacity group-hover/vs:opacity-80"></div>
+                        <div className="relative flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-neutral-950 border-[3px] border-neutral-800 shadow-[0_0_20px_rgba(20,184,166,0.3)] group-hover/vs:border-teal-500/50 transition-colors">
+                          <span className="text-transparent bg-clip-text bg-gradient-to-br from-white via-neutral-100 to-neutral-400 font-black text-xl sm:text-2xl tracking-tighter">
+                            VS
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-[2px] h-20 bg-gradient-to-b from-transparent via-neutral-700 to-transparent"></div>
+                    </div>
+
+                    {/* Video 2 */}
+                    <div className="flex-1 relative rounded-2xl bg-neutral-900/80 border border-purple-500/50 p-4 sm:p-5 shadow-2xl shadow-purple-900/30 flex flex-col items-center overflow-hidden group">
+                      {/* Dynamic Backgrounds - Fire & Particles */}
+                      <div className="absolute inset-0 overflow-hidden rounded-2xl pointer-events-none mix-blend-screen opacity-80">
+                        {/* Base Fire Glow */}
+                        <div className="absolute bottom-0 left-0 w-full h-[60%] bg-gradient-to-t from-purple-600/40 via-fuchsia-500/10 to-transparent" />
+                        {/* Rising Particles */}
+                        <div className="absolute bottom-[-10px] left-[15%] w-1.5 h-1.5 bg-purple-300 rounded-full blur-[1px] animate-[fire-rise_2s_linear_infinite]" />
+                        <div className="absolute bottom-[-10px] left-[35%] w-2 h-2 bg-fuchsia-300 rounded-full blur-[1px] animate-[fire-rise-left_2.5s_linear_infinite_0.3s]" />
+                        <div className="absolute bottom-[-10px] left-[55%] w-1 h-1 bg-purple-200 rounded-full blur-[0.5px] animate-[fire-rise-right_1.8s_linear_infinite_0.7s]" />
+                        <div className="absolute bottom-[-10px] left-[75%] w-2.5 h-2.5 bg-fuchsia-200 rounded-full blur-[2px] animate-[fire-rise_2.2s_linear_infinite_0.1s]" />
+                        <div className="absolute bottom-[-10px] left-[85%] w-1.5 h-1.5 bg-purple-400 rounded-full blur-[1px] animate-[fire-rise-left_2.7s_linear_infinite_0.5s]" />
+                        <div className="absolute bottom-[-10px] left-[25%] w-2 h-2 bg-fuchsia-400 rounded-full blur-[1px] animate-[fire-rise-right_2.1s_linear_infinite_0.8s]" />
+                        <div className="absolute bottom-[-10px] left-[45%] w-1 h-1 bg-purple-100 rounded-full animate-[fire-rise_1.5s_linear_infinite_0.2s]" />
+                        <div className="absolute bottom-[-10px] left-[65%] w-2 h-2 bg-fuchsia-100 rounded-full blur-[1px] animate-[fire-rise-left_2.4s_linear_infinite_0.6s]" />
+                      </div>
+                      
+                      <span className="relative z-10 bg-purple-600 text-white font-black w-8 h-8 rounded-full flex items-center justify-center mb-4 text-sm shadow-[0_0_15px_rgba(147,51,234,0.8)] border border-purple-400">B</span>
+                      
+                      <div className="relative z-10 w-full aspect-video rounded-xl bg-black mb-4 overflow-hidden ring-1 ring-purple-500/30">
+                        <video src={pickerSelectionBoth[1].driveFileId ? `https://drive.google.com/uc?id=${pickerSelectionBoth[1].driveFileId}&export=download` : pickerSelectionBoth[1].videoUrl} className="w-full h-full object-cover opacity-90" autoPlay loop muted playsInline />
+                      </div>
+                      
+                      <div className="relative z-10 text-sm sm:text-base font-bold text-neutral-100 text-center mb-2">{pickerSelectionBoth[1].model}</div>
+                      <div className="relative z-10 flex flex-wrap items-center justify-center gap-2">
+                        <span className="px-2 py-1 rounded bg-black/80 border border-neutral-700/50 text-[10px] sm:text-xs text-neutral-300 font-mono flex items-center gap-1.5 shadow-sm">
+                          <Maximize2 className="w-3 h-3 text-neutral-500" />
+                          {pickerSelectionBoth[1].width}x{pickerSelectionBoth[1].height}
+                        </span>
+                        <span className="px-2 py-1 rounded bg-purple-950/80 border border-purple-800/50 text-[10px] sm:text-xs text-purple-300 font-medium flex items-center gap-1.5 shadow-sm">
+                          <Layers className="w-3 h-3 text-purple-500" />
+                          {pickerSelectionBoth[1].steps} steps
+                        </span>
+                        {pickerSelectionBoth[1].renderSeconds !== undefined && pickerSelectionBoth[1].renderSeconds > 0 && (
+                          <span className="px-2 py-1 rounded bg-amber-950/60 border border-amber-800/50 text-[10px] sm:text-xs text-amber-300 font-medium flex items-center gap-1.5 shadow-sm">
+                            <Clock className="w-3 h-3 text-amber-500" />
+                            {pickerSelectionBoth[1].renderSeconds < 60 ? `${pickerSelectionBoth[1].renderSeconds}s` : `${Math.floor(pickerSelectionBoth[1].renderSeconds / 60)}m ${pickerSelectionBoth[1].renderSeconds % 60}s`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mt-12 flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+                    <button 
+                      onClick={() => setPickerSelectionBoth([null, null])}
+                      className="w-full sm:w-auto px-8 py-3 rounded-xl bg-neutral-900/80 border border-neutral-700 hover:border-neutral-500 text-neutral-300 hover:text-white font-bold tracking-widest uppercase text-xs transition-all cursor-pointer shadow-[inset_0_0_10px_rgba(0,0,0,0.5)] hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                    >
+                      Elegir de nuevo
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setVideoAId(pickerSelectionBoth[0]!.id || '');
+                        setVideoBId(pickerSelectionBoth[1]!.id || '');
+                        setPickerTarget(null);
+                      }}
+                      className="w-full sm:w-auto px-10 py-3 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black tracking-widest uppercase text-xs transition-all shadow-[0_0_20px_rgba(20,184,166,0.4)] hover:shadow-[0_0_30px_rgba(20,184,166,0.6)] flex items-center justify-center gap-2 cursor-pointer border border-teal-400/50"
+                    >
+                      <Check className="w-4 h-4" /> Confirmar
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className={`grid ${pickerGridClass} gap-3 sm:gap-4`}>
                   {paginatedVideos.map(vid => {
                     const isCurrentA = vid.id === videoAId;
                     const isCurrentB = vid.id === videoBId;
-                    const isCurrentTarget = (pickerTarget === 'A' && isCurrentA) || (pickerTarget === 'B' && isCurrentB);
+                    const isSelected1 = pickerTarget === 'both' && pickerSelectionBoth[0]?.id === vid.id;
+                    const isSelected2 = pickerTarget === 'both' && pickerSelectionBoth[1]?.id === vid.id;
+                    const isCurrentTarget = (pickerTarget === 'A' && isCurrentA) || (pickerTarget === 'B' && isCurrentB) || isSelected1 || isSelected2;
                     
                     const vidUrl = vid.driveFileId 
                       ? `https://drive.google.com/uc?id=${vid.driveFileId}&export=download`
@@ -1308,20 +1433,32 @@ export function DualCompareModal({
                         onClick={() => handleSelectFromPicker(vid)}
                         className={`group/card relative flex flex-col rounded-xl border bg-neutral-950 overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-xl hover:scale-[1.015] ${
                           isCurrentTarget
-                            ? pickerTarget === 'A'
+                            ? pickerTarget === 'A' || isSelected1
                               ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-950/20'
                               : 'border-purple-500 ring-2 ring-purple-500/40 bg-purple-950/20'
                             : 'border-neutral-800 hover:border-neutral-700'
                         }`}
                       >
                         {/* Video Thumbnail Stage */}
-                        <div className="relative aspect-video bg-black flex items-center justify-center overflow-hidden">
+                        <div className="relative aspect-video bg-neutral-950 flex items-center justify-center overflow-hidden">
+                          {/* Loading Indicator */}
+                          <div className="absolute inset-0 flex items-center justify-center bg-neutral-900 pointer-events-none transition-opacity duration-500">
+                             <Loader2 className="w-6 h-6 text-neutral-600 animate-spin" />
+                          </div>
                           <video
                             src={vidUrl}
                             muted
                             playsInline
                             crossOrigin="anonymous"
-                            className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
+                            style={{ opacity: 0 }}
+                            onLoadedData={e => {
+                              const target = e.target as HTMLVideoElement;
+                              target.style.opacity = '1';
+                              if (target.previousElementSibling) {
+                                (target.previousElementSibling as HTMLElement).style.opacity = '0';
+                              }
+                            }}
+                            className="w-full h-full object-cover group-hover/card:scale-105 transition-all duration-300 relative z-10"
                             onMouseEnter={e => (e.target as HTMLVideoElement).play().catch(() => {})}
                             onMouseLeave={e => {
                               const v = e.target as HTMLVideoElement;
@@ -1349,14 +1486,24 @@ export function DualCompareModal({
                           </div>
 
                           {/* Slot selection badge if currently selected */}
-                          {isCurrentA && (
+                          {(isCurrentA && pickerTarget !== 'both') && (
                             <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-blue-600 text-white font-bold text-[10px] flex items-center gap-1 shadow-lg">
                               <Check className="w-3 h-3" /> Slot A
                             </div>
                           )}
-                          {isCurrentB && (
+                          {(isCurrentB && pickerTarget !== 'both') && (
                             <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-purple-600 text-white font-bold text-[10px] flex items-center gap-1 shadow-lg">
                               <Check className="w-3 h-3" /> Slot B
+                            </div>
+                          )}
+                          {isSelected1 && (
+                            <div className="absolute bottom-2 left-2 w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.8)] border border-blue-400">
+                              1
+                            </div>
+                          )}
+                          {isSelected2 && (
+                            <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-purple-600 text-white font-bold text-xs flex items-center justify-center shadow-[0_0_15px_rgba(147,51,234,0.8)] border border-purple-400">
+                              2
                             </div>
                           )}
                         </div>
