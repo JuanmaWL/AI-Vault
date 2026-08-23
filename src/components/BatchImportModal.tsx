@@ -1,9 +1,8 @@
 import { useState, useRef, useMemo } from 'react';
-import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, ParsedVideoUrlInfo, generateTitleFromPrompt } from '../lib/utils';
+import { VideoRecord, VideoSource } from '../types';
+import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl } from '../lib/utils';
 import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Wand2, ArrowRight, Layers, User, Upload, FileText } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
-import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 interface BatchImportModalProps {
   onClose: () => void;
@@ -134,150 +133,28 @@ export function BatchImportModal({
     const results: VideoRecord[] = [];
 
     try {
-      const mediainfo = await import('mediainfo.js');
-
       for (let i = 0; i < lines.length; i++) {
         const url = lines[i];
         const urlInfo = parseVideoUrlInfo(url);
-
-        // Determine final category / groupName
-        let finalGroupName: string | undefined = undefined;
-        if (categoryStrategy === 'auto') {
-          finalGroupName = urlInfo.suggestedGroupName?.trim() || undefined;
-          if (finalGroupName && onAddCategory) {
-            onAddCategory(finalGroupName);
-          }
-        } else if (categoryStrategy === 'fixed') {
-          finalGroupName = fixedCategory.trim() || undefined;
-          if (finalGroupName && onAddCategory) {
-            onAddCategory(finalGroupName);
-          }
-        }
 
         setProgress({ current: i + 1, total: lines.length });
         addLog('info', `Procesando (${i + 1}/${lines.length}): ${urlInfo.fileName || url}`);
 
         try {
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
-          const blob = await response.blob();
-
-          const getSize = () => blob.size;
-          const readChunk = (chunkSize: number, offset: number) =>
-            new Promise<Uint8Array>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                if (e.target?.error) {
-                  reject(e.target.error);
-                } else if (e.target?.result) {
-                  resolve(new Uint8Array(e.target.result as ArrayBuffer));
-                } else {
-                  reject(new Error("Empty chunk"));
-                }
-              };
-              reader.readAsArrayBuffer(blob.slice(offset, offset + chunkSize));
-            });
-
-          const mi = await mediainfo.default({
-            format: 'object',
-            locateFile: () => wasmUrl
+          const record = await processVideoMetadataFromUrl({
+            url,
+            source: importSource,
+            customCategory: categoryStrategy === 'fixed' 
+              ? fixedCategory 
+              : (categoryStrategy === 'none' ? '' : undefined),
+            userEmail,
+            userDisplayName,
+            userUid,
+            onAddCategory,
           });
 
-          const result = await mi.analyzeData(getSize, readChunk);
-          const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General') as any;
-          const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video') as any;
-          const commentRaw = generalTrack?.extra?.Comment || generalTrack?.Comment || videoTrack?.extra?.Comment || videoTrack?.Comment;
-
-          // Default video parameters
-          let width = 1920;
-          let height = 1080;
-          let prompt = "Importado desde URL";
-          let model = "Desconocido";
-          let modelSizeB: number | undefined = undefined;
-          let modelVariant: string | undefined = undefined;
-          let title: string | undefined = undefined;
-          let durationSeconds = 5;
-          let steps = 30;
-          let shift = "5.0";
-          let seed = "";
-          let tagsInput = "";
-          let videoVae: string = 'Not Found';
-          let textEncoder: string = 'Not Found';
-          let loras: Lora[] = [];
-          let renderSeconds: number | undefined = undefined;
-          let generatedAt: number | undefined = undefined;
-          let fileSizeBytes: number | undefined = blob.size;
-
-          if (videoTrack?.Width) width = Number(videoTrack.Width);
-          if (videoTrack?.Height) height = Number(videoTrack.Height);
-          if (generalTrack?.Duration) durationSeconds = parseFloat(generalTrack.Duration);
-
-          if (commentRaw) {
-            const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, 24);
-            if (metadata) {
-              if (metadata.prompt) {
-                prompt = metadata.prompt;
-                const autoTitle = generateTitleFromPrompt(metadata.prompt);
-                if (autoTitle) title = autoTitle;
-              }
-              if (metadata.seed !== undefined) seed = metadata.seed;
-              if (metadata.steps !== undefined) steps = metadata.steps;
-              if (metadata.shift !== undefined) shift = metadata.shift;
-              if (metadata.baseModel) model = metadata.baseModel;
-              if (metadata.modelSizeB !== undefined) modelSizeB = metadata.modelSizeB;
-              if (metadata.modelVariant) modelVariant = metadata.modelVariant;
-              videoVae = metadata.videoVae;
-              textEncoder = metadata.textEncoder;
-              if (metadata.tags && metadata.tags.length > 0) tagsInput = metadata.tags.join(', ');
-              if (metadata.renderSeconds !== undefined) renderSeconds = metadata.renderSeconds;
-              if (metadata.generatedAt !== undefined) generatedAt = metadata.generatedAt;
-              if (metadata.loras && metadata.loras.length > 0) loras = metadata.loras;
-            }
-          }
-
-          const orientation = calculateOrientation(width, height);
-          const driveFileId = extractDriveFileId(url) || '';
-
-          // Creator attribution: prefer current session identity, fallback to author extracted from URL
-          const resolvedDisplayName = userDisplayName || userEmail || urlInfo.username || undefined;
-          const resolvedCreatedBy = userEmail || userDisplayName || (urlInfo.username ? `@${urlInfo.username}` : undefined);
-
-          const record: VideoRecord = {
-            schemaVersion: 2,
-            videoUrl: url,
-            groupName: finalGroupName,
-            driveFileId,
-            title,
-            prompt,
-            model,
-            modelSizeB,
-            modelVariant,
-            source: importSource,
-            localTool: importSource === 'local' ? 'Wan2GP' : undefined,
-            tags: tagsInput ? tagsInput.split(',').map(s => s.trim()).filter(Boolean) : [],
-            width,
-            height,
-            orientation,
-            steps,
-            shift: shift ? parseFloat(shift) : undefined,
-            seed: seed ? parseInt(seed) : undefined,
-            fps: 24,
-            durationSeconds,
-            videoVae,
-            textEncoder,
-            loras,
-            createdAt: Date.now(),
-            createdBy: resolvedCreatedBy,
-            creatorUid: userUid,
-            creatorDisplayName: resolvedDisplayName,
-            renderSeconds,
-            fileSizeBytes,
-            generatedAt,
-            rawMetadata: commentRaw
-          };
-
           results.push(record);
-          addLog('success', `✓ ${model} (${width}x${height}) ${finalGroupName ? `· Categoría: [${finalGroupName}]` : ''}`);
+          addLog('success', `✓ ${record.model} (${record.width}x${record.height}) ${record.groupName ? `· Categoría: [${record.groupName}]` : ''}`);
 
         } catch (e: any) {
           addLog('error', `Error al procesar ${url}: ${e.message}`);

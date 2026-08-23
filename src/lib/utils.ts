@@ -1,6 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { VideoOrientation, VideoRecord, Lora } from '../types';
+import { VideoOrientation, VideoRecord, Lora, VideoSource } from '../types';
+import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -739,4 +740,184 @@ export function parseVideoUrlInfo(url: string): ParsedVideoUrlInfo {
   }
 
   return { isHuggingFace: false };
+}
+
+/**
+ * Normalizes a Hugging Face dataset identifier.
+ * Accepts "https://huggingface.co/datasets/user/repo", "https://huggingface.co/user/repo", "user/repo", etc.
+ * Returns normalized "user/repo" or null if invalid.
+ */
+export function normalizeHuggingFaceDatasetRepoId(input: string): string | null {
+  if (!input || typeof input !== 'string') return null;
+  let clean = input.trim();
+  if (!clean) return null;
+
+  // Remove trailing slashes, tree/main, blob/main, etc.
+  clean = clean.replace(/\/+$/, '');
+  
+  // Check full URL: huggingface.co/datasets/owner/repo or huggingface.co/owner/repo
+  const urlMatch = clean.match(/(?:https?:\/\/)?(?:www\.)?huggingface\.co\/(?:datasets\/)?([^/\s]+\/[^/\s]+?)(?:\/(?:tree|blob|resolve)\/.*|\.git|\/)?$/i);
+  if (urlMatch && urlMatch[1]) {
+    return urlMatch[1];
+  }
+
+  // Simple "owner/repo" format
+  const simpleMatch = clean.match(/^([a-zA-Z0-9_\-\.]+)\/([a-zA-Z0-9_\-\.]+)$/);
+  if (simpleMatch) {
+    return `${simpleMatch[1]}/${simpleMatch[2]}`;
+  }
+
+  return null;
+}
+
+let mediainfoSharedPromise: Promise<any> | null = null;
+export const loadSharedMediaInfo = () => {
+  if (!mediainfoSharedPromise) {
+    mediainfoSharedPromise = import('mediainfo.js');
+  }
+  return mediainfoSharedPromise;
+};
+
+export interface ProcessVideoUrlOptions {
+  url: string;
+  source?: VideoSource;
+  customCategory?: string;
+  userEmail?: string;
+  userDisplayName?: string;
+  userUid?: string;
+  onAddCategory?: (category: string) => void;
+}
+
+export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOptions): Promise<VideoRecord> {
+  const { url, source = 'local', customCategory, userEmail, userDisplayName, userUid, onAddCategory } = options;
+  const urlInfo = parseVideoUrlInfo(url);
+
+  const finalGroupName: string | undefined = customCategory !== undefined 
+    ? (customCategory.trim() || undefined)
+    : (urlInfo.suggestedGroupName?.trim() || undefined);
+
+  if (finalGroupName && onAddCategory) {
+    onAddCategory(finalGroupName);
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} (${response.statusText || 'Error de red'})`);
+  }
+  const blob = await response.blob();
+
+  const getSize = () => blob.size;
+  const readChunk = (chunkSize: number, offset: number) =>
+    new Promise<Uint8Array>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.error) {
+          reject(e.target.error);
+        } else if (e.target?.result) {
+          resolve(new Uint8Array(e.target.result as ArrayBuffer));
+        } else {
+          reject(new Error("Empty chunk"));
+        }
+      };
+      reader.readAsArrayBuffer(blob.slice(offset, offset + chunkSize));
+    });
+
+  const mediainfoModule = await loadSharedMediaInfo();
+  const mi = await mediainfoModule.default({
+    format: 'object',
+    locateFile: () => wasmUrl
+  });
+
+  const result = await mi.analyzeData(getSize, readChunk);
+  const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General') as any;
+  const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video') as any;
+  const commentRaw = generalTrack?.extra?.Comment || generalTrack?.Comment || videoTrack?.extra?.Comment || videoTrack?.Comment;
+
+  let width = 1920;
+  let height = 1080;
+  let prompt = "Importado desde URL";
+  let model = "Desconocido";
+  let modelSizeB: number | undefined = undefined;
+  let modelVariant: string | undefined = undefined;
+  let title: string | undefined = undefined;
+  let durationSeconds = 5;
+  let steps = 30;
+  let shift = "5.0";
+  let seed = "";
+  let tagsInput = "";
+  let videoVae: string = 'Not Found';
+  let textEncoder: string = 'Not Found';
+  let loras: Lora[] = [];
+  let renderSeconds: number | undefined = undefined;
+  let generatedAt: number | undefined = undefined;
+  let fileSizeBytes: number | undefined = blob.size;
+
+  if (videoTrack?.Width) width = Number(videoTrack.Width);
+  if (videoTrack?.Height) height = Number(videoTrack.Height);
+  if (generalTrack?.Duration) durationSeconds = parseFloat(generalTrack.Duration);
+
+  if (commentRaw) {
+    const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, 24);
+    if (metadata) {
+      if (metadata.prompt) {
+        prompt = metadata.prompt;
+        const autoTitle = generateTitleFromPrompt(metadata.prompt);
+        if (autoTitle) title = autoTitle;
+      }
+      if (metadata.seed !== undefined) seed = metadata.seed;
+      if (metadata.steps !== undefined) steps = metadata.steps;
+      if (metadata.shift !== undefined) shift = metadata.shift;
+      if (metadata.baseModel) model = metadata.baseModel;
+      if (metadata.modelSizeB !== undefined) modelSizeB = metadata.modelSizeB;
+      if (metadata.modelVariant) modelVariant = metadata.modelVariant;
+      videoVae = metadata.videoVae;
+      textEncoder = metadata.textEncoder;
+      if (metadata.tags && metadata.tags.length > 0) tagsInput = metadata.tags.join(', ');
+      if (metadata.renderSeconds !== undefined) renderSeconds = metadata.renderSeconds;
+      if (metadata.generatedAt !== undefined) generatedAt = metadata.generatedAt;
+      if (metadata.loras && metadata.loras.length > 0) loras = metadata.loras;
+    }
+  }
+
+  const orientation = calculateOrientation(width, height);
+  const driveFileId = extractDriveFileId(url) || '';
+
+  const resolvedDisplayName = userDisplayName || userEmail || urlInfo.username || undefined;
+  const resolvedCreatedBy = userEmail || userDisplayName || (urlInfo.username ? `@${urlInfo.username}` : undefined);
+
+  const record: VideoRecord = {
+    schemaVersion: 2,
+    videoUrl: url,
+    groupName: finalGroupName,
+    driveFileId,
+    title,
+    prompt,
+    model,
+    modelSizeB,
+    modelVariant,
+    source,
+    localTool: source === 'local' ? 'Wan2GP' : undefined,
+    tags: tagsInput ? tagsInput.split(',').map(s => s.trim()).filter(Boolean) : [],
+    width,
+    height,
+    orientation,
+    steps,
+    shift: shift ? parseFloat(shift) : undefined,
+    seed: seed ? parseInt(seed) : undefined,
+    fps: 24,
+    durationSeconds,
+    videoVae,
+    textEncoder,
+    loras,
+    createdAt: Date.now(),
+    createdBy: resolvedCreatedBy,
+    creatorUid: userUid,
+    creatorDisplayName: resolvedDisplayName,
+    renderSeconds,
+    fileSizeBytes,
+    generatedAt,
+    rawMetadata: commentRaw
+  };
+
+  return record;
 }

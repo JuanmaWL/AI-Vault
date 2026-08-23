@@ -9,13 +9,12 @@ import { DashboardView } from './components/DashboardView';
 import { AddVideoModal } from './components/AddVideoModal';
 import { BatchImportModal } from './components/BatchImportModal';
 import { AccessGate } from './components/AccessGate';
-import { SetNickModal } from './components/SetNickModal';
+import { EditProfileModal } from './components/EditProfileModal';
 import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
-import { AdminMaintenancePanel } from './components/AdminMaintenancePanel';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, Wrench } from 'lucide-react';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check } from 'lucide-react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -104,7 +103,6 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
-  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
@@ -164,9 +162,15 @@ export default function App() {
       if (stored) localHardware = JSON.parse(stored);
     } catch {}
 
+    let localHfUrl: string | undefined;
+    try {
+      localHfUrl = localStorage.getItem('ai_video_vault_hf_dataset_url') || undefined;
+    } catch {}
+
     let firestoreHardware: UserHardware | undefined;
     let firestoreDisplayName: string | undefined;
     let firestoreRole: 'admin' | 'viewer' | undefined;
+    let firestoreHfUrl: string | undefined;
 
     if (db) {
       try {
@@ -176,6 +180,7 @@ export default function App() {
           if (data.hardware) firestoreHardware = data.hardware as UserHardware;
           if (data.displayName) firestoreDisplayName = data.displayName as string;
           if (data.role) firestoreRole = data.role as 'admin' | 'viewer';
+          if (data.huggingfaceDatasetUrl) firestoreHfUrl = data.huggingfaceDatasetUrl as string;
         }
       } catch (e) {
         console.warn('Could not fetch user profile from Firestore', e);
@@ -184,6 +189,7 @@ export default function App() {
 
     const activeHardware = firestoreHardware || localHardware;
     const activeDisplayName = user.displayName || firestoreDisplayName || '';
+    const activeHfUrl = firestoreHfUrl || localHfUrl;
 
     if (activeDisplayName) {
       setUserDisplayName(activeDisplayName);
@@ -195,6 +201,12 @@ export default function App() {
       } catch {}
     }
 
+    if (activeHfUrl) {
+      try {
+        localStorage.setItem('ai_video_vault_hf_dataset_url', activeHfUrl);
+      } catch {}
+    }
+
     // If we had local hardware but not yet in Firestore, sync it up
     if (db && localHardware && !firestoreHardware) {
       try {
@@ -203,6 +215,7 @@ export default function App() {
           email: user.email || '',
           displayName: activeDisplayName,
           hardware: localHardware,
+          huggingfaceDatasetUrl: activeHfUrl || '',
           updatedAt: Date.now()
         }, { merge: true });
       } catch (err) {
@@ -215,7 +228,8 @@ export default function App() {
       email: user.email || '', 
       displayName: activeDisplayName,
       hardware: activeHardware,
-      role: firestoreRole
+      role: firestoreRole,
+      huggingfaceDatasetUrl: activeHfUrl
     };
     setUserProfile(baseProfile);
 
@@ -708,49 +722,29 @@ export default function App() {
 
             <div className="flex items-center gap-3 shrink-0">
               {/* Botón de Autenticación / Estado de Usuario */}
-              <div className="flex items-center gap-2 bg-neutral-900/80 border border-neutral-800 rounded-full pl-3 pr-1.5 py-1 group/user">
-                {isAdmin ? (
-                  <button
-                    onClick={() => setIsNickModalOpen(true)}
-                    title="Haz clic para cambiar tu apodo"
-                    className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors"
-                  >
-                    <UserIcon className="w-3.5 h-3.5 text-teal-400" />
-                    <span className="max-w-[140px] truncate font-medium">
-                      {userDisplayName || currentUser.email}
-                    </span>
-                    <Edit3 className="w-3 h-3 text-neutral-500 opacity-0 group-hover/user:opacity-100 transition-opacity" />
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-xs text-neutral-300 px-1">
-                    <UserIcon className="w-3.5 h-3.5 text-neutral-400" />
-                    <span className="max-w-[140px] truncate font-medium">
-                      {userDisplayName || currentUser.email}
-                    </span>
+              <div className="flex items-center gap-1.5 bg-neutral-900/90 border border-neutral-800 rounded-full p-1 shadow-sm">
+                <button
+                  onClick={() => setIsNickModalOpen(true)}
+                  title="Haz clic para ver y editar tu perfil y dataset de Hugging Face"
+                  className="flex items-center gap-2 text-xs text-neutral-200 hover:text-white bg-neutral-800/80 hover:bg-neutral-800 border border-neutral-700/60 rounded-full px-3 py-1.5 transition-all shadow-inner group/profile"
+                >
+                  <div className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-300 flex items-center justify-center shrink-0 border border-teal-500/30 group-hover/profile:border-teal-400/60 transition-colors">
+                    <UserIcon className="w-3 h-3" />
                   </div>
-                )}
-                <div className="h-3 w-px bg-neutral-800" />
+                  <span className="max-w-[140px] truncate font-medium">
+                    {userDisplayName || currentUser.email}
+                  </span>
+                  <Edit3 className="w-3 h-3 text-neutral-400 group-hover/profile:text-teal-300 transition-colors shrink-0" />
+                </button>
                 
                 {isAdmin && (
-                  <>
-                    <button
-                      onClick={() => setIsHardwareModalOpen(true)}
-                      title="Perfil de Hardware"
-                      className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-white transition-colors px-1"
-                    >
-                      <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
-                    </button>
-                    <div className="h-3 w-px bg-neutral-800" />
-                    
-                    <button
-                      onClick={() => setIsMaintenanceModalOpen(true)}
-                      title="Mantenimiento y Re-análisis de Metadatos"
-                      className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-teal-300 transition-colors px-1"
-                    >
-                      <Wrench className="w-3.5 h-3.5 text-teal-400" />
-                    </button>
-                    <div className="h-3 w-px bg-neutral-800" />
-                  </>
+                  <button
+                    onClick={() => setIsHardwareModalOpen(true)}
+                    title="Perfil de Hardware"
+                    className="p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                  >
+                    <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
+                  </button>
                 )}
 
                 <button
@@ -1211,11 +1205,21 @@ export default function App() {
       )}
 
       {isNickModalOpen && currentUser && (
-        <SetNickModal
+        <EditProfileModal
           user={currentUser}
+          userProfile={userProfile}
+          videos={videos}
+          canImportVideos={isAdmin}
+          onSaveBatch={handleSaveBatch}
+          onAddCategory={handleAddCategory}
           onClose={() => setIsNickModalOpen(false)}
-          onUpdated={(newNick) => {
+          onUpdated={(newNick, newHfUrl) => {
             setUserDisplayName(newNick);
+            setUserProfile(prev => prev ? {
+              ...prev,
+              displayName: newNick,
+              huggingfaceDatasetUrl: newHfUrl !== undefined ? newHfUrl : prev.huggingfaceDatasetUrl
+            } : prev);
           }}
         />
       )}
@@ -1235,25 +1239,6 @@ export default function App() {
           initialVideoB={dualComparePair.videoB}
           allVideos={videos}
           onClose={() => setDualComparePair(null)}
-        />
-      )}
-
-      {isAdmin && isMaintenanceModalOpen && (
-        <AdminMaintenancePanel
-          isAdmin={isAdmin}
-          videos={videos}
-          db={db}
-          usingLocal={usingLocal}
-          onUpdateLocalRecord={(updated) => {
-            setVideos(prev => {
-              const next = prev.map(v => v.id === updated.id ? updated : v);
-              try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-              } catch {}
-              return next;
-            });
-          }}
-          onClose={() => setIsMaintenanceModalOpen(false)}
         />
       )}
     </div>

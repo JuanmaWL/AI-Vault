@@ -10,6 +10,7 @@ export interface UserProfile {
   displayName?: string;
   hardware?: UserHardware;
   role?: 'admin' | 'viewer';
+  huggingfaceDatasetUrl?: string;
 }
 
 export interface Lora {
