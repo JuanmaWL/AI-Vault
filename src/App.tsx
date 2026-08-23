@@ -13,8 +13,9 @@ import { SetNickModal } from './components/SetNickModal';
 import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
+import { AdminMaintenancePanel } from './components/AdminMaintenancePanel';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check } from 'lucide-react';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, Wrench } from 'lucide-react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -36,6 +37,7 @@ function normalizeRecord(raw: any): VideoRecord {
     prompt: raw.prompt || '',
     negativePrompt: raw.negativePrompt,
     model: raw.model || 'Desconocido',
+    modelSizeB: typeof raw.modelSizeB === 'number' ? raw.modelSizeB : undefined,
     source: raw.source === 'cloud' ? 'cloud' : 'local',
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     groupName: typeof raw.groupName === 'string' ? raw.groupName : undefined,
@@ -99,6 +101,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
+  const [isMaintenanceModalOpen, setIsMaintenanceModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
@@ -735,6 +738,15 @@ export default function App() {
                       <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
                     </button>
                     <div className="h-3 w-px bg-neutral-800" />
+                    
+                    <button
+                      onClick={() => setIsMaintenanceModalOpen(true)}
+                      title="Mantenimiento y Re-análisis de Metadatos"
+                      className="flex items-center gap-1.5 text-xs text-neutral-300 hover:text-teal-300 transition-colors px-1"
+                    >
+                      <Wrench className="w-3.5 h-3.5 text-teal-400" />
+                    </button>
+                    <div className="h-3 w-px bg-neutral-800" />
                   </>
                 )}
 
@@ -1220,6 +1232,25 @@ export default function App() {
           initialVideoB={dualComparePair.videoB}
           allVideos={videos}
           onClose={() => setDualComparePair(null)}
+        />
+      )}
+
+      {isAdmin && isMaintenanceModalOpen && (
+        <AdminMaintenancePanel
+          isAdmin={isAdmin}
+          videos={videos}
+          db={db}
+          usingLocal={usingLocal}
+          onUpdateLocalRecord={(updated) => {
+            setVideos(prev => {
+              const next = prev.map(v => v.id === updated.id ? updated : v);
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+              } catch {}
+              return next;
+            });
+          }}
+          onClose={() => setIsMaintenanceModalOpen(false)}
         />
       )}
     </div>
