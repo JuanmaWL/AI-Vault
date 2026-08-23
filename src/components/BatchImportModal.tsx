@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { VideoRecord, VideoSource } from '../types';
 import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl } from '../lib/utils';
-import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Wand2, ArrowRight, Layers, User, Upload, FileText } from 'lucide-react';
+import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Upload, FileText, Terminal, Layers } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 
 interface BatchImportModalProps {
@@ -38,14 +38,14 @@ export function BatchImportModal({
   
   const isProcessingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
   const handleFile = (file: File) => {
     setFileWarning(null);
 
-    // Check if file is .txt
     const isTxt = file.name.toLowerCase().endsWith('.txt') || file.type === 'text/plain';
     if (!isTxt) {
-      setFileWarning(`El archivo "${file.name}" no es un archivo .txt.`);
+      setFileWarning(`El archivo "${file.name}" no es un archivo .txt válido.`);
       return;
     }
 
@@ -67,6 +67,9 @@ export function BatchImportModal({
 
   const addLog = (type: 'info' | 'success' | 'error', msg: string) => {
     setLogs(prev => [...prev, { type, msg }]);
+    setTimeout(() => {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 50);
   };
 
   // Real-time analysis of pasted URLs
@@ -77,8 +80,6 @@ export function BatchImportModal({
       .filter(l => l.startsWith('http'));
 
     const categoryCounts = new Map<string, number>();
-    const authorCounts = new Map<string, number>();
-    const repoCounts = new Map<string, number>();
     let huggingFaceCount = 0;
 
     const parsedList: { url: string; info: ParsedVideoUrlInfo }[] = [];
@@ -97,22 +98,12 @@ export function BatchImportModal({
           (categoryCounts.get(info.suggestedGroupName) || 0) + 1
         );
       }
-
-      if (info.username) {
-        authorCounts.set(info.username, (authorCounts.get(info.username) || 0) + 1);
-      }
-
-      if (info.repoName) {
-        repoCounts.set(info.repoName, (repoCounts.get(info.repoName) || 0) + 1);
-      }
     });
 
     return {
       totalUrls: lines.length,
       huggingFaceCount,
       categoryCounts: Array.from(categoryCounts.entries()),
-      authorCounts: Array.from(authorCounts.entries()),
-      repoCounts: Array.from(repoCounts.entries()),
       parsedList,
     };
   }, [urlsInput]);
@@ -154,10 +145,10 @@ export function BatchImportModal({
           });
 
           results.push(record);
-          addLog('success', `✓ ${record.model} (${record.width}x${record.height}) ${record.groupName ? `· Categoría: [${record.groupName}]` : ''}`);
+          addLog('success', `✓ ${record.model} (${record.width}x${record.height}) ${record.groupName ? `· [${record.groupName}]` : ''}`);
 
         } catch (e: any) {
-          addLog('error', `Error al procesar ${url}: ${e.message}`);
+          addLog('error', `Error en ${urlInfo.fileName || url}: ${e.message}`);
         }
       }
 
@@ -165,10 +156,10 @@ export function BatchImportModal({
         addLog('info', `Guardando ${results.length} vídeos en la base de datos...`);
         await onSaveBatch(results);
         setIsCompleted(true);
-        addLog('success', `¡Proceso completado! Se han guardado ${results.length} vídeos con éxito.`);
+        addLog('success', `¡Proceso completado! Se han guardado ${results.length} vídeos.`);
         setTimeout(() => {
           onClose();
-        }, 1600);
+        }, 1500);
       } else {
         addLog('error', 'No se ha podido procesar ningún vídeo.');
         setIsProcessing(false);
@@ -176,378 +167,368 @@ export function BatchImportModal({
       }
 
     } catch (e: any) {
-      addLog('error', `Fallo general del proceso: ${e.message}`);
+      addLog('error', `Fallo del proceso: ${e.message}`);
       setIsProcessing(false);
       isProcessingRef.current = false;
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh]">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between p-5 sm:p-6 border-b border-neutral-800 bg-neutral-900/60">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800 bg-neutral-950/70 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20">
-              <FileVideo className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="p-2 bg-teal-500/10 text-teal-400 rounded-xl border border-teal-500/20">
+              <FileVideo className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
-                Importación Batch
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-800">
-                  Auto-categorías
-                </span>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                Importación por Lote
               </h2>
-              <p className="text-xs sm:text-sm text-neutral-400">
-                Detecta automáticamente categorías y metadatos de Hugging Face y URLs directas MP4.
+              <p className="text-xs text-neutral-400">
+                Pega URLs o carga un archivo .txt para extraer y registrar metadatos de vídeo automáticamente.
               </p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer" 
             disabled={isProcessing}
+            className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer disabled:opacity-40" 
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Modal Scrollable Body */}
-        <div className="p-5 sm:p-6 flex-1 overflow-y-auto custom-scrollbar flex flex-col gap-5">
-          {/* Origen & Estrategia de Categorías */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Origen */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
-                Origen de los vídeos
-              </label>
-              <div className="flex bg-neutral-950 p-1 rounded-xl border border-neutral-800">
-                <button
-                  type="button"
-                  onClick={() => setImportSource('local')}
-                  disabled={isProcessing}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    importSource === 'local' 
-                      ? 'bg-neutral-800 text-teal-400 shadow-sm border border-neutral-700' 
-                      : 'text-neutral-500 hover:text-neutral-300'
-                  }`}
-                >
-                  Generación Local (PC)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImportSource('cloud')}
-                  disabled={isProcessing}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    importSource === 'cloud' 
-                      ? 'bg-neutral-800 text-teal-400 shadow-sm border border-neutral-700' 
-                      : 'text-neutral-500 hover:text-neutral-300'
-                  }`}
-                >
-                  Servicio Cloud
-                </button>
-              </div>
-            </div>
-
-            {/* Modo de Categorización */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider flex items-center justify-between">
-                <span>Estrategia de Categoría</span>
-              </label>
-              <div className="flex bg-neutral-950 p-1 rounded-xl border border-neutral-800">
-                <button
-                  type="button"
-                  onClick={() => setCategoryStrategy('auto')}
-                  disabled={isProcessing}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    categoryStrategy === 'auto'
-                      ? 'bg-teal-950/90 text-teal-300 border border-teal-700 shadow-sm'
-                      : 'text-neutral-500 hover:text-neutral-300'
-                  }`}
-                  title="Extrae la subcarpeta de la URL (Ej: /Ezio%20%26%20Thanos/)"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-                  Auto por URL
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCategoryStrategy('fixed')}
-                  disabled={isProcessing}
-                  className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    categoryStrategy === 'fixed'
-                      ? 'bg-neutral-800 text-teal-400 shadow-sm border border-neutral-700'
-                      : 'text-neutral-500 hover:text-neutral-300'
-                  }`}
-                >
-                  <Folder className="w-3.5 h-3.5" />
-                  Fija
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCategoryStrategy('none')}
-                  disabled={isProcessing}
-                  className={`py-2 px-3 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    categoryStrategy === 'none'
-                      ? 'bg-neutral-800 text-neutral-200 shadow-sm border border-neutral-700'
-                      : 'text-neutral-500 hover:text-neutral-300'
-                  }`}
-                >
-                  Ninguna
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Selector de Categoría Fija (Si la estrategia es 'fixed') */}
-          {categoryStrategy === 'fixed' && (
-            <div className="p-3 bg-neutral-950/80 rounded-xl border border-neutral-800 space-y-2 animate-in fade-in duration-150">
-              <label className="text-xs font-semibold text-neutral-300 flex items-center gap-2">
-                <Folder className="w-4 h-4 text-teal-400" />
-                Asignar todos los vídeos a esta categoría:
-              </label>
-              <CategorySelector
-                value={fixedCategory}
-                onChange={setFixedCategory}
-                categories={availableCategories}
-                onCreateCategory={onAddCategory}
-                disabled={isProcessing}
-                placeholder="Elige una categoría existente o escribe para crear nueva..."
-              />
-            </div>
-          )}
-
-          {/* Auto URL Info Box (Si la estrategia es 'auto') */}
-          {categoryStrategy === 'auto' && (
-            <div className="p-3 bg-teal-950/20 border border-teal-900/40 rounded-xl text-xs text-neutral-300 flex items-start gap-2.5">
-              <Sparkles className="w-4 h-4 text-teal-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold text-teal-300">
-                  Detección automática por URL activa
-                </p>
-                <p className="text-neutral-400 text-[11px] leading-relaxed">
-                  Las carpetas contenidas en las rutas de Hugging Face (después de <code>/resolve/main/</code>) se asignarán automáticamente como Categoría. Si no hay subcarpeta, se asignará el nombre del repositorio.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* URLs Input & Drop Zone */}
-          <div className="flex flex-col gap-2.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-neutral-300 uppercase tracking-wider">
-                URLs de los vídeos (Una por línea)
-              </label>
-              {urlAnalysis.totalUrls > 0 && (
-                <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-neutral-800 text-teal-400 border border-neutral-700">
-                  {urlAnalysis.totalUrls} {urlAnalysis.totalUrls === 1 ? 'URL detectada' : 'URLs detectadas'}
-                </span>
-              )}
-            </div>
-
-            {/* Drop Zone */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!isProcessing) setIsDragging(true);
-              }}
-              onDragEnter={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!isProcessing) setIsDragging(true);
-              }}
-              onDragLeave={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(false);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsDragging(false);
-                if (isProcessing) return;
-                const file = e.dataTransfer.files?.[0];
-                if (file) {
-                  handleFile(file);
-                }
-              }}
-              className={`relative border-2 border-dashed rounded-xl p-3.5 sm:p-4 text-center transition-all flex flex-col sm:flex-row items-center justify-between gap-3 ${
-                isDragging
-                  ? 'border-teal-400 bg-teal-950/40 shadow-[0_0_20px_rgba(20,184,166,0.15)] scale-[1.01]'
-                  : 'border-neutral-800 bg-neutral-950/70 hover:border-neutral-700'
-              }`}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".txt,text/plain"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFile(file);
-                  e.target.value = '';
-                }}
-                className="hidden"
-                disabled={isProcessing}
-              />
+        {/* Body */}
+        <div className="p-5 flex-1 overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 h-full items-stretch">
+            
+            {/* LEFT COLUMN: Input & Upload */}
+            <div className="flex flex-col gap-3 min-h-0">
               
-              <div className="flex items-center gap-2.5 text-left">
-                <div className={`p-2 rounded-lg border transition-colors ${
-                  isDragging 
-                    ? 'bg-teal-500/20 text-teal-300 border-teal-500/40' 
-                    : 'bg-neutral-900 text-neutral-400 border-neutral-800'
-                }`}>
-                  <Upload className="w-4 h-4" />
-                </div>
-                <div className="text-xs">
-                  <p className="text-neutral-300 font-medium">
-                    Arrastra aquí un .txt con URLs (una por línea), o pega/escribe abajo
-                  </p>
-                  <p className="text-[11px] text-neutral-500">
-                    Lectura local instantánea de archivos de texto plano (.txt)
-                  </p>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isProcessing}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-teal-400 hover:text-teal-300 border border-neutral-700 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+              {/* Drop & File Upload Strip */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!isProcessing) setIsDragging(true);
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!isProcessing) setIsDragging(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDragging(false);
+                  if (isProcessing) return;
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) handleFile(file);
+                }}
+                className={`border border-dashed rounded-xl px-3 py-2 text-center transition-all flex items-center justify-between gap-2 ${
+                  isDragging
+                    ? 'border-teal-400 bg-teal-950/40 text-teal-300'
+                    : 'border-neutral-800 bg-neutral-950/60 hover:border-neutral-700 text-neutral-400'
+                }`}
               >
-                <FileText className="w-3.5 h-3.5" />
-                Seleccionar archivo .txt
-              </button>
-            </div>
-
-            {/* File Warning Notice (non-blocking) */}
-            {fileWarning && (
-              <div className="p-2.5 bg-amber-950/40 border border-amber-800/60 rounded-xl text-xs text-amber-300 flex items-center justify-between gap-2 animate-in fade-in duration-150">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>{fileWarning}</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,text/plain"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFile(file);
+                    e.target.value = '';
+                  }}
+                  className="hidden"
+                  disabled={isProcessing}
+                />
+                
+                <div className="flex items-center gap-2 text-xs">
+                  <Upload className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <span className="text-[11px] truncate">Arrastra o selecciona un archivo .txt</span>
                 </div>
+
                 <button
                   type="button"
-                  onClick={() => setFileWarning(null)}
-                  className="text-amber-400 hover:text-amber-200 p-0.5 rounded cursor-pointer"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-teal-300 border border-neutral-700 text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <X className="w-3.5 h-3.5" />
+                  <FileText className="w-3 h-3" />
+                  Cargar .txt
                 </button>
               </div>
-            )}
 
-            <textarea
-              value={urlsInput}
-              onChange={(e) => {
-                setUrlsInput(e.target.value);
-                if (fileWarning) setFileWarning(null);
-              }}
-              disabled={isProcessing}
-              placeholder="https://huggingface.co/datasets/Usuario/Repo/resolve/main/Carpeta%20Categoria/video1.mp4&#10;https://huggingface.co/datasets/Usuario/Repo/resolve/main/Carpeta%20Categoria/video2.mp4"
-              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-xs text-neutral-200 focus:outline-none focus:border-teal-500 transition-colors placeholder:text-neutral-600 font-mono resize-none h-32 custom-scrollbar"
-            />
-          </div>
+              {/* File warning banner */}
+              {fileWarning && (
+                <div className="p-2 bg-amber-950/40 border border-amber-800/60 rounded-xl text-xs text-amber-300 flex items-center justify-between gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="text-[11px]">{fileWarning}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFileWarning(null)}
+                    className="text-amber-400 hover:text-amber-200 p-0.5"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
 
-          {/* Live Preview of Detected Data from URLs */}
-          {urlAnalysis.totalUrls > 0 && (
-            <div className="p-3.5 bg-neutral-950 rounded-xl border border-neutral-800 space-y-2.5 animate-in fade-in duration-200">
-              <div className="text-xs font-bold text-neutral-400 uppercase tracking-wider flex items-center justify-between">
-                <span>Resumen de datos detectados en las URLs</span>
-                {urlAnalysis.huggingFaceCount > 0 && (
-                  <span className="text-[10px] text-amber-400 font-semibold px-2 py-0.5 rounded bg-amber-950/60 border border-amber-800/60">
-                    {urlAnalysis.huggingFaceCount} de Hugging Face
-                  </span>
+              {/* URLs Textarea Container */}
+              <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex items-center justify-between pb-1.5 shrink-0">
+                  <label className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                    URLs de los vídeos
+                  </label>
+                  {urlAnalysis.totalUrls > 0 && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-800">
+                      {urlAnalysis.totalUrls} {urlAnalysis.totalUrls === 1 ? 'vídeo' : 'vídeos'}
+                    </span>
+                  )}
+                </div>
+                <textarea
+                  value={urlsInput}
+                  onChange={(e) => {
+                    setUrlsInput(e.target.value);
+                    if (fileWarning) setFileWarning(null);
+                  }}
+                  disabled={isProcessing}
+                  placeholder="Pega aquí las URLs de los vídeos (una por línea):&#10;https://huggingface.co/datasets/.../Categoria/video1.mp4&#10;https://.../video2.mp4"
+                  className="w-full flex-1 bg-neutral-950 border border-neutral-800 rounded-xl p-3 text-xs text-neutral-200 focus:outline-none focus:border-teal-500 transition-colors placeholder:text-neutral-600 font-mono resize-none custom-scrollbar min-h-[220px]"
+                />
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Configuration & Live Monitor / Console */}
+            <div className="flex flex-col gap-3 min-h-0">
+              
+              {/* Config Options */}
+              <div className="bg-neutral-950/80 border border-neutral-800 rounded-xl p-3.5 space-y-3 shrink-0">
+                {/* Source & Strategy */}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                      Origen
+                    </label>
+                    <div className="flex bg-neutral-900 p-0.5 rounded-lg border border-neutral-800">
+                      <button
+                        type="button"
+                        onClick={() => setImportSource('local')}
+                        disabled={isProcessing}
+                        className={`flex-1 py-1 rounded-md text-xs font-medium transition-all ${
+                          importSource === 'local' 
+                            ? 'bg-neutral-800 text-teal-300 shadow-sm border border-neutral-700' 
+                            : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                      >
+                        Local
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImportSource('cloud')}
+                        disabled={isProcessing}
+                        className={`flex-1 py-1 rounded-md text-xs font-medium transition-all ${
+                          importSource === 'cloud' 
+                            ? 'bg-neutral-800 text-teal-300 shadow-sm border border-neutral-700' 
+                            : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                      >
+                        Cloud
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider">
+                      Categoría
+                    </label>
+                    <div className="flex bg-neutral-900 p-0.5 rounded-lg border border-neutral-800">
+                      <button
+                        type="button"
+                        onClick={() => setCategoryStrategy('auto')}
+                        disabled={isProcessing}
+                        className={`flex-1 py-1 rounded-md text-xs font-medium transition-all flex items-center justify-center gap-1 ${
+                          categoryStrategy === 'auto'
+                            ? 'bg-teal-950 text-teal-300 border border-teal-700 shadow-sm'
+                            : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                        title="Extrae la carpeta de la ruta URL"
+                      >
+                        <Sparkles className="w-3 h-3 text-teal-400" />
+                        Auto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryStrategy('fixed')}
+                        disabled={isProcessing}
+                        className={`flex-1 py-1 rounded-md text-xs font-medium transition-all ${
+                          categoryStrategy === 'fixed'
+                            ? 'bg-neutral-800 text-teal-300 shadow-sm border border-neutral-700'
+                            : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                      >
+                        Fija
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryStrategy('none')}
+                        disabled={isProcessing}
+                        className={`px-2 py-1 rounded-md text-xs font-medium transition-all ${
+                          categoryStrategy === 'none'
+                            ? 'bg-neutral-800 text-neutral-300 shadow-sm border border-neutral-700'
+                            : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                      >
+                        Off
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fixed category selector */}
+                {categoryStrategy === 'fixed' && (
+                  <div className="pt-1 animate-in fade-in duration-150">
+                    <CategorySelector
+                      value={fixedCategory}
+                      onChange={setFixedCategory}
+                      categories={availableCategories}
+                      onCreateCategory={onAddCategory}
+                      disabled={isProcessing}
+                      placeholder="Seleccionar o crear categoría..."
+                    />
+                  </div>
                 )}
               </div>
 
-              {/* Detected Categories */}
-              {categoryStrategy === 'auto' && (
-                <div className="space-y-1">
-                  <span className="text-[11px] text-neutral-500 flex items-center gap-1">
-                    <Folder className="w-3 h-3 text-teal-400" /> Categorías detectadas a asignar:
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {urlAnalysis.categoryCounts.length > 0 ? (
-                      urlAnalysis.categoryCounts.map(([cat, count]) => (
-                        <span 
-                          key={cat}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-teal-950/80 border border-teal-800 text-teal-300 text-xs font-medium"
-                        >
-                          <span className="font-bold">{cat}</span>
-                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-teal-900 text-teal-200 font-mono">
-                            {count} {count === 1 ? 'vídeo' : 'vídeos'}
-                          </span>
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs text-neutral-500 italic">
-                        No se han detectado subcarpetas explícitas (se usarán repositorios o sin categoría).
+              {/* Dynamic State: Pre-detection Summary OR Live Terminal Logs */}
+              {!isProcessing && logs.length === 0 ? (
+                /* PRE-IMPORT DETECTION SUMMARY */
+                <div className="flex-1 bg-neutral-950/80 border border-neutral-800 rounded-xl p-3.5 flex flex-col justify-between min-h-0">
+                  <div className="space-y-3 overflow-y-auto custom-scrollbar">
+                    <div className="flex items-center justify-between border-b border-neutral-850 pb-2">
+                      <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-teal-400" />
+                        Resumen detectado
                       </span>
+                      {urlAnalysis.huggingFaceCount > 0 && (
+                        <span className="text-[10px] text-amber-400 font-medium px-2 py-0.5 rounded bg-amber-950/40 border border-amber-800/40">
+                          {urlAnalysis.huggingFaceCount} de Hugging Face
+                        </span>
+                      )}
+                    </div>
+
+                    {categoryStrategy === 'auto' && (
+                      <div className="space-y-1.5">
+                        <span className="text-xs text-neutral-400 font-medium flex items-center gap-1">
+                          <Folder className="w-3.5 h-3.5 text-teal-400" /> Categorías detectadas:
+                        </span>
+                        {urlAnalysis.categoryCounts.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto custom-scrollbar pt-0.5">
+                            {urlAnalysis.categoryCounts.map(([cat, count]) => (
+                              <span 
+                                key={cat}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-teal-300 text-xs"
+                              >
+                                <span className="font-medium truncate max-w-[130px]">{cat}</span>
+                                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-teal-950 text-teal-300 border border-teal-800 font-mono">
+                                  {count}
+                                </span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-neutral-500 italic">
+                            {urlAnalysis.totalUrls === 0 
+                              ? 'Pega URLs en el panel izquierdo para previsualizar las categorías.' 
+                              : 'Sin carpetas en las URLs. Se guardarán sin categoría.'}
+                          </p>
+                        )}
+                      </div>
                     )}
+
+                    {categoryStrategy === 'fixed' && (
+                      <p className="text-xs text-neutral-400 leading-relaxed">
+                        Todos los vídeos ({urlAnalysis.totalUrls}) se asignarán a la categoría <strong className="text-teal-300 font-semibold">{fixedCategory || '(Sin asignar)'}</strong>.
+                      </p>
+                    )}
+
+                    {categoryStrategy === 'none' && (
+                      <p className="text-xs text-neutral-500 italic">
+                        Los vídeos se importarán sin asignación de categoría.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-neutral-850 text-[11px] text-neutral-500 flex items-center justify-between shrink-0">
+                    <span>Listo para procesar metadatos</span>
+                    <span className="font-mono text-neutral-400">{urlAnalysis.totalUrls} pendientes</span>
+                  </div>
+                </div>
+              ) : (
+                /* LIVE IMPORT PROGRESS & TERMINAL LOGS */
+                <div className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl p-3 flex flex-col gap-2 min-h-0">
+                  {/* Progress Header */}
+                  <div className="space-y-1.5 shrink-0">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-semibold text-teal-300 flex items-center gap-1.5">
+                        <Terminal className="w-3.5 h-3.5 text-teal-400" />
+                        {isCompleted ? 'Completado' : 'Procesando metadatos...'}
+                      </span>
+                      <span className="font-mono text-neutral-400 text-xs">
+                        {progress.current} / {progress.total}
+                      </span>
+                    </div>
+                    <div className="w-full bg-neutral-900 rounded-full h-1.5 overflow-hidden border border-neutral-800">
+                      <div 
+                        className="bg-teal-500 h-full transition-all duration-200"
+                        style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Terminal console */}
+                  <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-[11px] flex flex-col gap-1 p-2 bg-neutral-900/60 rounded-lg border border-neutral-850">
+                    {logs.map((log, i) => (
+                      <div key={i} className={`flex items-start gap-1.5 leading-relaxed ${log.type === 'error' ? 'text-rose-400' : log.type === 'success' ? 'text-teal-300' : 'text-neutral-400'}`}>
+                        {log.type === 'error' && <AlertCircle className="w-3 h-3 shrink-0 mt-0.5 text-rose-400" />}
+                        {log.type === 'success' && <Check className="w-3 h-3 shrink-0 mt-0.5 text-teal-400" />}
+                        {log.type === 'info' && <span className="w-3 h-3 shrink-0 mt-0.5 opacity-40">→</span>}
+                        <span className="break-all">{log.msg}</span>
+                      </div>
+                    ))}
+                    <div ref={logsEndRef} />
                   </div>
                 </div>
               )}
 
-              {/* Detected Authors / Repos */}
-              {(urlAnalysis.authorCounts.length > 0 || urlAnalysis.repoCounts.length > 0) && (
-                <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-neutral-400 border-t border-neutral-850">
-                  {urlAnalysis.authorCounts.length > 0 && (
-                    <div className="flex items-center gap-1">
-                      <User className="w-3.5 h-3.5 text-neutral-500" />
-                      <span className="text-neutral-500">Autor(es):</span>
-                      {urlAnalysis.authorCounts.map(([author]) => (
-                        <span key={author} className="text-neutral-300 font-mono font-semibold">
-                          @{author}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  {urlAnalysis.repoCounts.length > 0 && (
-                    <div className="flex items-center gap-1 ml-2">
-                      <Layers className="w-3.5 h-3.5 text-neutral-500" />
-                      <span className="text-neutral-500">Repo:</span>
-                      {urlAnalysis.repoCounts.map(([repo]) => (
-                        <span key={repo} className="text-neutral-300 font-mono">
-                          {repo}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
-          )}
 
-          {/* Real-time Process Logs */}
-          <div className="bg-neutral-950 rounded-xl border border-neutral-800 p-3.5 h-36 overflow-y-auto custom-scrollbar font-mono text-xs flex flex-col gap-1.5">
-            {logs.length === 0 ? (
-              <span className="text-neutral-500 italic">Los resultados y metadatos extraídos aparecerán aquí al iniciar el proceso...</span>
-            ) : (
-              logs.map((log, i) => (
-                <div key={i} className={`flex items-start gap-2 ${log.type === 'error' ? 'text-rose-400' : log.type === 'success' ? 'text-teal-400' : 'text-neutral-300'}`}>
-                  {log.type === 'error' && <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
-                  {log.type === 'success' && <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
-                  {log.type === 'info' && <span className="w-3.5 h-3.5 shrink-0 mt-0.5 opacity-50">→</span>}
-                  <span className="break-all">{log.msg}</span>
-                </div>
-              ))
-            )}
           </div>
         </div>
 
-        {/* Modal Footer */}
-        <div className="p-4 sm:p-6 border-t border-neutral-800 bg-neutral-900/80 flex items-center justify-between gap-3">
-          <div className="text-xs sm:text-sm text-neutral-400 font-medium">
-            {isProcessing && `Procesando: ${progress.current} de ${progress.total}`}
-            {isCompleted && <span className="text-teal-400 font-semibold">✓ Guardado finalizado. Cerrando...</span>}
+        {/* Footer */}
+        <div className="px-5 py-3.5 border-t border-neutral-800 bg-neutral-950/70 flex items-center justify-between gap-3 shrink-0">
+          <div className="text-xs text-neutral-400">
+            {isProcessing && `Importando (${progress.current}/${progress.total})...`}
+            {isCompleted && <span className="text-teal-400 font-medium">✓ Proceso finalizado con éxito</span>}
           </div>
-          <div className="flex gap-2 sm:gap-3">
+          <div className="flex gap-2.5">
             <button
               type="button"
               onClick={onClose}
               disabled={isProcessing || isCompleted}
-              className="px-4 py-2 sm:px-5 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-50 cursor-pointer"
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-neutral-300 hover:text-white hover:bg-neutral-800 transition-colors disabled:opacity-40 cursor-pointer"
             >
               Cancelar
             </button>
@@ -555,18 +536,19 @@ export function BatchImportModal({
               type="button"
               onClick={handleProcess}
               disabled={isProcessing || isCompleted || urlAnalysis.totalUrls === 0}
-              className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-neutral-950 px-5 py-2 sm:px-6 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(20,184,166,0.2)] cursor-pointer"
+              className="flex items-center gap-2 bg-teal-500 hover:bg-teal-400 text-neutral-950 px-5 py-2 rounded-xl text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm cursor-pointer"
             >
               {isProcessing ? (
-                <><Loader2 className="w-4 h-4 animate-spin" /> Procesando {progress.current}/{progress.total}...</>
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando...</>
               ) : isCompleted ? (
-                <><Check className="w-4 h-4 text-neutral-950" /> Guardado con éxito</>
+                <><Check className="w-3.5 h-3.5 text-neutral-950" /> Finalizado</>
               ) : (
-                <><Check className="w-4 h-4" /> Importar {urlAnalysis.totalUrls > 0 ? `(${urlAnalysis.totalUrls})` : ''}</>
+                <><Check className="w-3.5 h-3.5" /> Iniciar Importación {urlAnalysis.totalUrls > 0 ? `(${urlAnalysis.totalUrls})` : ''}</>
               )}
             </button>
           </div>
         </div>
+
       </div>
     </div>
   );

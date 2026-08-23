@@ -758,30 +758,32 @@ export default function App() {
 
               {/* Botones de acción principales */}
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (selectionMode) {
-                      setSelectionMode(false);
-                      setSelectedVideoIds(new Set());
-                    } else {
-                      setSelectionMode(true);
-                    }
-                  }}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold transition-all border ${
-                     selectionMode 
-                      ? 'bg-teal-950/70 text-teal-300 border-teal-600 shadow-md shadow-teal-950/40' 
-                      : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 text-neutral-300'
-                  }`}
-                  title="Activar/desactivar modo de selección para borrar o comparar"
-                >
-                  <CheckSquare className="w-3.5 h-3.5 text-teal-400" />
-                  <span>{selectionMode ? 'Seleccionando...' : 'Seleccionar'}</span>
-                  {selectedVideoIds.size > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
-                      {selectedVideoIds.size}
-                    </span>
-                  )}
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => {
+                      if (selectionMode) {
+                        setSelectionMode(false);
+                        setSelectedVideoIds(new Set());
+                      } else {
+                        setSelectionMode(true);
+                      }
+                    }}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold transition-all border ${
+                       selectionMode 
+                        ? 'bg-teal-950/70 text-teal-300 border-teal-600 shadow-md shadow-teal-950/40' 
+                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 text-neutral-300'
+                    }`}
+                    title="Activar/desactivar modo de selección para borrar o comparar"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5 text-teal-400" />
+                    <span>{selectionMode ? 'Seleccionando...' : 'Seleccionar'}</span>
+                    {selectedVideoIds.size > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
+                        {selectedVideoIds.size}
+                      </span>
+                    )}
+                  </button>
+                )}
 
                 {isAdmin ? (
                   <>
@@ -1054,7 +1056,7 @@ export default function App() {
       </div>
 
       {/* Floating Bottom Bulk Action Toolbar */}
-      {selectionMode && (
+      {isAdmin && selectionMode && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-4xl w-[92%] sm:w-auto animate-in slide-in-from-bottom-5 duration-200">
           <div className="bg-neutral-900/95 backdrop-blur-md border border-teal-500/40 px-4 py-3 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.6)] flex flex-wrap items-center justify-between sm:justify-start gap-3 text-sm">
             {/* Contador de seleccionados */}
