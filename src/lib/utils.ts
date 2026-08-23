@@ -49,10 +49,60 @@ export const VIDEO_VAE_OPTIONS = [
 export interface ExtractedTechnicalDetails {
   baseModel: string;
   modelSizeB?: number;
+  modelVariant?: string;
   videoVae: string;
   textEncoder: string;
   precision?: string;
   tags: string[];
+}
+
+/**
+ * Cleans noise prefixes and extracts a clean, concise title (~50 chars) from prompt.
+ */
+export function generateTitleFromPrompt(prompt: string): string {
+  if (!prompt || typeof prompt !== 'string') return '';
+
+  let cleaned = prompt.trim();
+
+  // Clean noise prefixes
+  const noisePatterns: RegExp[] = [
+    /^integrated_multimodal_description\s*:\s*/i,
+    /^integrated\s+multimodal\s+description\s*:\s*/i,
+    /^\[\s*shot\s*\d+\s*\]\s*:?\s*/i,
+    /^shot\s*\d+\s*:\s*/i,
+    /^prompt\s*:\s*/i,
+    /^(cinematic\s+shot|cinematic\s+video|cinematic|masterpiece|photorealistic|ultra\s+realistic|hyper\s+realistic)\s*[,:\-\s]\s*/i,
+  ];
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const pattern of noisePatterns) {
+      if (pattern.test(cleaned)) {
+        cleaned = cleaned.replace(pattern, '').trim();
+        changed = true;
+      }
+    }
+  }
+
+  // Remove residual leading punctuation
+  cleaned = cleaned.replace(/^[,:\-–—"'\s]+/, '').trim();
+
+  if (!cleaned) return '';
+
+  const LIMIT = 50;
+  if (cleaned.length <= LIMIT) {
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  }
+
+  // Cut at last space before limit
+  const sub = cleaned.substring(0, LIMIT);
+  const lastSpace = sub.lastIndexOf(' ');
+  const truncated = (lastSpace > 15 ? sub.substring(0, lastSpace) : sub).trim();
+  const cleanEnd = truncated.replace(/[,;:\-\s]+$/, '');
+  const result = cleanEnd + '…';
+
+  return result.charAt(0).toUpperCase() + result.slice(1);
 }
 
 /**
@@ -115,6 +165,16 @@ export function extractTechnicalDetails(
   const modelFilename = parsedJson?.model_filename || parsedJson?.filename;
   const modelSizeB = extractModelSizeB(typeField, modelFilename);
 
+  // Model Variant (structured field: FL2VA, Ref2VA, SCAIL 2...)
+  let modelVariant: string | undefined = undefined;
+  if (combined.includes('fl2va')) {
+    modelVariant = 'FL2VA';
+  } else if (combined.includes('ref2va')) {
+    modelVariant = 'Ref2VA';
+  } else if (combined.includes('scail2') || combined.includes('scail 2')) {
+    modelVariant = 'SCAIL 2';
+  }
+
   // 2. Text Encoder Detection (Minimax H3 / Qwen3-VL specific options)
   let textEncoder: string = 'Not Found';
   const rawTextEnc = parsedJson?.text_encoder || parsedJson?.text_encoder_name || parsedJson?.text_encoder_path || parsedJson?.t5_path || parsedJson?.llm;
@@ -150,38 +210,17 @@ export function extractTechnicalDetails(
     videoVae = 'Original VAE';
   }
 
-  // 4. Automatic Tag Enrichment
-  const tagsSet = new Set<string>();
-  if (combined.includes('pruned')) tagsSet.add('pruned');
-  if (combined.includes('distilled')) tagsSet.add('distilled');
-  if (combined.includes('ref2va')) tagsSet.add('ref2va');
-  if (combined.includes('fl2va')) tagsSet.add('FL2VA');
-  if (combined.includes('33b')) tagsSet.add('33B');
-  if (combined.includes('20b')) tagsSet.add('20B');
-  if (combined.includes('14b')) tagsSet.add('14B');
-  if (combined.includes('scail2')) tagsSet.add('SCAIL 2');
-
-  // Precision / Format tags
-  if (textEncoder !== 'Not Found') {
-    if (textEncoder.includes('GGUF')) tagsSet.add('GGUF');
-    if (textEncoder.includes('Q4_K_M')) tagsSet.add('Q4_K_M');
-    if (textEncoder.includes('Q2_K')) tagsSet.add('Q2_K');
-    if (textEncoder.includes('INT8')) tagsSet.add('INT8');
-    if (textEncoder.includes('NVFP4')) tagsSet.add('NVFP4');
-    if (textEncoder.includes('BF16')) tagsSet.add('BF16');
-  }
-
-  if (videoVae === 'FP8 Mixed Precision') {
-    tagsSet.add('FP8');
-  }
+  // Tags are reserved for custom user tags; structured details live in their dedicated fields
+  const tags: string[] = [];
 
   return {
     baseModel,
     modelSizeB,
+    modelVariant,
     videoVae,
     textEncoder,
     precision: textEncoder !== 'Not Found' ? textEncoder : undefined,
-    tags: Array.from(tagsSet)
+    tags
   };
 }
 
@@ -192,6 +231,7 @@ export interface ParsedWanGpMetadata {
   shift?: string;
   baseModel: string;
   modelSizeB?: number;
+  modelVariant?: string;
   videoVae: string;
   textEncoder: string;
   precision?: string;
@@ -255,6 +295,7 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
       shift: parsed.flow_shift !== undefined ? String(parsed.flow_shift) : undefined,
       baseModel: techDetails.baseModel,
       modelSizeB: techDetails.modelSizeB,
+      modelVariant: techDetails.modelVariant,
       videoVae: techDetails.videoVae,
       textEncoder: techDetails.textEncoder,
       precision: techDetails.precision,
@@ -273,6 +314,7 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
     return {
       baseModel: techDetails.baseModel,
       modelSizeB: techDetails.modelSizeB,
+      modelVariant: techDetails.modelVariant,
       videoVae: techDetails.videoVae,
       textEncoder: techDetails.textEncoder,
       precision: techDetails.precision,

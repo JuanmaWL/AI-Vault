@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { VideoRecord } from '../types';
-import { parseWanGpMetadata } from '../lib/utils';
+import { parseWanGpMetadata, generateTitleFromPrompt } from '../lib/utils';
 import { doc, updateDoc, Firestore } from 'firebase/firestore';
 import { 
   Wrench, 
@@ -215,6 +215,19 @@ export function AdminMaintenancePanel({
         if (typeof metadata.modelSizeB === 'number' && typeof video.modelSizeB !== 'number') {
           updateFields.modelSizeB = metadata.modelSizeB;
           changesSummary.push(`modelSizeB: ${metadata.modelSizeB}B`);
+        }
+
+        if (metadata.modelVariant && !video.modelVariant) {
+          updateFields.modelVariant = metadata.modelVariant;
+          changesSummary.push(`modelVariant: ${metadata.modelVariant}`);
+        }
+
+        if (!video.title && metadata.prompt) {
+          const autoTitle = generateTitleFromPrompt(metadata.prompt);
+          if (autoTitle) {
+            updateFields.title = autoTitle;
+            changesSummary.push(`title: "${autoTitle}"`);
+          }
         }
 
         if (metadata.videoVae && (!video.videoVae || video.videoVae === 'Not Found') && metadata.videoVae !== 'Not Found') {

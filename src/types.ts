@@ -29,12 +29,15 @@ export interface VideoRecord {
   driveFileId: string;     // extraído UNA vez al guardar (regex), no en cada render
 
   // Generación
+  title?: string;          // título legible autogenerado o personalizado por el usuario
   prompt: string;
   negativePrompt?: string;
   model: string;           // texto libre con autocompletado (histórico de valores usados)
   modelSizeB?: number;     // tamaño del modelo en billones de parámetros (ej. 20, 33)
-  source: VideoSource;     // 'local' (Wan2GP) | 'cloud'
-  tags?: string[];         // libre: "pruned", "33B", "distilled", "ref2va"...
+  modelVariant?: string;   // variante del modelo (ej. "FL2VA", "Ref2VA", "SCAIL 2")
+  source: VideoSource;     // 'local' | 'cloud'
+  localTool?: string;      // herramienta local utilizada (ej. "Wan2GP", "ComfyUI")
+  tags?: string[];         // etiquetas libres del usuario
   groupName?: string;      // carpeta o grupo de comparación
 
   // Hardware usado (sello histórico)

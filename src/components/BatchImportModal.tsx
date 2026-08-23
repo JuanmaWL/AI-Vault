@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, ParsedVideoUrlInfo } from '../lib/utils';
+import { extractDriveFileId, calculateOrientation, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, ParsedVideoUrlInfo, generateTitleFromPrompt } from '../lib/utils';
 import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Wand2, ArrowRight, Layers, User, Upload, FileText } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
@@ -194,6 +194,8 @@ export function BatchImportModal({
           let prompt = "Importado desde URL";
           let model = "Wan 2.1";
           let modelSizeB: number | undefined = undefined;
+          let modelVariant: string | undefined = undefined;
+          let title: string | undefined = undefined;
           let durationSeconds = 5;
           let steps = 30;
           let shift = "5.0";
@@ -213,12 +215,17 @@ export function BatchImportModal({
           if (commentRaw) {
             const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, 24);
             if (metadata) {
-              if (metadata.prompt) prompt = metadata.prompt;
+              if (metadata.prompt) {
+                prompt = metadata.prompt;
+                const autoTitle = generateTitleFromPrompt(metadata.prompt);
+                if (autoTitle) title = autoTitle;
+              }
               if (metadata.seed !== undefined) seed = metadata.seed;
               if (metadata.steps !== undefined) steps = metadata.steps;
               if (metadata.shift !== undefined) shift = metadata.shift;
               if (metadata.baseModel) model = metadata.baseModel;
               if (metadata.modelSizeB !== undefined) modelSizeB = metadata.modelSizeB;
+              if (metadata.modelVariant) modelVariant = metadata.modelVariant;
               videoVae = metadata.videoVae;
               textEncoder = metadata.textEncoder;
               if (metadata.tags && metadata.tags.length > 0) tagsInput = metadata.tags.join(', ');
@@ -240,10 +247,13 @@ export function BatchImportModal({
             videoUrl: url,
             groupName: finalGroupName,
             driveFileId,
+            title,
             prompt,
             model,
             modelSizeB,
+            modelVariant,
             source: importSource,
+            localTool: importSource === 'local' ? 'Wan2GP' : undefined,
             tags: tagsInput ? tagsInput.split(',').map(s => s.trim()).filter(Boolean) : [],
             width,
             height,

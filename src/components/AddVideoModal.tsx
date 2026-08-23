@@ -1,7 +1,7 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
-import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder } from 'lucide-react';
+import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
+import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder, Type, Wrench } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
@@ -27,11 +27,14 @@ const COMMON_MODELS = [
 
 export function AddVideoModal({ onClose, onSave, userEmail, initialData, existingGroups, onAddCategory }: AddVideoModalProps) {
   const [videoUrl, setVideoUrl] = useState(initialData?.videoUrl || '');
+  const [title, setTitle] = useState(initialData?.title || '');
   const [prompt, setPrompt] = useState(initialData?.prompt || '');
   const [negativePrompt, setNegativePrompt] = useState(initialData?.negativePrompt || '');
   const [model, setModel] = useState(initialData?.model || '');
   const [modelSizeB, setModelSizeB] = useState<number | undefined>(initialData?.modelSizeB);
+  const [modelVariant, setModelVariant] = useState(initialData?.modelVariant || '');
   const [source, setSource] = useState<VideoSource>(initialData?.source || 'local');
+  const [localTool, setLocalTool] = useState(initialData?.localTool || 'Wan2GP');
   const [tagsInput, setTagsInput] = useState(initialData?.tags?.join(', ') || '');
   const [groupName, setGroupName] = useState(initialData?.groupName || '');
   const [width, setWidth] = useState<number | ''>(initialData?.width || '');
@@ -139,12 +142,24 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
         const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, fps ? Number(fps) : 24);
         if (metadata) {
           setRawMetadata(commentRaw);
-          if (metadata.prompt) { setPrompt(metadata.prompt); newAutoFilled.prompt = true; foundSomething = true; }
+          if (metadata.prompt) {
+            setPrompt(metadata.prompt);
+            newAutoFilled.prompt = true;
+            foundSomething = true;
+            if (!title) {
+              const autoTitle = generateTitleFromPrompt(metadata.prompt);
+              if (autoTitle) {
+                setTitle(autoTitle);
+                newAutoFilled.title = true;
+              }
+            }
+          }
           if (metadata.seed !== undefined) { setSeed(metadata.seed); newAutoFilled.seed = true; foundSomething = true; }
           if (metadata.steps !== undefined) { setSteps(metadata.steps); newAutoFilled.steps = true; foundSomething = true; }
           if (metadata.shift !== undefined) { setShift(metadata.shift); newAutoFilled.shift = true; foundSomething = true; }
           if (metadata.baseModel) { setModel(metadata.baseModel); newAutoFilled.model = true; foundSomething = true; }
           if (metadata.modelSizeB !== undefined) { setModelSizeB(metadata.modelSizeB); }
+          if (metadata.modelVariant) { setModelVariant(metadata.modelVariant); newAutoFilled.modelVariant = true; foundSomething = true; }
           if (metadata.videoVae) { setVideoVae(metadata.videoVae); newAutoFilled.videoVae = true; foundSomething = true; }
           if (metadata.textEncoder) { setTextEncoder(metadata.textEncoder); newAutoFilled.textEncoder = true; foundSomething = true; }
           if (metadata.precision) { setPrecision(metadata.precision); newAutoFilled.precision = true; foundSomething = true; }
@@ -293,11 +308,14 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       schemaVersion: 2,
       videoUrl: videoUrl.trim(),
       driveFileId: detectedFileId || extractDriveFileId(videoUrl),
+      title: title.trim() ? title.trim() : (prompt.trim() ? generateTitleFromPrompt(prompt.trim()) : undefined),
       prompt: prompt.trim(),
       negativePrompt: negativePrompt.trim() ? negativePrompt.trim() : undefined,
       model: model.trim(),
       modelSizeB,
+      modelVariant: modelVariant.trim() ? modelVariant.trim() : undefined,
       source,
+      localTool: source === 'local' ? (localTool.trim() || undefined) : undefined,
       tags: cleanTags.length > 0 ? cleanTags : undefined,
       width: Number(width) || 1920,
       height: Number(height) || 1080,
@@ -501,6 +519,24 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               )}
             </div>
 
+            {/* Título del Vídeo */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Type className="w-3.5 h-3.5 text-teal-400" />
+                  Título del Vídeo (Opcional / Autogenerado)
+                </span>
+                <AutoFillBadge field="title" />
+              </label>
+              <input 
+                type="text" 
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="Título corto (se autogenera desde el prompt si se deja vacío)..."
+                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all font-medium"
+              />
+            </div>
+
             {/* Prompt */}
             <div className="space-y-2">
               <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
@@ -510,7 +546,13 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               <textarea 
                 required
                 value={prompt}
-                onChange={e => setPrompt(e.target.value)}
+                onChange={e => {
+                  setPrompt(e.target.value);
+                  if (!title) {
+                    const autoTitle = generateTitleFromPrompt(e.target.value);
+                    if (autoTitle) setTitle(autoTitle);
+                  }
+                }}
                 placeholder="Descripción completa del prompt utilizado..."
                 rows={3}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all resize-none leading-relaxed"
@@ -531,9 +573,9 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               />
             </div>
 
-            {/* Modelo y Origen (Local vs Cloud) */}
+            {/* Modelo, Variante y Origen (Local vs Cloud) */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="sm:col-span-2 space-y-2">
+              <div className="space-y-2">
                 <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
                   Modelo AI <span className="text-teal-400">*</span>
                   <AutoFillBadge field="model" />
@@ -544,12 +586,32 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   list="models-list"
                   value={model}
                   onChange={e => setModel(e.target.value)}
-                  placeholder="Ej: Wan2.1, Minimax H3, LTX 2.3..."
+                  placeholder="Ej: Wan 2.1, Minimax H3..."
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all"
                 />
                 <datalist id="models-list">
                   {COMMON_MODELS.map(m => (
                     <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-neutral-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>Variante</span>
+                  <AutoFillBadge field="modelVariant" />
+                </label>
+                <input 
+                  type="text" 
+                  list="model-variants-list"
+                  value={modelVariant}
+                  onChange={e => setModelVariant(e.target.value)}
+                  placeholder="FL2VA, Ref2VA..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-neutral-600 transition-all"
+                />
+                <datalist id="model-variants-list">
+                  {['FL2VA', 'Ref2VA', 'SCAIL 2'].map(v => (
+                    <option key={v} value={v} />
                   ))}
                 </datalist>
               </div>
@@ -584,6 +646,29 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                 </div>
               </div>
             </div>
+
+            {/* Herramienta Local (visible solo si source === 'local') */}
+            {source === 'local' && (
+              <div className="space-y-2 animate-in fade-in duration-150">
+                <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <Wrench className="w-3.5 h-3.5 text-teal-400" />
+                  Herramienta Local
+                </label>
+                <input 
+                  type="text" 
+                  list="local-tools-list"
+                  value={localTool}
+                  onChange={e => setLocalTool(e.target.value)}
+                  placeholder="Wan2GP, ComfyUI, SwarmUI, Forge..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all"
+                />
+                <datalist id="local-tools-list">
+                  {['Wan2GP', 'ComfyUI', 'SwarmUI', 'Forge', 'WebUI', 'Diffusers'].map(tool => (
+                    <option key={tool} value={tool} />
+                  ))}
+                </datalist>
+              </div>
+            )}
 
             {/* Tags */}
             <div className="space-y-2">

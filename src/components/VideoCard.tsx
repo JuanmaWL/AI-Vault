@@ -19,6 +19,25 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedNegative, setCopiedNegative] = useState(false);
+  
+  // Persist technical details expanded state in localStorage
+  const [showTechDetails, setShowTechDetails] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ai_vault_show_tech_details') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleToggleTechDetails = () => {
+    setShowTechDetails(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('ai_vault_show_tech_details', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   const handleCopyPrompt = async (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -70,6 +89,19 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const PROMPT_LIMIT = 150;
   const isPromptLong = video.prompt.length > PROMPT_LIMIT;
   const isNegativeLong = (video.negativePrompt?.length || 0) > PROMPT_LIMIT;
+
+  const hasTechDetails = Boolean(
+    (video.textEncoder && video.textEncoder !== 'Not Found') ||
+    (video.videoVae && video.videoVae !== 'Not Found') ||
+    (video.tags && video.tags.length > 0) ||
+    video.precision
+  );
+
+  const mainHeadline = video.title || video.model || 'Vídeo sin título';
+
+  const sourceLabel = video.source === 'local'
+    ? (video.localTool ? `Local (${video.localTool})` : 'Local')
+    : 'Cloud';
 
   return (
     <div id={`video-card-${video.id}`} className={`flex flex-col lg:flex-row bg-neutral-900/60 border ${isSelected ? 'border-teal-500' : 'border-neutral-800'} rounded-2xl overflow-hidden hover:border-neutral-700 transition-all shadow-lg relative`}>
@@ -190,115 +222,158 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
       {/* Zona de datos técnicos */}
       <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between space-y-6">
         <div className="space-y-4">
-          {/* Header con Modelo y Source */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                <Layers className="w-4 h-4 text-teal-400" />
-                {video.model}
-              </span>
-              {typeof video.modelSizeB === 'number' && (
-                <span 
-                  className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-teal-500/15 border border-teal-500/40 text-teal-300 shadow-sm"
-                  title={`Tamaño del modelo: ${video.modelSizeB}B parámetros`}
+          {/* Header con Titular Principal, Badges y Acciones */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex flex-col gap-2 min-w-0 flex-1">
+                {/* Titular Principal */}
+                <h2 
+                  className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug break-words"
+                  title={mainHeadline}
                 >
-                  {video.modelSizeB}B
+                  {mainHeadline}
+                </h2>
+
+                {/* Badges del Modelo, Variante, Origen */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-neutral-300 bg-neutral-950 px-2.5 py-0.5 rounded-md border border-neutral-800 flex items-center gap-1.5">
+                    <Layers className="w-3 h-3 text-teal-400" />
+                    {video.model}
+                  </span>
+
+                  {typeof video.modelSizeB === 'number' && (
+                    <span 
+                      className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-teal-500/15 border border-teal-500/40 text-teal-300 shadow-sm"
+                      title={`Tamaño del modelo: ${video.modelSizeB}B parámetros`}
+                    >
+                      {video.modelSizeB}B
+                    </span>
+                  )}
+
+                  {video.modelVariant && (
+                    <span 
+                      className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-md bg-indigo-950/50 border border-indigo-800/60 text-indigo-300 shadow-sm"
+                      title={`Variante del modelo: ${video.modelVariant}`}
+                    >
+                      {video.modelVariant}
+                    </span>
+                  )}
+
+                  <span
+                    className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                      video.source === 'local'
+                        ? 'bg-teal-950/60 border-teal-800 text-teal-300'
+                        : 'bg-neutral-800 border-neutral-700 text-neutral-300'
+                    }`}
+                  >
+                    {sourceLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Botones a la derecha: Toggle Detalles Técnicos y Acciones */}
+              <div className="flex items-center gap-2 shrink-0">
+                {hasTechDetails && (
+                  <button
+                    type="button"
+                    onClick={handleToggleTechDetails}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                      showTechDetails
+                        ? 'bg-teal-500/15 text-teal-300 border border-teal-500/40 shadow-sm'
+                        : 'bg-neutral-950/80 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                    }`}
+                    title={showTechDetails ? "Ocultar detalles técnicos" : "Ver detalles técnicos"}
+                  >
+                    <Cpu className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Detalles técnicos</span>
+                    {showTechDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                )}
+
+                {/* Botones de acción */}
+                {!selectionMode && (
+                  <div className="flex items-center gap-1">
+                    {onCompareClick && (
+                      <button
+                        onClick={onCompareClick}
+                        className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-teal-950/30 rounded-lg transition-colors border border-transparent hover:border-teal-900/50"
+                        title="Comparar este vídeo (1 vs 1)"
+                      >
+                        <SplitSquareVertical className="w-4 h-4" />
+                      </button>
+                    )}
+                    {onEditClick && (
+                      <button
+                        onClick={onEditClick}
+                        className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-teal-950/30 rounded-lg transition-colors border border-transparent hover:border-teal-900/50"
+                        title="Editar vídeo"
+                      >
+                        <Edit3 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {onDeleteClick && (
+                      <button
+                        onClick={onDeleteClick}
+                        className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors border border-transparent hover:border-rose-900/50"
+                        title="Borrar vídeo"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sección desplegable de Detalles Técnicos */}
+            {showTechDetails && hasTechDetails && (
+              <div className="flex flex-wrap items-center gap-2 p-2.5 bg-neutral-950/70 rounded-xl border border-neutral-800/80 animate-in fade-in duration-150">
+                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1 mr-1">
+                  <Sparkles className="w-3 h-3 text-teal-400" />
+                  Info Técnica:
                 </span>
-              )}
-              <span
-                className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                  video.source === 'local'
-                    ? 'bg-teal-950/60 border-teal-800 text-teal-300'
-                    : 'bg-neutral-800 border-neutral-700 text-neutral-300'
-                }`}
-              >
-                {video.source === 'local' ? 'Local (Wan2GP)' : 'Cloud'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Badges Técnicos Específicos */}
-              {(video.textEncoder || video.videoVae) && (
-                <div className="flex flex-wrap gap-1.5">
-                  {video.textEncoder && (
-                    <span 
-                      className={`text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono ${
-                        video.textEncoder === 'Not Found'
-                          ? 'bg-neutral-800/60 border-neutral-700 text-neutral-400'
-                          : 'bg-blue-950/40 border-blue-800/60 text-blue-300'
-                      }`}
-                      title={`Text Encoder: ${video.textEncoder}`}
-                    >
-                      <Sparkles className="w-2.5 h-2.5 text-blue-400" />
-                      <span className="text-[10px] text-blue-400/70 font-sans uppercase">Text:</span>
-                      {video.textEncoder}
-                    </span>
-                  )}
-                  {video.videoVae && (
-                    <span 
-                      className={`text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono ${
-                        video.videoVae === 'Not Found'
-                          ? 'bg-neutral-800/60 border-neutral-700 text-neutral-400'
-                          : 'bg-purple-950/40 border-purple-800/60 text-purple-300'
-                      }`}
-                      title={`Video VAE: ${video.videoVae}`}
-                    >
-                      <Cpu className="w-2.5 h-2.5 text-purple-400" />
-                      <span className="text-[10px] text-purple-400/70 font-sans uppercase">Video:</span>
-                      {video.videoVae}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Badges de Tags */}
-              {video.tags && video.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {video.tags.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="text-[11px] px-2 py-0.5 rounded-md bg-neutral-950 border border-neutral-800 text-neutral-400 flex items-center gap-1"
-                    >
-                      <Tag className="w-2.5 h-2.5" />
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-              
-              {/* Botones de acción */}
-              {!selectionMode && (
-                <div className="flex items-center gap-1">
-                  {onCompareClick && (
-                    <button
-                      onClick={onCompareClick}
-                      className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-teal-950/30 rounded-lg transition-colors border border-transparent hover:border-teal-900/50"
-                      title="Comparar este vídeo (1 vs 1)"
-                    >
-                      <SplitSquareVertical className="w-4 h-4" />
-                    </button>
-                  )}
-                  {onEditClick && (
-                    <button
-                      onClick={onEditClick}
-                      className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-teal-950/30 rounded-lg transition-colors border border-transparent hover:border-teal-900/50"
-                      title="Editar vídeo"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                  )}
-                  {onDeleteClick && (
-                    <button
-                      onClick={onDeleteClick}
-                      className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors border border-transparent hover:border-rose-900/50"
-                      title="Borrar vídeo"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+                {video.textEncoder && video.textEncoder !== 'Not Found' && (
+                  <span 
+                    className="text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono bg-blue-950/40 border-blue-800/60 text-blue-300"
+                    title={`Text Encoder: ${video.textEncoder}`}
+                  >
+                    <span className="text-[10px] text-blue-400/70 font-sans uppercase">Encoder:</span>
+                    {video.textEncoder}
+                  </span>
+                )}
+                {video.videoVae && video.videoVae !== 'Not Found' && (
+                  <span 
+                    className="text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono bg-purple-950/40 border-purple-800/60 text-purple-300"
+                    title={`Video VAE: ${video.videoVae}`}
+                  >
+                    <span className="text-[10px] text-purple-400/70 font-sans uppercase">VAE:</span>
+                    {video.videoVae}
+                  </span>
+                )}
+                {video.precision && (
+                  <span 
+                    className="text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono bg-amber-950/40 border-amber-800/60 text-amber-300"
+                    title={`Precisión: ${video.precision}`}
+                  >
+                    <span className="text-[10px] text-amber-400/70 font-sans uppercase">Precisión:</span>
+                    {video.precision}
+                  </span>
+                )}
+                {video.tags && video.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 ml-auto">
+                    {video.tags.map((tag, idx) => (
+                      <span
+                        key={idx}
+                        className="text-[11px] px-2 py-0.5 rounded-md bg-neutral-900 border border-neutral-800 text-neutral-300 flex items-center gap-1"
+                      >
+                        <Tag className="w-2.5 h-2.5 text-teal-400" />
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Prompt */}
