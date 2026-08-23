@@ -32,6 +32,7 @@ export interface VideoRecord {
   prompt: string;
   negativePrompt?: string;
   model: string;           // texto libre con autocompletado (histórico de valores usados)
+  modelSizeB?: number;     // tamaño del modelo en billones de parámetros (ej. 20, 33)
   source: VideoSource;     // 'local' (Wan2GP) | 'cloud'
   tags?: string[];         // libre: "pruned", "33B", "distilled", "ref2va"...
   groupName?: string;      // carpeta o grupo de comparación

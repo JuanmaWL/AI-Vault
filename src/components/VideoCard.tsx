@@ -197,6 +197,14 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 <Layers className="w-4 h-4 text-teal-400" />
                 {video.model}
               </span>
+              {typeof video.modelSizeB === 'number' && (
+                <span 
+                  className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full bg-teal-500/15 border border-teal-500/40 text-teal-300 shadow-sm"
+                  title={`Tamaño del modelo: ${video.modelSizeB}B parámetros`}
+                >
+                  {video.modelSizeB}B
+                </span>
+              )}
               <span
                 className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                   video.source === 'local'

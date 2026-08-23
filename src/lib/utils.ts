@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { VideoOrientation, VideoRecord } from '../types';
+import { VideoOrientation, VideoRecord, Lora } from '../types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -48,10 +48,39 @@ export const VIDEO_VAE_OPTIONS = [
 
 export interface ExtractedTechnicalDetails {
   baseModel: string;
+  modelSizeB?: number;
   videoVae: string;
   textEncoder: string;
   precision?: string;
   tags: string[];
+}
+
+/**
+ * Extracts model size in billions of parameters (e.g. 20, 33)
+ * Priority:
+ * 1. Look in "type" field for pattern /(\d+)\s*B\b/i
+ * 2. Look in "model_filename" field for pattern /(\d+)\s*B\b/i
+ * 3. Otherwise undefined
+ */
+export function extractModelSizeB(typeField?: string, modelFilename?: string): number | undefined {
+  const sizeRegex = /(\d+)\s*B\b/i;
+  if (typeField && typeof typeField === 'string') {
+    const match = typeField.match(sizeRegex);
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+
+  if (modelFilename && typeof modelFilename === 'string') {
+    const match = modelFilename.match(sizeRegex);
+    if (match && match[1]) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > 0) return num;
+    }
+  }
+
+  return undefined;
 }
 
 export function extractTechnicalDetails(
@@ -80,6 +109,11 @@ export function extractTechnicalDetails(
   } else if (combined.includes('hunyuan')) {
     baseModel = 'HunyuanVideo';
   }
+
+  // Model size in Billions (modelSizeB)
+  const typeField = parsedJson?.type || typeDesc;
+  const modelFilename = parsedJson?.model_filename || parsedJson?.filename;
+  const modelSizeB = extractModelSizeB(typeField, modelFilename);
 
   // 2. Text Encoder Detection (Minimax H3 / Qwen3-VL specific options)
   let textEncoder: string = 'Not Found';
@@ -143,10 +177,110 @@ export function extractTechnicalDetails(
 
   return {
     baseModel,
+    modelSizeB,
     videoVae,
     textEncoder,
+    precision: textEncoder !== 'Not Found' ? textEncoder : undefined,
     tags: Array.from(tagsSet)
   };
+}
+
+export interface ParsedWanGpMetadata {
+  prompt?: string;
+  seed?: string;
+  steps?: number;
+  shift?: string;
+  baseModel: string;
+  modelSizeB?: number;
+  videoVae: string;
+  textEncoder: string;
+  precision?: string;
+  tags: string[];
+  width?: number;
+  height?: number;
+  renderSeconds?: number;
+  durationSeconds?: string;
+  generatedAt?: number;
+  loras: Lora[];
+  rawComment?: string;
+}
+
+/**
+ * Unified parser for WanGP metadata embedded in video Comment/Track fields.
+ * Shared between AddVideoModal and BatchImportModal to prevent desync.
+ */
+export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: number, fallbackFps = 24): ParsedWanGpMetadata | null {
+  if (!commentRaw || typeof commentRaw !== 'string') return null;
+
+  try {
+    const parsed = JSON.parse(commentRaw);
+    const techDetails = extractTechnicalDetails(parsed, commentRaw, parsed.model_type || parsed.type || '');
+    
+    let width: number | undefined = undefined;
+    let height: number | undefined = undefined;
+    if (parsed.resolution) {
+      const [w, h] = String(parsed.resolution).split('x');
+      if (w && h) {
+        width = Number(w);
+        height = Number(h);
+      }
+    }
+
+    let durationSeconds: string | undefined = undefined;
+    if (parsed.video_length !== undefined) {
+      const computedDuration = Number(parsed.video_length) / fallbackFps;
+      durationSeconds = computedDuration.toFixed(1);
+    } else if (fallbackDurationSec !== undefined && fallbackDurationSec > 0) {
+      durationSeconds = fallbackDurationSec.toFixed(1);
+    }
+
+    const loras: Lora[] = [];
+    if (parsed.activated_loras && parsed.loras_multipliers) {
+      const weights = String(parsed.loras_multipliers).split('|');
+      parsed.activated_loras.forEach((loraPath: string, idx: number) => {
+        const nameParts = loraPath.split(/[\/\\]/);
+        let baseName = nameParts[nameParts.length - 1];
+        baseName = baseName.replace(/\.[^/.]+$/, "");
+        const weightStr = weights[idx];
+        if (weightStr !== undefined && weightStr !== '') {
+          loras.push({ name: baseName, weight: parseFloat(weightStr) });
+        }
+      });
+    }
+
+    return {
+      prompt: parsed.prompt ? String(parsed.prompt) : undefined,
+      seed: parsed.seed !== undefined ? String(parsed.seed) : undefined,
+      steps: parsed.num_inference_steps !== undefined ? Number(parsed.num_inference_steps) : undefined,
+      shift: parsed.flow_shift !== undefined ? String(parsed.flow_shift) : undefined,
+      baseModel: techDetails.baseModel,
+      modelSizeB: techDetails.modelSizeB,
+      videoVae: techDetails.videoVae,
+      textEncoder: techDetails.textEncoder,
+      precision: techDetails.precision,
+      tags: techDetails.tags,
+      width,
+      height,
+      renderSeconds: parsed.generation_time !== undefined ? Number(parsed.generation_time) : undefined,
+      durationSeconds,
+      generatedAt: parsed.creation_timestamp !== undefined ? Number(parsed.creation_timestamp) * 1000 : undefined,
+      loras,
+      rawComment: commentRaw,
+    };
+  } catch {
+    // Non-JSON comment fallback
+    const techDetails = extractTechnicalDetails(undefined, commentRaw);
+    return {
+      baseModel: techDetails.baseModel,
+      modelSizeB: techDetails.modelSizeB,
+      videoVae: techDetails.videoVae,
+      textEncoder: techDetails.textEncoder,
+      precision: techDetails.precision,
+      tags: techDetails.tags,
+      loras: [],
+      rawComment: commentRaw,
+    };
+  }
 }
 
 export function parseModelAndTags(modelType: string, typeDesc: string = ''): { baseModel: string, newTags: string[] } {

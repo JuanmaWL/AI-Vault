@@ -33,6 +33,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
   // Phase 1: Local Cross-Filters for Dashboard
   const [selectedGpu, setSelectedGpu] = useState<string>('all');
   const [selectedModel, setSelectedModel] = useState<string>('all');
+  const [selectedModelSize, setSelectedModelSize] = useState<string>('all');
   const [selectedResolution, setSelectedResolution] = useState<string>('all');
   const [selectedLoraFilter, setSelectedLoraFilter] = useState<'all' | 'with_lora' | 'without_lora'>('all');
 
@@ -63,6 +64,20 @@ export function DashboardView({ videos }: DashboardViewProps) {
       .map(([name, count]) => ({ name, count }));
   }, [videos]);
 
+  // Discover all Model Sizes available across all videos
+  const availableModelSizes = useMemo(() => {
+    const sizeCounts: Record<string, number> = {};
+    videos.forEach(v => {
+      if (typeof v.modelSizeB === 'number') {
+        const sizeLabel = `${v.modelSizeB}B`;
+        sizeCounts[sizeLabel] = (sizeCounts[sizeLabel] || 0) + 1;
+      }
+    });
+    return Object.entries(sizeCounts)
+      .sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
+      .map(([name, count]) => ({ name, count }));
+  }, [videos]);
+
   // Discover all Resolutions available across all videos
   const availableResolutions = useMemo(() => {
     const resCounts: Record<string, number> = {};
@@ -76,6 +91,15 @@ export function DashboardView({ videos }: DashboardViewProps) {
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
   }, [videos]);
+
+  // Helper function to format full model name including parameter size if available
+  const getFullModelName = (v: VideoRecord): string => {
+    const base = v.model || 'Desconocido';
+    if (typeof v.modelSizeB === 'number') {
+      return `${base} ${v.modelSizeB}B`;
+    }
+    return base;
+  };
 
   // Phase 3: Hardware Benchmark Matrix (GPU A vs GPU B Head-to-Head under identical conditions)
   const [benchmarkGpuA, setBenchmarkGpuA] = useState<string>('');
@@ -99,7 +123,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
   const benchmarkComparison = useMemo(() => {
     if (!benchmarkGpuA || !benchmarkGpuB || benchmarkGpuA === benchmarkGpuB) return null;
 
-    // Collect all unique conditions (Model + Resolution) across all videos
+    // Collect all unique conditions (Full Model + Resolution) across all videos
     type ConditionData = {
       model: string;
       resolution: string;
@@ -122,12 +146,13 @@ export function DashboardView({ videos }: DashboardViewProps) {
       const gpu = v.hardware?.gpu?.trim() || 'Sin GPU especificada';
       if (gpu !== benchmarkGpuA && gpu !== benchmarkGpuB) return;
 
+      const fullModel = getFullModelName(v);
       const res = `${v.width}x${v.height}`;
-      const condKey = `${v.model}___${res}`;
+      const condKey = `${fullModel}___${res}`;
 
       if (!conditionMap[condKey]) {
         conditionMap[condKey] = {
-          model: v.model,
+          model: fullModel,
           resolution: res,
           gpuA: { totalSecPerStep: 0, totalRenderSec: 0, count: 0 },
           gpuB: { totalSecPerStep: 0, totalRenderSec: 0, count: 0 }
@@ -224,6 +249,11 @@ export function DashboardView({ videos }: DashboardViewProps) {
         const model = v.model || 'Desconocido';
         if (model !== selectedModel) return false;
       }
+      // Model size filter
+      if (selectedModelSize !== 'all') {
+        const sizeLabel = typeof v.modelSizeB === 'number' ? `${v.modelSizeB}B` : 'none';
+        if (sizeLabel !== selectedModelSize) return false;
+      }
       // Resolution filter
       if (selectedResolution !== 'all') {
         const res = `${v.width}x${v.height}`;
@@ -237,13 +267,14 @@ export function DashboardView({ videos }: DashboardViewProps) {
       }
       return true;
     });
-  }, [videos, selectedGpu, selectedModel, selectedResolution, selectedLoraFilter]);
+  }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedLoraFilter]);
 
-  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedResolution !== 'all' || selectedLoraFilter !== 'all';
+  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedLoraFilter !== 'all';
 
   const resetFilters = () => {
     setSelectedGpu('all');
     setSelectedModel('all');
+    setSelectedModelSize('all');
     setSelectedResolution('all');
     setSelectedLoraFilter('all');
   };
@@ -266,7 +297,8 @@ export function DashboardView({ videos }: DashboardViewProps) {
 
     // 1. Model usage (Pie)
     const modelCounts = dashboardVideos.reduce((acc, v) => {
-      acc[v.model] = (acc[v.model] || 0) + 1;
+      const fullModel = getFullModelName(v);
+      acc[fullModel] = (acc[fullModel] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
     const modelData = Object.entries(modelCounts)
@@ -279,22 +311,22 @@ export function DashboardView({ videos }: DashboardViewProps) {
     const modelGpuRenderTimes = dashboardVideos.reduce((acc, v) => {
       const metricVal = getVideoMetric(v);
       if (metricVal !== null) {
-        const model = v.model || 'Desconocido';
+        const fullModel = getFullModelName(v);
         const gpu = v.hardware?.gpu?.trim() || 'Sin GPU especificada';
-        if (!acc[model]) {
-          acc[model] = {
+        if (!acc[fullModel]) {
+          acc[fullModel] = {
             totalSum: 0,
             totalCount: 0,
             gpus: {} as Record<string, { sum: number; count: number }>
           };
         }
-        acc[model].totalSum += metricVal;
-        acc[model].totalCount += 1;
-        if (!acc[model].gpus[gpu]) {
-          acc[model].gpus[gpu] = { sum: 0, count: 0 };
+        acc[fullModel].totalSum += metricVal;
+        acc[fullModel].totalCount += 1;
+        if (!acc[fullModel].gpus[gpu]) {
+          acc[fullModel].gpus[gpu] = { sum: 0, count: 0 };
         }
-        acc[model].gpus[gpu].sum += metricVal;
-        acc[model].gpus[gpu].count += 1;
+        acc[fullModel].gpus[gpu].sum += metricVal;
+        acc[fullModel].gpus[gpu].count += 1;
       }
       return acc;
     }, {} as Record<string, { totalSum: number; totalCount: number; gpus: Record<string, { sum: number; count: number }> }>);
@@ -376,9 +408,10 @@ export function DashboardView({ videos }: DashboardViewProps) {
     // 5. Steps Habit by Model (Usage configuration)
     const stepsByModel = dashboardVideos.reduce((acc, v) => {
       if (typeof v.steps === 'number' && v.steps > 0) {
-        if (!acc[v.model]) acc[v.model] = { sum: 0, count: 0 };
-        acc[v.model].sum += v.steps;
-        acc[v.model].count += 1;
+        const fullModel = getFullModelName(v);
+        if (!acc[fullModel]) acc[fullModel] = { sum: 0, count: 0 };
+        acc[fullModel].sum += v.steps;
+        acc[fullModel].count += 1;
       }
       return acc;
     }, {} as Record<string, { sum: number; count: number }>);
@@ -394,9 +427,10 @@ export function DashboardView({ videos }: DashboardViewProps) {
     // 6. Shift Habit by Model (Usage configuration)
     const shiftByModel = dashboardVideos.reduce((acc, v) => {
       if (typeof v.shift === 'number') {
-        if (!acc[v.model]) acc[v.model] = { sum: 0, count: 0 };
-        acc[v.model].sum += v.shift;
-        acc[v.model].count += 1;
+        const fullModel = getFullModelName(v);
+        if (!acc[fullModel]) acc[fullModel] = { sum: 0, count: 0 };
+        acc[fullModel].sum += v.shift;
+        acc[fullModel].count += 1;
       }
       return acc;
     }, {} as Record<string, { sum: number; count: number }>);
@@ -545,7 +579,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
         </div>
 
         {/* Phase 1: Cross-Filters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           
           {/* GPU Filter */}
           <div className="flex flex-col gap-1">
@@ -581,6 +615,25 @@ export function DashboardView({ videos }: DashboardViewProps) {
               <option value="all">Todos los modelos ({videos.length})</option>
               {availableModels.map(m => (
                 <option key={m.name} value={m.name}>{m.name} ({m.count})</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Model Size Filter */}
+          <div className="flex flex-col gap-1">
+            <label htmlFor="dash-size" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+              <Layers className="w-3 h-3 text-teal-400" />
+              Tamaño del Modelo:
+            </label>
+            <select
+              id="dash-size"
+              value={selectedModelSize}
+              onChange={(e) => setSelectedModelSize(e.target.value)}
+              className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs text-neutral-200 focus:outline-none transition-colors cursor-pointer"
+            >
+              <option value="all">Todos los tamaños ({videos.length})</option>
+              {availableModelSizes.map(s => (
+                <option key={s.name} value={s.name}>{s.name} ({s.count})</option>
               ))}
             </select>
           </div>

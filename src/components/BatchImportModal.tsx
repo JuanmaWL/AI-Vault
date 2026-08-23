@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, extractTechnicalDetails, parseVideoUrlInfo, ParsedVideoUrlInfo } from '../lib/utils';
+import { extractDriveFileId, calculateOrientation, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, ParsedVideoUrlInfo } from '../lib/utils';
 import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Wand2, ArrowRight, Layers, User, Upload, FileText } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
@@ -193,6 +193,7 @@ export function BatchImportModal({
           let height = 1080;
           let prompt = "Importado desde URL";
           let model = "Wan 2.1";
+          let modelSizeB: number | undefined = undefined;
           let durationSeconds = 5;
           let steps = 30;
           let shift = "5.0";
@@ -210,38 +211,20 @@ export function BatchImportModal({
           if (generalTrack?.Duration) durationSeconds = parseFloat(generalTrack.Duration);
 
           if (commentRaw) {
-            try {
-              const parsed = JSON.parse(commentRaw);
-              if (parsed.prompt) prompt = parsed.prompt;
-              if (parsed.seed !== undefined) seed = String(parsed.seed);
-              if (parsed.num_inference_steps !== undefined) steps = Number(parsed.num_inference_steps);
-              if (parsed.flow_shift !== undefined) shift = String(parsed.flow_shift);
-
-              const techDetails = extractTechnicalDetails(parsed, commentRaw, parsed.model_type || parsed.type || '');
-              if (techDetails.baseModel) model = techDetails.baseModel;
-              videoVae = techDetails.videoVae;
-              textEncoder = techDetails.textEncoder;
-              if (techDetails.tags.length > 0) tagsInput = techDetails.tags.join(', ');
-
-              if (parsed.generation_time !== undefined) renderSeconds = Number(parsed.generation_time);
-              if (parsed.creation_timestamp !== undefined) generatedAt = Number(parsed.creation_timestamp) * 1000;
-
-              if (parsed.activated_loras && parsed.loras_multipliers) {
-                const weights = String(parsed.loras_multipliers).split('|');
-                parsed.activated_loras.forEach((loraPath: string, loraIdx: number) => {
-                  const nameParts = loraPath.split(/[\/\\]/);
-                  let baseName = nameParts[nameParts.length - 1];
-                  baseName = baseName.replace(/\.[^/.]+$/, "");
-                  const weightStr = weights[loraIdx];
-                  if (weightStr !== undefined && weightStr !== '') {
-                    loras.push({ name: baseName, weight: parseFloat(weightStr) });
-                  }
-                });
-              }
-            } catch {
-              const techDetails = extractTechnicalDetails(undefined, commentRaw);
-              videoVae = techDetails.videoVae;
-              textEncoder = techDetails.textEncoder;
+            const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, 24);
+            if (metadata) {
+              if (metadata.prompt) prompt = metadata.prompt;
+              if (metadata.seed !== undefined) seed = metadata.seed;
+              if (metadata.steps !== undefined) steps = metadata.steps;
+              if (metadata.shift !== undefined) shift = metadata.shift;
+              if (metadata.baseModel) model = metadata.baseModel;
+              if (metadata.modelSizeB !== undefined) modelSizeB = metadata.modelSizeB;
+              videoVae = metadata.videoVae;
+              textEncoder = metadata.textEncoder;
+              if (metadata.tags && metadata.tags.length > 0) tagsInput = metadata.tags.join(', ');
+              if (metadata.renderSeconds !== undefined) renderSeconds = metadata.renderSeconds;
+              if (metadata.generatedAt !== undefined) generatedAt = metadata.generatedAt;
+              if (metadata.loras && metadata.loras.length > 0) loras = metadata.loras;
             }
           }
 
@@ -259,6 +242,7 @@ export function BatchImportModal({
             driveFileId,
             prompt,
             model,
+            modelSizeB,
             source: importSource,
             tags: tagsInput ? tagsInput.split(',').map(s => s.trim()).filter(Boolean) : [],
             width,

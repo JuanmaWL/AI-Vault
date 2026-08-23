@@ -1,6 +1,6 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseVideoUrlInfo, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
+import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
 import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
@@ -30,6 +30,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [prompt, setPrompt] = useState(initialData?.prompt || '');
   const [negativePrompt, setNegativePrompt] = useState(initialData?.negativePrompt || '');
   const [model, setModel] = useState(initialData?.model || '');
+  const [modelSizeB, setModelSizeB] = useState<number | undefined>(initialData?.modelSizeB);
   const [source, setSource] = useState<VideoSource>(initialData?.source || 'local');
   const [tagsInput, setTagsInput] = useState(initialData?.tags?.join(', ') || '');
   const [groupName, setGroupName] = useState(initialData?.groupName || '');
@@ -135,101 +136,52 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       }
 
       if (commentRaw) {
-        try {
-          const parsed = JSON.parse(commentRaw);
+        const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, fps ? Number(fps) : 24);
+        if (metadata) {
           setRawMetadata(commentRaw);
-          
-          if (parsed.prompt) { setPrompt(parsed.prompt); newAutoFilled.prompt = true; foundSomething = true; }
-          if (parsed.seed !== undefined) { setSeed(String(parsed.seed)); newAutoFilled.seed = true; foundSomething = true; }
-          if (parsed.num_inference_steps !== undefined) { setSteps(Number(parsed.num_inference_steps)); newAutoFilled.steps = true; foundSomething = true; }
-          if (parsed.flow_shift !== undefined) { setShift(String(parsed.flow_shift)); newAutoFilled.shift = true; foundSomething = true; }
-          
-          const techDetails = extractTechnicalDetails(parsed, commentRaw, parsed.model_type || parsed.type || '');
-          if (techDetails.baseModel) {
-            setModel(techDetails.baseModel);
-            newAutoFilled.model = true;
-            foundSomething = true;
-          }
-          if (techDetails.videoVae) {
-            setVideoVae(techDetails.videoVae);
-            newAutoFilled.videoVae = true;
-            foundSomething = true;
-          }
-          if (techDetails.textEncoder) {
-            setTextEncoder(techDetails.textEncoder);
-            newAutoFilled.textEncoder = true;
-            foundSomething = true;
-          }
-          if (techDetails.precision) {
-            setPrecision(techDetails.precision);
-            newAutoFilled.precision = true;
-            foundSomething = true;
-          }
-          if (techDetails.tags.length > 0) {
+          if (metadata.prompt) { setPrompt(metadata.prompt); newAutoFilled.prompt = true; foundSomething = true; }
+          if (metadata.seed !== undefined) { setSeed(metadata.seed); newAutoFilled.seed = true; foundSomething = true; }
+          if (metadata.steps !== undefined) { setSteps(metadata.steps); newAutoFilled.steps = true; foundSomething = true; }
+          if (metadata.shift !== undefined) { setShift(metadata.shift); newAutoFilled.shift = true; foundSomething = true; }
+          if (metadata.baseModel) { setModel(metadata.baseModel); newAutoFilled.model = true; foundSomething = true; }
+          if (metadata.modelSizeB !== undefined) { setModelSizeB(metadata.modelSizeB); }
+          if (metadata.videoVae) { setVideoVae(metadata.videoVae); newAutoFilled.videoVae = true; foundSomething = true; }
+          if (metadata.textEncoder) { setTextEncoder(metadata.textEncoder); newAutoFilled.textEncoder = true; foundSomething = true; }
+          if (metadata.precision) { setPrecision(metadata.precision); newAutoFilled.precision = true; foundSomething = true; }
+          if (metadata.tags && metadata.tags.length > 0) {
             const existingTags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
-            const merged = Array.from(new Set([...existingTags, ...techDetails.tags]));
+            const merged = Array.from(new Set([...existingTags, ...metadata.tags]));
             setTagsInput(merged.join(', '));
             newAutoFilled.tags = true;
             foundSomething = true;
           }
-          
-          if (parsed.resolution && !newAutoFilled.width) {
-            const [w, h] = parsed.resolution.split('x');
-            if (w && h) {
-              setWidth(Number(w));
-              setHeight(Number(h));
-              newAutoFilled.width = true;
-              newAutoFilled.height = true;
-              foundSomething = true;
-            }
+          if (metadata.width && metadata.height && !newAutoFilled.width) {
+            setWidth(metadata.width);
+            setHeight(metadata.height);
+            newAutoFilled.width = true;
+            newAutoFilled.height = true;
+            foundSomething = true;
           }
-          
-          if (parsed.generation_time !== undefined) {
-            setRenderSeconds(String(parsed.generation_time));
+          if (metadata.renderSeconds !== undefined) {
+            setRenderSeconds(String(metadata.renderSeconds));
             newAutoFilled.renderSeconds = true;
             foundSomething = true;
           }
-
-          if (parsed.video_length !== undefined && !newAutoFilled.durationSeconds) {
-            const currentFps = fps ? Number(fps) : 24;
-            const computedDuration = Number(parsed.video_length) / currentFps;
-            setDurationSeconds(computedDuration.toFixed(1));
+          if (metadata.durationSeconds !== undefined && !newAutoFilled.durationSeconds) {
+            setDurationSeconds(metadata.durationSeconds);
             newAutoFilled.durationSeconds = true;
             foundSomething = true;
           }
-
-          if (parsed.creation_timestamp !== undefined) {
-            setGeneratedAt(Number(parsed.creation_timestamp) * 1000);
+          if (metadata.generatedAt !== undefined) {
+            setGeneratedAt(metadata.generatedAt);
             newAutoFilled.generatedAt = true;
             foundSomething = true;
           }
-
-          if (parsed.activated_loras && parsed.loras_multipliers) {
-            const weights = String(parsed.loras_multipliers).split('|');
-            const newLoras: Lora[] = [];
-            parsed.activated_loras.forEach((loraPath: string, i: number) => {
-              const nameParts = loraPath.split(/[\/\\]/);
-              let baseName = nameParts[nameParts.length - 1];
-              baseName = baseName.replace(/\.[^/.]+$/, "");
-
-              const weightStr = weights[i];
-              if (weightStr !== undefined && weightStr !== '') {
-                newLoras.push({ name: baseName, weight: parseFloat(weightStr) });
-              }
-            });
-            if (newLoras.length > 0) {
-              setLoras(newLoras);
-              newAutoFilled.loras = true;
-              foundSomething = true;
-            }
+          if (metadata.loras && metadata.loras.length > 0) {
+            setLoras(metadata.loras);
+            newAutoFilled.loras = true;
+            foundSomething = true;
           }
-          
-        } catch (e) {
-          console.error("Error parsing JSON comment", e);
-          const techDetails = extractTechnicalDetails(undefined, commentRaw);
-          if (techDetails.videoVae) { setVideoVae(techDetails.videoVae); newAutoFilled.videoVae = true; foundSomething = true; }
-          if (techDetails.textEncoder) { setTextEncoder(techDetails.textEncoder); newAutoFilled.textEncoder = true; foundSomething = true; }
-          if (techDetails.precision) { setPrecision(techDetails.precision); newAutoFilled.precision = true; foundSomething = true; }
         }
       }
       
@@ -344,6 +296,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       prompt: prompt.trim(),
       negativePrompt: negativePrompt.trim() ? negativePrompt.trim() : undefined,
       model: model.trim(),
+      modelSizeB,
       source,
       tags: cleanTags.length > 0 ? cleanTags : undefined,
       width: Number(width) || 1920,
