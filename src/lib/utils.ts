@@ -7,6 +7,53 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export const GPU_LOGOS = {
+  nvidia: 'https://rpe0dhvxrlsesamf.private.blob.vercel-storage.com/iconos/nvidia.ico?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfclBFMGRodnhyTFNFc0FtZiIsIm93bmVySWQiOiJ0ZWFtX3E1eWdHQTY1ZnAxOWxUdHhRNzhpNHV2OCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzg3NjQ5Mzg4MDkzLCJpYXQiOjE3ODc2MDYxODkxNjZ9.D-dTk_TJXoQznAI9JaJ8Khekt1SIQ_2POxMYwDjPsmk&vercel-blob-signature=nmlbpOhiu8bdTOeYbnmINNohcXtCUMuetDNBzQfxE_4',
+  amd: 'https://rpe0dhvxrlsesamf.private.blob.vercel-storage.com/iconos/amd.ico?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfclBFMGRodnhyTFNFc0FtZiIsIm93bmVySWQiOiJ0ZWFtX3E1eWdHQTY1ZnAxOWxUdHhRNzhpNHV2OCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzg3NjQ5MzgzMDU0LCJpYXQiOjE3ODc2MDYxODQxMjh9.Ej7doo7ADwaxKDs-_hJ9WLEP19oSbte6TOrwQxcXByo&vercel-blob-signature=yRQZRxzozi5HFq8FCj41GIBjm7GxgL3DCmDljQGw-eI'
+} as const;
+
+/**
+ * Extracts creation timestamp formatted in Spanish from filename, title, or url
+ * Pattern: 2026-08-21-20h02m49s or 2026-08-21_20h02m49s or ISO 2026-08-17T15:36:47
+ */
+export function extractCreationDateFromText(text?: string): string | null {
+  if (!text || typeof text !== 'string') return null;
+  const decoded = decodeURIComponent(text);
+
+  const formatToStandard = (year: string, month: string, day: string, hour: string, min: string) => {
+    const pad = (v: string | number) => v.toString().padStart(2, '0');
+    return `${pad(day)}/${pad(month)}/${year} ${pad(hour)}:${pad(min)}`;
+  };
+
+  // Pattern 1: 2026-08-21-20h02m49s or 2026-08-21_20h02m49s or 2026-08-21 20h02m49s
+  const match = decoded.match(/(\d{4})-(\d{2})-(\d{2})[-_\s](\d{2})h(\d{2})m(\d{2})s/i);
+  if (match) {
+    const [, year, month, day, hour, min] = match;
+    return formatToStandard(year, month, day, hour, min);
+  }
+
+  // Pattern 2: ISO 2026-08-17T15:36:47 or 2026-08-17 15:36:47
+  const isoMatch = decoded.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/i);
+  if (isoMatch) {
+    const [, year, month, day, hour, min] = isoMatch;
+    return formatToStandard(year, month, day, hour, min);
+  }
+
+  return null;
+}
+
+export function getGpuVendor(gpuName?: string): 'nvidia' | 'amd' | 'other' {
+  if (!gpuName || typeof gpuName !== 'string') return 'other';
+  const lower = gpuName.toLowerCase();
+  if (lower.includes('nvidia') || lower.includes('rtx') || lower.includes('gtx') || lower.includes('geforce') || lower.includes('quadro') || lower.includes('tesla')) {
+    return 'nvidia';
+  }
+  if (lower.includes('amd') || lower.includes('radeon') || lower.includes('rx ') || lower.includes('rdna')) {
+    return 'amd';
+  }
+  return 'other';
+}
+
 export function extractDriveFileId(url: string): string {
   if (!url) return '';
   const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
@@ -180,9 +227,21 @@ export function extractTechnicalDetails(
     modelVariant = 'SCAIL 2';
   }
 
-  // 2. Text Encoder Detection (restricted strictly to text encoder technical fields)
+  // 2. Text Encoder Detection (restricted strictly to text encoder technical fields + Wan2GP config)
   let textEncoder: string = 'Not Found';
+  
+  // Also extract config string directly if present in rawComment or parsedJson
+  let configStr = parsedJson?.config || '';
+  if (!configStr && rawComment) {
+    const configMatch = rawComment.match(/"config"\s*:\s*"([^"]+)"/i) || rawComment.match(/config[:=]\s*([a-zA-Z0-9_, -]+)/i);
+    if (configMatch && configMatch[1]) {
+      configStr = configMatch[1];
+    }
+  }
+
   const rawTextEnc = [
+    configStr,
+    parsedJson?.config,
     parsedJson?.text_encoder,
     parsedJson?.text_encoder_name,
     parsedJson?.text_encoder_path,
@@ -192,9 +251,9 @@ export function extractTechnicalDetails(
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
   if (rawTextEnc.length > 0) {
-    if (rawTextEnc.includes('q4_k_m') || rawTextEnc.includes('q4-k-m') || rawTextEnc.includes('q4km')) {
+    if (rawTextEnc.includes('q4_k_m') || rawTextEnc.includes('q4-k-m') || rawTextEnc.includes('q4km') || rawTextEnc.includes('gguf_q4') || rawTextEnc.includes('q4_k')) {
       textEncoder = 'Qwen3-VL GGUF Q4_K_M';
-    } else if (rawTextEnc.includes('q2_k') || rawTextEnc.includes('q2-k') || rawTextEnc.includes('q2k')) {
+    } else if (rawTextEnc.includes('q2_k') || rawTextEnc.includes('q2-k') || rawTextEnc.includes('q2k') || rawTextEnc.includes('gguf_q2')) {
       textEncoder = 'Qwen3-VL GGUF Q2_K';
     } else if (rawTextEnc.includes('quanto') || rawTextEnc.includes('int8')) {
       textEncoder = 'Qwen3-VL Quanto INT8';
@@ -204,14 +263,16 @@ export function extractTechnicalDetails(
       textEncoder = 'Qwen3-VL BF16';
     } else if (rawTextEnc.includes('default')) {
       textEncoder = 'Default';
-    } else if (rawTextEnc.includes('qwen3-vl') || rawTextEnc.includes('qwen3_vl') || rawTextEnc.includes('qwen3')) {
+    } else if (rawTextEnc.includes('qwen3-vl') || rawTextEnc.includes('qwen3_vl') || rawTextEnc.includes('qwen3') || rawTextEnc.includes('qwen')) {
       textEncoder = 'Qwen3-VL GGUF Q4_K_M';
     }
   }
 
-  // 3. Video VAE Detection (restricted strictly to VAE technical fields)
+  // 3. Video VAE Detection (restricted strictly to VAE technical fields + Wan2GP config)
   let videoVae: string = 'Not Found';
   const rawVae = [
+    configStr,
+    parsedJson?.config,
     parsedJson?.video_vae,
     parsedJson?.vae,
     parsedJson?.vae_name,
@@ -220,7 +281,7 @@ export function extractTechnicalDetails(
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
   if (rawVae.length > 0) {
-    if (rawVae.includes('fp8')) {
+    if (rawVae.includes('fp8') || rawVae.includes('fp8mix') || rawVae.includes('fp8_mix')) {
       videoVae = 'FP8 Mixed Precision';
     } else if (rawVae.includes('original') || rawVae.includes('default') || rawVae.includes('wan2.1_vae') || rawVae.includes('wan 2.1 vae')) {
       videoVae = 'Original VAE';
@@ -321,7 +382,9 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
       height,
       renderSeconds: parsed.generation_time !== undefined ? Number(parsed.generation_time) : undefined,
       durationSeconds,
-      generatedAt: parsed.creation_timestamp !== undefined ? Number(parsed.creation_timestamp) * 1000 : undefined,
+      generatedAt: parsed.creation_timestamp !== undefined 
+        ? Number(parsed.creation_timestamp) * 1000 
+        : (parsed.creation_date ? new Date(parsed.creation_date).getTime() : undefined),
       loras,
       rawComment: commentRaw,
     };

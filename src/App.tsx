@@ -15,7 +15,7 @@ import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
 
@@ -145,10 +145,29 @@ export default function App() {
     }
   });
 
+  const [gridColumns, setGridColumns] = useState<2 | 3 | 4>(() => {
+    try {
+      const saved = localStorage.getItem('ai_vault_grid_columns');
+      if (saved === '2' || saved === '3' || saved === '4') {
+        return Number(saved) as 2 | 3 | 4;
+      }
+      return 3;
+    } catch {
+      return 3;
+    }
+  });
+
   const handleSetCatalogLayout = (layout: 'list' | 'grid') => {
     setCatalogLayout(layout);
     try {
       localStorage.setItem('ai_vault_catalog_layout', layout);
+    } catch {}
+  };
+
+  const handleSetGridColumns = (cols: 2 | 3 | 4) => {
+    setGridColumns(cols);
+    try {
+      localStorage.setItem('ai_vault_grid_columns', String(cols));
     } catch {}
   };
 
@@ -159,7 +178,7 @@ export default function App() {
   const [filterModel, setFilterModel] = useState<string>('Todos');
   const [filterModelSizeB, setFilterModelSizeB] = useState<string>('Todos');
   const [filterOrientation, setFilterOrientation] = useState<string>('Todas');
-  const [filterSource, setFilterSource] = useState<string>('Todos');
+  const [filterLocalTool, setFilterLocalTool] = useState<string>('Todos');
   const [filterResolution, setFilterResolution] = useState<string>('Todas');
   const [filterLora, setFilterLora] = useState<string>('Todos');
   const [filterVae, setFilterVae] = useState<string>('Todos');
@@ -175,7 +194,7 @@ export default function App() {
     if (filterModel !== 'Todos') count++;
     if (filterModelSizeB !== 'Todos') count++;
     if (filterOrientation !== 'Todas') count++;
-    if (filterSource !== 'Todos') count++;
+    if (filterLocalTool !== 'Todos') count++;
     if (filterResolution !== 'Todas') count++;
     if (filterLora !== 'Todos') count++;
     if (filterVae !== 'Todos') count++;
@@ -183,7 +202,7 @@ export default function App() {
     if (filterTags.length > 0) count += filterTags.length;
     if (groupByFolder) count++;
     return count;
-  }, [filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterSource, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
+  }, [filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
 
   const handleResetFilters = () => {
     setFilterGroup('Todas');
@@ -191,7 +210,7 @@ export default function App() {
     setFilterModel('Todos');
     setFilterModelSizeB('Todos');
     setFilterOrientation('Todas');
-    setFilterSource('Todos');
+    setFilterLocalTool('Todos');
     setFilterResolution('Todas');
     setFilterLora('Todos');
     setFilterVae('Todos');
@@ -289,9 +308,12 @@ export default function App() {
     }
   };
 
+  const [loginToast, setLoginToast] = useState(false);
+
   // Escuchar estado de autenticación
   useEffect(() => {
     if (auth) {
+      let initialChecked = false;
       const unsubscribe = onAuthStateChanged(auth, (user) => {
         setCurrentUser(user);
         if (user) {
@@ -300,9 +322,15 @@ export default function App() {
           if (!user.displayName) {
             setIsNickModalOpen(true);
           }
+          if (initialChecked) {
+            // Se acaba de loguear
+            setLoginToast(true);
+            setTimeout(() => setLoginToast(false), 3500);
+          }
         } else {
           setUserProfile(null);
         }
+        initialChecked = true;
         setAuthLoading(false);
       });
       return () => unsubscribe();
@@ -588,6 +616,12 @@ export default function App() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }, [videos]);
 
+  const uniqueLocalTools = useMemo(() => 
+    Array.from(new Set(videos.map(v => v.localTool).filter(Boolean) as string[]))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })),
+    [videos]
+  );
+
   const filteredVideos = useMemo(() => {
     return videos.filter(video => {
       // 1. Text Search
@@ -596,6 +630,7 @@ export default function App() {
         const matchesSearch = video.prompt.toLowerCase().includes(lower) ||
           video.model.toLowerCase().includes(lower) ||
           (video.modelSizeB !== undefined && `${video.modelSizeB}b`.includes(lower)) ||
+          (video.localTool && video.localTool.toLowerCase().includes(lower)) ||
           (video.tags && video.tags.some((t) => t.toLowerCase().includes(lower))) ||
           (video.loras && video.loras.some((l) => l.name.toLowerCase().includes(lower))) ||
           video.steps.toString().includes(lower) ||
@@ -638,8 +673,8 @@ export default function App() {
       // 5. Orientation
       if (filterOrientation !== 'Todas' && video.orientation !== filterOrientation) return false;
 
-      // 6. Source
-      if (filterSource !== 'Todos' && video.source !== filterSource.toLowerCase()) return false;
+      // 6. Herramienta (Wan2GP, ComfyUI, etc.)
+      if (filterLocalTool !== 'Todos' && video.localTool !== filterLocalTool) return false;
 
       // 7. Tags
       if (filterTags.length > 0) {
@@ -666,7 +701,7 @@ export default function App() {
 
       return true;
     });
-  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterSource, filterTags, filterResolution, filterLora, filterVae, filterEncoder]);
+  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterLocalTool, filterTags, filterResolution, filterLora, filterVae, filterEncoder]);
 
   const groupedVideos = useMemo(() => {
     if (!groupByFolder) return null;
@@ -1040,31 +1075,53 @@ export default function App() {
 
                 {/* Selector de modo de vista: Lista vs Cuadrícula */}
                 {view === 'detail' && (
-                  <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5" title="Cambiar disposición del catálogo">
-                    <button
-                      onClick={() => handleSetCatalogLayout('list')}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                        catalogLayout === 'list'
-                          ? 'bg-neutral-800 text-teal-300 shadow-sm'
-                          : 'text-neutral-500 hover:text-neutral-300'
-                      }`}
-                      title="Vista Lista / Detalle"
-                    >
-                      <LayoutList className="w-3.5 h-3.5" />
-                      <span className="hidden md:inline text-[11px]">Lista</span>
-                    </button>
-                    <button
-                      onClick={() => handleSetCatalogLayout('grid')}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                        catalogLayout === 'grid'
-                          ? 'bg-neutral-800 text-teal-300 shadow-sm'
-                          : 'text-neutral-500 hover:text-neutral-300'
-                      }`}
-                      title="Vista Cuadrícula / Mosaico"
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      <span className="hidden md:inline text-[11px]">Mosaico</span>
-                    </button>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5" title="Cambiar disposición del catálogo">
+                      <button
+                        onClick={() => handleSetCatalogLayout('list')}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                          catalogLayout === 'list'
+                            ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                            : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                        title="Vista Lista / Detalle"
+                      >
+                        <LayoutList className="w-3.5 h-3.5" />
+                        <span className="hidden md:inline text-[11px]">Lista</span>
+                      </button>
+                      <button
+                        onClick={() => handleSetCatalogLayout('grid')}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                          catalogLayout === 'grid'
+                            ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                            : 'text-neutral-500 hover:text-neutral-300'
+                        }`}
+                        title="Vista Cuadrícula / Mosaico"
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        <span className="hidden md:inline text-[11px]">Mosaico</span>
+                      </button>
+                    </div>
+
+                    {/* Selector de columnas en Mosaico */}
+                    {catalogLayout === 'grid' && (
+                      <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5 text-xs" title="Vídeos por fila">
+                        {([2, 3, 4] as const).map((cols) => (
+                          <button
+                            key={cols}
+                            onClick={() => handleSetGridColumns(cols)}
+                            className={`px-2 py-1 rounded-md text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                              gridColumns === cols
+                                ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+                                : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
+                            }`}
+                            title={`${cols} columnas por fila`}
+                          >
+                            {cols}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1213,20 +1270,17 @@ export default function App() {
                           ))}
                         </div>
 
-                        {/* Selector de Origen (Local/Cloud) */}
-                        <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
-                          {['Todos', 'Local', 'Cloud'].map(s => (
-                            <button 
-                              key={s} 
-                              onClick={() => setFilterSource(s)} 
-                              className={`px-3 py-1.5 text-[11px] font-medium transition-colors cursor-pointer ${
-                                filterSource === s ? 'bg-neutral-800 text-teal-300 font-semibold' : 'text-neutral-400 hover:text-neutral-200'
-                              }`}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </div>
+                        {/* Herramienta (Wan2GP, ComfyUI, etc.) */}
+                        {uniqueLocalTools.length > 0 && (
+                          <select 
+                            value={filterLocalTool} 
+                            onChange={e => setFilterLocalTool(e.target.value)} 
+                            className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500 cursor-pointer"
+                          >
+                            <option value="Todos">🔧 Herramienta (Todas)</option>
+                            {uniqueLocalTools.map(tool => <option key={tool} value={tool}>{tool}</option>)}
+                          </select>
+                        )}
                       </div>
                     </div>
 
@@ -1331,25 +1385,46 @@ export default function App() {
                 const isCollapsed = collapsedGroups[groupName];
                 return (
                   <div key={groupName} className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between bg-neutral-900/60 p-3 px-4 rounded-xl border border-neutral-800/80">
-                      <button onClick={() => toggleGroupCollapse(groupName)} className="flex items-center gap-3 text-left cursor-pointer">
-                        <span className="font-semibold text-neutral-200">{groupName}</span>
-                        <span className="text-xs font-medium bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full">{groupVideos.length}</span>
+                    <div className="flex items-center justify-between bg-neutral-900/80 backdrop-blur-md p-3.5 px-5 rounded-2xl border border-neutral-800/90 shadow-sm hover:border-neutral-700/80 transition-all">
+                      <button 
+                        onClick={() => toggleGroupCollapse(groupName)} 
+                        className="flex items-center gap-3 text-left cursor-pointer group"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:bg-teal-500/20 transition-all">
+                          {isCollapsed ? <Folder className="w-4 h-4" /> : <FolderOpen className="w-4 h-4 text-teal-300" />}
+                        </div>
+                        <div className="flex items-center gap-2.5">
+                          <span className="font-bold text-neutral-100 text-sm sm:text-base tracking-tight group-hover:text-teal-300 transition-colors">
+                            {groupName}
+                          </span>
+                          <span className="text-[11px] font-bold font-mono bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded-full">
+                            {groupVideos.length} {groupVideos.length === 1 ? 'vídeo' : 'vídeos'}
+                          </span>
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-neutral-500 group-hover:text-neutral-300 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`} />
                       </button>
                       <button 
                         onClick={() => {
                           setFilterGroup(groupName);
                           setView('compare');
                         }}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-neutral-800/90 hover:bg-teal-500/15 text-neutral-300 hover:text-teal-300 border border-neutral-700/70 hover:border-teal-500/40 transition-all cursor-pointer shadow-sm active:scale-95"
+                        title="Ver comparativa de esta carpeta"
                       >
-                        Comparar
+                        <Columns3 className="w-3.5 h-3.5 text-teal-400" />
+                        <span>Comparar carpeta</span>
                       </button>
                     </div>
                     {!isCollapsed && (
-                      <div className="pl-2 border-l-2 border-neutral-800/50">
+                      <div className="pl-3 sm:pl-4 border-l-2 border-teal-500/20">
                         {catalogLayout === 'grid' ? (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                          <div className={`grid gap-5 ${
+                            gridColumns === 2 
+                              ? 'grid-cols-1 sm:grid-cols-2' 
+                              : gridColumns === 4 
+                              ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                          }`}>
                             {groupVideos.map((video) => (
                               <VideoGridCard 
                                 key={video.id || video.videoUrl}
@@ -1393,7 +1468,13 @@ export default function App() {
               })}
             </div>
           ) : catalogLayout === 'grid' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-24">
+            <div className={`grid gap-5 pb-24 ${
+              gridColumns === 2 
+                ? 'grid-cols-1 sm:grid-cols-2' 
+                : gridColumns === 4 
+                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+            }`}>
               {filteredVideos.map((video) => (
                 <VideoGridCard 
                   key={video.id || video.videoUrl}
@@ -1433,93 +1514,132 @@ export default function App() {
         </main>
       </div>
 
-      {/* Floating Bottom Bulk Action Toolbar */}
-      {isAdmin && selectionMode && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-4xl w-[92%] sm:w-auto animate-in slide-in-from-bottom-5 duration-200">
-          <div className="bg-neutral-900/95 backdrop-blur-md border border-teal-500/40 px-4 py-3 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.6)] flex flex-wrap items-center justify-between sm:justify-start gap-3 text-sm">
-            {/* Contador de seleccionados */}
-            <div className="flex items-center gap-2 pr-2 border-r border-neutral-800">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-teal-400 animate-pulse" />
-              <span className="font-bold text-white text-xs sm:text-sm whitespace-nowrap">
-                {selectedVideoIds.size} {selectedVideoIds.size === 1 ? 'vídeo seleccionado' : 'vídeos seleccionados'}
-              </span>
+      {/* Floating Bottom Bulk Action Toolbar with Animated RGB Glow Border */}
+      <AnimatePresence>
+        {isAdmin && selectionMode && (
+          <motion.div 
+            initial={{ y: 50, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 50, opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 max-w-4xl w-[94%] sm:w-auto"
+          >
+            {/* RGB Glow Animated Outer Wrapper */}
+            <div className="relative p-[2px] rounded-2xl animate-rgb-glow shadow-[0_0_30px_rgba(20,184,166,0.35)]">
+              <div className="bg-neutral-950/95 backdrop-blur-xl px-4 py-3 rounded-[14px] flex flex-wrap items-center justify-between sm:justify-start gap-3 text-sm">
+                
+                {/* Badge de estado y contador de seleccionados */}
+                <div className="flex items-center gap-2.5 pr-2.5 sm:border-r sm:border-neutral-800">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-teal-500"></span>
+                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-400">Modo Selección</span>
+                    <span className="font-extrabold text-white text-xs sm:text-sm whitespace-nowrap">
+                      {selectedVideoIds.size} {selectedVideoIds.size === 1 ? 'vídeo marcado' : 'vídeos marcados'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Acciones de selección rápida */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => {
+                      if (selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0) {
+                        setSelectedVideoIds(new Set());
+                      } else {
+                        setSelectedVideoIds(new Set(filteredVideos.map(v => v.id!).filter(Boolean)));
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white rounded-xl text-xs font-semibold transition-all border border-neutral-750 cursor-pointer active:scale-95 shadow-sm"
+                  >
+                    {selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}
+                  </button>
+
+                  {filteredVideos.some(v => !isVideoOwner(v)) && filteredVideos.some(isVideoOwner) && (
+                    <button
+                      onClick={() => {
+                        const myIds = filteredVideos.filter(isVideoOwner).map(v => v.id!).filter(Boolean);
+                        setSelectedVideoIds(new Set(myIds));
+                      }}
+                      className="px-3 py-1.5 bg-teal-950/70 hover:bg-teal-900/80 text-teal-300 border border-teal-800/70 rounded-xl text-xs font-semibold transition-all cursor-pointer active:scale-95 shadow-sm"
+                      title="Seleccionar solo los vídeos que puedes borrar o editar"
+                    >
+                      Mis vídeos ({filteredVideos.filter(isVideoOwner).length})
+                    </button>
+                  )}
+                </div>
+
+                {/* Separador */}
+                <div className="hidden sm:block h-6 w-px bg-neutral-800" />
+
+                {/* Acciones con los elementos seleccionados */}
+                <div className="flex items-center gap-2 flex-wrap ml-auto sm:ml-0">
+                  {selectedVideoIds.size === 2 && (
+                    <button
+                      onClick={() => {
+                        const selected = Array.from(selectedVideoIds).map(id => videos.find(v => v.id === id)).filter(Boolean) as VideoRecord[];
+                        if (selected.length === 2) {
+                          setDualComparePair({ videoA: selected[0], videoB: selected[1] });
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-teal-400 via-teal-500 to-emerald-400 hover:from-teal-300 hover:to-emerald-300 text-neutral-950 font-extrabold rounded-xl text-xs transition-all shadow-[0_0_15px_rgba(20,184,166,0.4)] hover:scale-105 active:scale-95 cursor-pointer"
+                      title="Comparar los 2 vídeos seleccionados a pantalla completa"
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5 text-neutral-950 stroke-[2.5]" />
+                      <span>Comparar 1 vs 1</span>
+                    </button>
+                  )}
+
+                  {selectedVideoIds.size > 0 && (
+                    <button
+                      onClick={() => setVideosToDelete(Array.from(selectedVideoIds))}
+                      className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-rose-100 border border-rose-800/80 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer active:scale-95"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Eliminar ({selectedVideoIds.size})</span>
+                    </button>
+                  )}
+
+                  {/* Botón cerrar/salir modo selección */}
+                  <button
+                    onClick={() => {
+                      setSelectionMode(false);
+                      setSelectedVideoIds(new Set());
+                    }}
+                    className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer"
+                    title="Salir del modo selección"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-            {/* Acciones de selección rápida */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <button
-                onClick={() => {
-                  if (selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0) {
-                    setSelectedVideoIds(new Set());
-                  } else {
-                    setSelectedVideoIds(new Set(filteredVideos.map(v => v.id!).filter(Boolean)));
-                  }
-                }}
-                className="px-3 py-1.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 hover:text-white rounded-lg text-xs font-medium transition-colors border border-neutral-700/60"
-              >
-                {selectedVideoIds.size === filteredVideos.length && filteredVideos.length > 0 ? 'Desmarcar todos' : 'Marcar todos'}
-              </button>
-
-              {filteredVideos.some(v => !isVideoOwner(v)) && filteredVideos.some(isVideoOwner) && (
-                <button
-                  onClick={() => {
-                    const myIds = filteredVideos.filter(isVideoOwner).map(v => v.id!).filter(Boolean);
-                    setSelectedVideoIds(new Set(myIds));
-                  }}
-                  className="px-3 py-1.5 bg-teal-950/60 hover:bg-teal-900/60 text-teal-300 border border-teal-800/60 rounded-lg text-xs font-medium transition-colors"
-                  title="Seleccionar solo los vídeos que puedes borrar o editar"
-                >
-                  Marcar mis vídeos ({filteredVideos.filter(isVideoOwner).length})
-                </button>
-              )}
+      {/* Toast Notificación: Sesión iniciada */}
+      <AnimatePresence>
+        {loginToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
+            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 bg-neutral-900/95 border border-teal-500/50 rounded-2xl shadow-[0_10px_30px_rgba(20,184,166,0.3)] backdrop-blur-xl text-white"
+          >
+            <div className="w-8 h-8 rounded-xl bg-teal-500/20 flex items-center justify-center text-teal-400">
+              <CheckCircle2 className="w-5 h-5" />
             </div>
-
-            {/* Separador */}
-            <div className="hidden sm:block h-5 w-px bg-neutral-800" />
-
-            {/* Acciones con los elementos seleccionados */}
-            <div className="flex items-center gap-2 flex-wrap ml-auto sm:ml-0">
-              {selectedVideoIds.size === 2 && (
-                <button
-                  onClick={() => {
-                    const selected = Array.from(selectedVideoIds).map(id => videos.find(v => v.id === id)).filter(Boolean) as VideoRecord[];
-                    if (selected.length === 2) {
-                      setDualComparePair({ videoA: selected[0], videoB: selected[1] });
-                    }
-                  }}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-teal-500 to-blue-600 hover:from-teal-400 hover:to-blue-500 text-neutral-950 font-bold rounded-lg text-xs transition-all shadow-md hover:scale-105 active:scale-95"
-                  title="Comparar los 2 vídeos seleccionados a pantalla completa"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Comparar 1 vs 1</span>
-                </button>
-              )}
-
-              {selectedVideoIds.size > 0 && (
-                <button
-                  onClick={() => setVideosToDelete(Array.from(selectedVideoIds))}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-950/60 hover:bg-rose-900/80 text-rose-300 hover:text-rose-100 border border-rose-800/80 rounded-lg text-xs font-semibold transition-all shadow-sm"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Eliminar ({selectedVideoIds.size})</span>
-                </button>
-              )}
-
-              {/* Botón cerrar/salir modo selección */}
-              <button
-                onClick={() => {
-                  setSelectionMode(false);
-                  setSelectedVideoIds(new Set());
-                }}
-                className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
-                title="Salir del modo selección"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            <div>
+              <p className="text-xs font-black text-teal-400 tracking-wider uppercase">Inición sesiada</p>
+              <p className="text-[11px] text-neutral-300">Bienvenido al sistema</p>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Pie de Página */}
       <footer className="border-t border-neutral-800/80 bg-neutral-950/90 py-6 px-6 text-xs text-neutral-500">

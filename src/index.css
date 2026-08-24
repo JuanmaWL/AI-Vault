@@ -1,1 +1,19 @@
 @import "tailwindcss";
+
+@keyframes rgbGlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-rgb-glow {
+  background: linear-gradient(90deg, #14b8a6, #3b82f6, #8b5cf6, #ec4899, #14b8a6);
+  background-size: 300% 300%;
+  animation: rgbGlow 4s linear infinite;
+}

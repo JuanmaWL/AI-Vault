@@ -124,13 +124,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-teal-500 text-neutral-950 hover:bg-teal-400 font-bold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-md shadow-teal-900/20 disabled:opacity-50"
+          className="w-full bg-gradient-to-r from-teal-400 via-teal-500 to-emerald-400 hover:from-teal-300 hover:via-teal-400 hover:to-emerald-300 text-neutral-950 font-extrabold py-2.5 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(20,184,166,0.35)] hover:shadow-[0_0_25px_rgba(20,184,166,0.55)] active:scale-[0.99] disabled:opacity-50 cursor-pointer"
         >
           {loading ? (
             <div className="w-4 h-4 border-2 border-neutral-950 border-t-transparent rounded-full animate-spin" />
           ) : (
             <>
-              <LogIn className="w-4 h-4" /> Entrar al sistema
+              <LogIn className="w-4 h-4 text-neutral-950 stroke-[2.5]" /> 
+              <span className="tracking-wide">Entrar al sistema</span>
             </>
           )}
         </button>
