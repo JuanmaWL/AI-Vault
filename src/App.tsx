@@ -4,6 +4,7 @@ import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateD
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { VideoRecord, UserProfile, UserHardware } from './types';
 import { VideoCard } from './components/VideoCard';
+import { VideoGridCard } from './components/VideoGridCard';
 import { CompareView } from './components/CompareView';
 import { DashboardView } from './components/DashboardView';
 import { AddVideoModal } from './components/AddVideoModal';
@@ -14,7 +15,7 @@ import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
 
@@ -134,6 +135,22 @@ export default function App() {
 
   // View state
   const [view, setView] = useState<'detail' | 'compare' | 'dashboard'>('detail');
+
+  // Layout mode for catalog: list (full detail card) vs grid (mosaico/cuadrícula)
+  const [catalogLayout, setCatalogLayout] = useState<'list' | 'grid'>(() => {
+    try {
+      return (localStorage.getItem('ai_vault_catalog_layout') as 'list' | 'grid') || 'list';
+    } catch {
+      return 'list';
+    }
+  });
+
+  const handleSetCatalogLayout = (layout: 'list' | 'grid') => {
+    setCatalogLayout(layout);
+    try {
+      localStorage.setItem('ai_vault_catalog_layout', layout);
+    } catch {}
+  };
 
   // Filters state
   const [showFilters, setShowFilters] = useState<boolean>(false);
@@ -1021,6 +1038,36 @@ export default function App() {
                   <span>Agrupar por carpeta</span>
                 </label>
 
+                {/* Selector de modo de vista: Lista vs Cuadrícula */}
+                {view === 'detail' && (
+                  <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5" title="Cambiar disposición del catálogo">
+                    <button
+                      onClick={() => handleSetCatalogLayout('list')}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                        catalogLayout === 'list'
+                          ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                          : 'text-neutral-500 hover:text-neutral-300'
+                      }`}
+                      title="Vista Lista / Detalle"
+                    >
+                      <LayoutList className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline text-[11px]">Lista</span>
+                    </button>
+                    <button
+                      onClick={() => handleSetCatalogLayout('grid')}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                        catalogLayout === 'grid'
+                          ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                          : 'text-neutral-500 hover:text-neutral-300'
+                      }`}
+                      title="Vista Cuadrícula / Mosaico"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      <span className="hidden md:inline text-[11px]">Mosaico</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Botón de Gestión por Lote (Solo Admin) */}
                 {isAdmin && view === 'detail' && (
                   <>
@@ -1285,7 +1332,7 @@ export default function App() {
                 return (
                   <div key={groupName} className="flex flex-col gap-4">
                     <div className="flex items-center justify-between bg-neutral-900/60 p-3 px-4 rounded-xl border border-neutral-800/80">
-                      <button onClick={() => toggleGroupCollapse(groupName)} className="flex items-center gap-3 text-left">
+                      <button onClick={() => toggleGroupCollapse(groupName)} className="flex items-center gap-3 text-left cursor-pointer">
                         <span className="font-semibold text-neutral-200">{groupName}</span>
                         <span className="text-xs font-medium bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full">{groupVideos.length}</span>
                       </button>
@@ -1294,34 +1341,74 @@ export default function App() {
                           setFilterGroup(groupName);
                           setView('compare');
                         }}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors"
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-neutral-800 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors cursor-pointer"
                       >
                         Comparar
                       </button>
                     </div>
                     {!isCollapsed && (
-                      <div className="flex flex-col gap-6 pl-2 border-l-2 border-neutral-800/50">
-                        {groupVideos.map((video) => (
-                          <div key={video.id || video.videoUrl}>
-                            <VideoCard 
-                              video={video} 
-                              selectionMode={selectionMode}
-                              isSelected={selectedVideoIds.has(video.id!)}
-                              onToggleSelect={() => toggleSelection(video.id!)}
-                              onCompareClick={() => handleOpenDualCompare(video)}
-                              onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                              onEditClick={isVideoOwner(video) && !selectionMode ? () => {
-                                setEditingVideo(video);
-                                setIsModalOpen(true);
-                              } : undefined}
-                            />
+                      <div className="pl-2 border-l-2 border-neutral-800/50">
+                        {catalogLayout === 'grid' ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                            {groupVideos.map((video) => (
+                              <VideoGridCard 
+                                key={video.id || video.videoUrl}
+                                video={video} 
+                                selectionMode={selectionMode}
+                                isSelected={selectedVideoIds.has(video.id!)}
+                                onToggleSelect={() => toggleSelection(video.id!)}
+                                onCompareClick={() => handleOpenDualCompare(video)}
+                                onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                                onEditClick={isVideoOwner(video) && !selectionMode ? () => {
+                                  setEditingVideo(video);
+                                  setIsModalOpen(true);
+                                } : undefined}
+                              />
+                            ))}
                           </div>
-                        ))}
+                        ) : (
+                          <div className="flex flex-col gap-6">
+                            {groupVideos.map((video) => (
+                              <div key={video.id || video.videoUrl}>
+                                <VideoCard 
+                                  video={video} 
+                                  selectionMode={selectionMode}
+                                  isSelected={selectedVideoIds.has(video.id!)}
+                                  onToggleSelect={() => toggleSelection(video.id!)}
+                                  onCompareClick={() => handleOpenDualCompare(video)}
+                                  onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                                  onEditClick={isVideoOwner(video) && !selectionMode ? () => {
+                                    setEditingVideo(video);
+                                    setIsModalOpen(true);
+                                  } : undefined}
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })}
+            </div>
+          ) : catalogLayout === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-24">
+              {filteredVideos.map((video) => (
+                <VideoGridCard 
+                  key={video.id || video.videoUrl}
+                  video={video} 
+                  selectionMode={selectionMode}
+                  isSelected={selectedVideoIds.has(video.id!)}
+                  onToggleSelect={() => toggleSelection(video.id!)}
+                  onCompareClick={() => handleOpenDualCompare(video)}
+                  onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                  onEditClick={isVideoOwner(video) && !selectionMode ? () => {
+                    setEditingVideo(video);
+                    setIsModalOpen(true);
+                  } : undefined}
+                />
+              ))}
             </div>
           ) : (
             <div className="flex flex-col gap-6 pb-24">
