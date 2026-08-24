@@ -573,8 +573,8 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               />
             </div>
 
-            {/* Modelo, Variante y Origen (Local vs Cloud) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Modelo, Parámetros (B), Variante y Origen (Local vs Cloud) */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
                   Modelo AI <span className="text-teal-400">*</span>
@@ -594,6 +594,21 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                     <option key={m} value={m} />
                   ))}
                 </datalist>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-teal-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>Parámetros (B)</span>
+                </label>
+                <input 
+                  type="number" 
+                  step="1"
+                  value={modelSizeB ?? ''}
+                  onChange={e => setModelSizeB(e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="Ej: 20, 33..."
+                  className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all font-mono"
+                  title="Tamaño del modelo en billones de parámetros (ej: 20 para 20B, 33 para 33B)"
+                />
               </div>
 
               <div className="space-y-2">

@@ -14,7 +14,8 @@ import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
 import { extractDriveFileId, calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check } from 'lucide-react';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
 
 const COLLECTION_NAME = 'videos';
@@ -135,19 +136,52 @@ export default function App() {
   const [view, setView] = useState<'detail' | 'compare' | 'dashboard'>('detail');
 
   // Filters state
+  const [showFilters, setShowFilters] = useState<boolean>(false);
   const [filterGroup, setFilterGroup] = useState<string>('Todas');
   const [filterUser, setFilterUser] = useState<string>('Todos');
   const [filterModel, setFilterModel] = useState<string>('Todos');
+  const [filterModelSizeB, setFilterModelSizeB] = useState<string>('Todos');
   const [filterOrientation, setFilterOrientation] = useState<string>('Todas');
   const [filterSource, setFilterSource] = useState<string>('Todos');
   const [filterResolution, setFilterResolution] = useState<string>('Todas');
   const [filterLora, setFilterLora] = useState<string>('Todos');
-  const [filterPrecision, setFilterPrecision] = useState<string>('Todas');
   const [filterVae, setFilterVae] = useState<string>('Todos');
   const [filterEncoder, setFilterEncoder] = useState<string>('Todos');
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [groupByFolder, setGroupByFolder] = useState<boolean>(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (filterGroup !== 'Todas') count++;
+    if (filterUser !== 'Todos') count++;
+    if (filterModel !== 'Todos') count++;
+    if (filterModelSizeB !== 'Todos') count++;
+    if (filterOrientation !== 'Todas') count++;
+    if (filterSource !== 'Todos') count++;
+    if (filterResolution !== 'Todas') count++;
+    if (filterLora !== 'Todos') count++;
+    if (filterVae !== 'Todos') count++;
+    if (filterEncoder !== 'Todos') count++;
+    if (filterTags.length > 0) count += filterTags.length;
+    if (groupByFolder) count++;
+    return count;
+  }, [filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterSource, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
+
+  const handleResetFilters = () => {
+    setFilterGroup('Todas');
+    setFilterUser('Todos');
+    setFilterModel('Todos');
+    setFilterModelSizeB('Todos');
+    setFilterOrientation('Todas');
+    setFilterSource('Todos');
+    setFilterResolution('Todas');
+    setFilterLora('Todos');
+    setFilterVae('Todos');
+    setFilterEncoder('Todos');
+    setFilterTags([]);
+    setGroupByFolder(false);
+  };
 
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
@@ -468,8 +502,9 @@ export default function App() {
   // Extract unique values for filters and category selectors
   const uniqueGroups = useMemo(() => {
     const fromVideos = videos.map(v => v.groupName).filter(Boolean) as string[];
-    return Array.from(new Set([...fromVideos, ...customCategories])).sort();
+    return Array.from(new Set([...fromVideos, ...customCategories])).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }, [videos, customCategories]);
+
   const userOptions = useMemo(() => {
     const map = new Map<string, string>();
     videos.forEach(v => {
@@ -478,15 +513,63 @@ export default function App() {
         map.set(v.createdBy, label);
       }
     });
-    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+    return Array.from(map.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
   }, [videos]);
-  const uniqueModels = useMemo(() => Array.from(new Set(videos.map(v => v.model).filter(Boolean) as string[])).sort(), [videos]);
-  const uniqueTags = useMemo(() => Array.from(new Set(videos.flatMap(v => v.tags || []))).sort(), [videos]);
-  const uniqueResolutions = useMemo(() => Array.from(new Set(videos.map(v => `${v.width}x${v.height}`))).sort(), [videos]);
-  const uniqueLoras = useMemo(() => Array.from(new Set(videos.flatMap(v => v.loras?.map(l => l.name) || []))).sort(), [videos]);
-  const uniqueVaes = useMemo(() => Array.from(new Set(videos.map(v => v.videoVae).filter(Boolean) as string[])).sort(), [videos]);
-  const uniqueEncoders = useMemo(() => Array.from(new Set(videos.map(v => v.textEncoder).filter(Boolean) as string[])).sort(), [videos]);
-  const uniquePrecisions = useMemo(() => Array.from(new Set(videos.map(v => v.precision).filter(Boolean) as string[])).sort(), [videos]);
+
+  const uniqueModels = useMemo(() => 
+    Array.from(new Set(videos.map(v => v.model).filter(Boolean) as string[]))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })), 
+    [videos]
+  );
+
+  const uniqueModelSizes = useMemo(() => {
+    const rawSizes = videos
+      .map(v => v.modelSizeB)
+      .filter((s): s is number => typeof s === 'number');
+    const unique = Array.from(new Set(rawSizes)).sort((a, b) => a - b);
+    return unique;
+  }, [videos]);
+
+  const uniqueTags = useMemo(() => 
+    Array.from(new Set(videos.flatMap(v => v.tags || [])))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })), 
+    [videos]
+  );
+
+  const uniqueResolutions = useMemo(() => {
+    const rawResolutions = Array.from(new Set(videos.map(v => `${v.width}x${v.height}`)));
+    return rawResolutions.sort((a, b) => {
+      const [wA, hA] = a.split('x').map(Number);
+      const [wB, hB] = b.split('x').map(Number);
+      const areaA = (wA || 0) * (hA || 0);
+      const areaB = (wB || 0) * (hB || 0);
+      if (areaA !== areaB) return areaA - areaB;
+      return (wA || 0) - (wB || 0);
+    });
+  }, [videos]);
+
+  const uniqueLoras = useMemo(() => 
+    Array.from(new Set(videos.flatMap(v => v.loras?.map(l => l.name) || [])))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })), 
+    [videos]
+  );
+
+  const uniqueVaes = useMemo(() => 
+    Array.from(new Set(videos.map(v => v.videoVae).filter(Boolean) as string[]))
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })), 
+    [videos]
+  );
+
+  const uniqueEncoders = useMemo(() => {
+    const set = new Set<string>();
+    videos.forEach(v => {
+      if (v.textEncoder && v.textEncoder !== 'Not Found') set.add(v.textEncoder);
+      if (v.precision) set.add(v.precision);
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [videos]);
 
   const filteredVideos = useMemo(() => {
     return videos.filter(video => {
@@ -495,6 +578,7 @@ export default function App() {
         const lower = searchTerm.toLowerCase();
         const matchesSearch = video.prompt.toLowerCase().includes(lower) ||
           video.model.toLowerCase().includes(lower) ||
+          (video.modelSizeB !== undefined && `${video.modelSizeB}b`.includes(lower)) ||
           (video.tags && video.tags.some((t) => t.toLowerCase().includes(lower))) ||
           (video.loras && video.loras.some((l) => l.name.toLowerCase().includes(lower))) ||
           video.steps.toString().includes(lower) ||
@@ -524,6 +608,16 @@ export default function App() {
       // 4. Model
       if (filterModel !== 'Todos' && video.model !== filterModel) return false;
 
+      // 4.1 Model Size (Parámetros: 20B, 33B, etc.)
+      if (filterModelSizeB !== 'Todos') {
+        if (filterModelSizeB === 'Sin especificar') {
+          if (video.modelSizeB !== undefined) return false;
+        } else {
+          const targetSize = Number(filterModelSizeB);
+          if (video.modelSizeB !== targetSize) return false;
+        }
+      }
+
       // 5. Orientation
       if (filterOrientation !== 'Todas' && video.orientation !== filterOrientation) return false;
 
@@ -543,18 +637,19 @@ export default function App() {
         if (!video.loras || !video.loras.some(l => l.name === filterLora)) return false;
       }
 
-      // 10. VAE
+      // 10. Video VAE (Técnico)
       if (filterVae !== 'Todos' && video.videoVae !== filterVae) return false;
 
-      // 11. Encoder
-      if (filterEncoder !== 'Todos' && video.textEncoder !== filterEncoder) return false;
-
-      // 12. Precision
-      if (filterPrecision !== 'Todas' && video.precision !== filterPrecision) return false;
+      // 11. Text Encoder & Precisión (Técnico: Qwen3-VL INT8/FP8/BF16/GGUF...)
+      if (filterEncoder !== 'Todos') {
+        const matchEncoder = video.textEncoder === filterEncoder;
+        const matchPrecision = video.precision === filterEncoder;
+        if (!matchEncoder && !matchPrecision) return false;
+      }
 
       return true;
     });
-  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterOrientation, filterSource, filterTags, filterResolution, filterLora, filterVae, filterEncoder, filterPrecision]);
+  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterSource, filterTags, filterResolution, filterLora, filterVae, filterEncoder]);
 
   const groupedVideos = useMemo(() => {
     if (!groupByFolder) return null;
@@ -758,33 +853,6 @@ export default function App() {
 
               {/* Botones de acción principales */}
               <div className="flex items-center gap-2">
-                {isAdmin && (
-                  <button
-                    onClick={() => {
-                      if (selectionMode) {
-                        setSelectionMode(false);
-                        setSelectedVideoIds(new Set());
-                      } else {
-                        setSelectionMode(true);
-                      }
-                    }}
-                    className={`flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold transition-all border ${
-                       selectionMode 
-                        ? 'bg-teal-950/70 text-teal-300 border-teal-600 shadow-md shadow-teal-950/40' 
-                        : 'bg-neutral-900 border-neutral-800 hover:border-neutral-700 hover:bg-neutral-850 text-neutral-300'
-                    }`}
-                    title="Activar/desactivar modo de selección para borrar o comparar"
-                  >
-                    <CheckSquare className="w-3.5 h-3.5 text-teal-400" />
-                    <span>{selectionMode ? 'Seleccionando...' : 'Seleccionar'}</span>
-                    {selectedVideoIds.size > 0 && (
-                      <span className="ml-1 px-1.5 py-0.5 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
-                        {selectedVideoIds.size}
-                      </span>
-                    )}
-                  </button>
-                )}
-
                 {isAdmin ? (
                   <>
                     <button
@@ -800,7 +868,7 @@ export default function App() {
                         setEditingVideo(undefined);
                         setIsModalOpen(true);
                       }}
-                      className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 px-3 py-2 rounded-full text-xs sm:text-sm font-medium transition-all"
+                      className="flex items-center gap-1.5 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-800 hover:border-neutral-700 px-3.5 py-2 rounded-full text-xs sm:text-sm font-medium transition-all"
                       title="Crear registro individual de vídeo manualmente"
                     >
                       <Plus className="w-4 h-4" /> <span className="hidden md:inline">Nuevo Registro</span>
@@ -827,34 +895,77 @@ export default function App() {
         {/* Sub-navegación para vistas */}
         <div className="border-b border-neutral-900 bg-neutral-950/50">
           <div className="max-w-[1600px] mx-auto px-6">
-            <div className="flex items-center gap-1 py-3 overflow-x-auto no-scrollbar">
-              <button 
-                onClick={() => setView('detail')} 
-                className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${view === 'detail' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50'}`}
-              >
-                Vista Detallada
-              </button>
-              <button 
-                onClick={() => setView('compare')} 
-                className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${view === 'compare' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50'}`}
-              >
-                Comparativa Visual
-              </button>
-              <button 
-                onClick={() => setView('dashboard')} 
-                className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${view === 'dashboard' ? 'bg-neutral-800 text-teal-400 shadow-sm' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900/50'}`}
-              >
-                Métricas y Rendimiento
-              </button>
-              {videos.length >= 2 && (
+            <div className="flex items-center justify-between gap-4 py-2.5 overflow-x-auto no-scrollbar">
+              {/* Segmented Control de Vistas */}
+              <div className="flex items-center bg-neutral-900/90 border border-neutral-800 p-1 rounded-full shadow-inner">
                 <button 
-                  onClick={() => handleOpenDualCompare(videos[0], videos[1])} 
-                  className="px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 flex items-center gap-1.5 ml-auto shadow-sm"
-                  title="Abrir comparativa 1 vs 1 a pantalla completa (permite elegir cualquier vídeo del catálogo)"
+                  onClick={() => setView('detail')} 
+                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'detail' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                  title="Vista Detallada del Catálogo"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Comparativa 1 vs 1</span>
+                  {view === 'detail' && (
+                    <motion.div
+                      layoutId="activeViewTab"
+                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/80 rounded-full shadow-sm"
+                      transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                    />
+                  )}
+                  <LayoutList className="w-4 h-4 relative z-10 shrink-0" />
+                  <span className="relative z-10 hidden sm:inline">Catálogo</span>
                 </button>
+
+                <button 
+                  onClick={() => setView('compare')} 
+                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'compare' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                  title="Comparativa Visual Cuadrícula"
+                >
+                  {view === 'compare' && (
+                    <motion.div
+                      layoutId="activeViewTab"
+                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/80 rounded-full shadow-sm"
+                      transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                    />
+                  )}
+                  <Columns3 className="w-4 h-4 relative z-10 shrink-0" />
+                  <span className="relative z-10 hidden sm:inline">Comparar</span>
+                </button>
+
+                <button 
+                  onClick={() => setView('dashboard')} 
+                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'dashboard' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                  title="Métricas y Rendimiento"
+                >
+                  {view === 'dashboard' && (
+                    <motion.div
+                      layoutId="activeViewTab"
+                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/80 rounded-full shadow-sm"
+                      transition={{ type: 'spring', stiffness: 450, damping: 35 }}
+                    />
+                  )}
+                  <BarChart3 className="w-4 h-4 relative z-10 shrink-0" />
+                  <span className="relative z-10 hidden sm:inline">Métricas</span>
+                </button>
+              </div>
+
+              {/* Acción rápida separada: Comparativa 1 vs 1 */}
+              {videos.length >= 2 && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="hidden md:block h-5 w-px bg-neutral-850" />
+                  <button 
+                    onClick={() => handleOpenDualCompare(videos[0], videos[1])} 
+                    className="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 hover:border-teal-400/50 flex items-center gap-1.5 shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    title="Abrir comparativa 1 vs 1 a pantalla completa (permite elegir cualquier vídeo del catálogo)"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                    <span>Comparativa 1 vs 1</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -863,103 +974,283 @@ export default function App() {
         {/* Main Content */}
         <main className="max-w-[1600px] mx-auto px-6 py-8">
           
-          {/* Barra de Filtros */}
-          <div className="mb-6 p-4 bg-neutral-900/40 rounded-xl border border-neutral-800/80 flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <span className="text-sm font-medium text-neutral-400">
-                Mostrando <strong className="text-neutral-200">{filteredVideos.length}</strong> de {videos.length} vídeos
-              </span>
-              <label className="flex items-center gap-2 text-sm text-neutral-300 cursor-pointer select-none">
-                <input 
-                  type="checkbox" 
-                  checked={groupByFolder} 
-                  onChange={e => setGroupByFolder(e.target.checked)}
-                  className="rounded border-neutral-700 bg-neutral-900 text-teal-500 focus:ring-teal-500/20 w-4 h-4"
-                />
-                Agrupar por carpeta
-              </label>
-            </div>
+          {/* Barra de Controles y Filtros */}
+          <div className="mb-6 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 overflow-hidden shadow-sm backdrop-blur-sm">
+            {/* Barra superior de controles */}
+            <div className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3">
+                {/* Botón para desplegar filtros */}
+                <button
+                  onClick={() => setShowFilters(prev => !prev)}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
+                    showFilters || activeFiltersCount > 0
+                      ? 'bg-neutral-800 text-teal-300 border-neutral-700 shadow-sm'
+                      : 'bg-neutral-950/70 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
+                  }`}
+                  title={showFilters ? 'Ocultar panel de filtros' : 'Desplegar panel de filtros'}
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                  <span>Filtros</span>
+                  {activeFiltersCount > 0 && (
+                    <span className="px-1.5 py-0.2 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full ml-0.5">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                  {showFilters ? (
+                    <ChevronUp className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
+                  )}
+                </button>
 
-            <div className="flex flex-wrap gap-3 items-center">
-              <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
-                <option value="Todas">Todas las carpetas</option>
-                {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
-                <option value="Sin carpeta">Sin carpeta</option>
-              </select>
-
-              <select value={filterUser} onChange={e => setFilterUser(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
-                <option value="Todos">Todos los usuarios</option>
-                {userOptions.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
-                <option value="Anónimo">Anónimo</option>
-              </select>
-
-              <select value={filterModel} onChange={e => setFilterModel(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
-                <option value="Todos">Todos los modelos</option>
-                {uniqueModels.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-
-              {uniqueVaes.length > 0 && (
-                <select value={filterVae} onChange={e => setFilterVae(e.target.value)} className="bg-neutral-950 border border-purple-900/50 rounded-lg px-3 py-1.5 text-xs text-purple-300 focus:outline-none focus:border-purple-500">
-                  <option value="Todos">VAE (Todos)</option>
-                  {uniqueVaes.map(v => <option key={v} value={v}>{v}</option>)}
-                </select>
-              )}
-
-              {uniqueEncoders.length > 0 && (
-                <select value={filterEncoder} onChange={e => setFilterEncoder(e.target.value)} className="bg-neutral-950 border border-blue-900/50 rounded-lg px-3 py-1.5 text-xs text-blue-300 focus:outline-none focus:border-blue-500">
-                  <option value="Todos">Encoder (Todos)</option>
-                  {uniqueEncoders.map(enc => <option key={enc} value={enc}>{enc}</option>)}
-                </select>
-              )}
-
-              {uniquePrecisions.length > 0 && (
-                <select value={filterPrecision} onChange={e => setFilterPrecision(e.target.value)} className="bg-neutral-950 border border-amber-900/50 rounded-lg px-3 py-1.5 text-xs text-amber-300 focus:outline-none focus:border-amber-500">
-                  <option value="Todas">Precisión (Todas)</option>
-                  {uniquePrecisions.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              )}
-
-              <select value={filterResolution} onChange={e => setFilterResolution(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
-                <option value="Todas">Resolución (Todas)</option>
-                {uniqueResolutions.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-              <select value={filterLora} onChange={e => setFilterLora(e.target.value)} className="bg-neutral-950 border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500">
-                <option value="Todos">LoRAs (Todos)</option>
-                {uniqueLoras.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-
-              <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden">
-                {['Todas', '16:9', '9:16', '1:1'].map(o => (
-                  <button key={o} onClick={() => setFilterOrientation(o)} className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${filterOrientation === o ? 'bg-neutral-800 text-neutral-100' : 'text-neutral-500 hover:text-neutral-300'}`}>{o}</button>
-                ))}
+                {/* Contador de resultados */}
+                <span className="text-xs sm:text-sm text-neutral-400">
+                  Mostrando <strong className="text-neutral-200">{filteredVideos.length}</strong> de {videos.length} vídeos
+                </span>
               </div>
 
-              <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg overflow-hidden">
-                {['Todos', 'Local', 'Cloud'].map(s => (
-                  <button key={s} onClick={() => setFilterSource(s)} className={`px-3 py-1.5 text-[11px] font-medium transition-colors ${filterSource === s ? 'bg-neutral-800 text-neutral-100' : 'text-neutral-500 hover:text-neutral-300'}`}>{s}</button>
-                ))}
-              </div>
-            </div>
+              {/* Controles de la derecha: Agrupar por carpeta y Gestión por lote */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                <label className="flex items-center gap-2 text-xs sm:text-sm text-neutral-300 hover:text-white cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={groupByFolder} 
+                    onChange={e => setGroupByFolder(e.target.checked)}
+                    className="rounded border-neutral-700 bg-neutral-950 text-teal-500 focus:ring-teal-500/20 w-3.5 h-3.5 cursor-pointer"
+                  />
+                  <span>Agrupar por carpeta</span>
+                </label>
 
-            {uniqueTags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <span className="text-[11px] text-neutral-500 uppercase tracking-wider mr-2">Tags:</span>
-                {uniqueTags.map(tag => {
-                  const isActive = filterTags.includes(tag);
-                  return (
-                    <button 
-                      key={tag}
+                {/* Botón de Gestión por Lote (Solo Admin) */}
+                {isAdmin && view === 'detail' && (
+                  <>
+                    <div className="h-4 w-px bg-neutral-800 hidden sm:block" />
+                    <button
                       onClick={() => {
-                        setFilterTags(prev => isActive ? prev.filter(t => t !== tag) : [...prev, tag]);
+                        if (selectionMode) {
+                          setSelectionMode(false);
+                          setSelectedVideoIds(new Set());
+                        } else {
+                          setSelectionMode(true);
+                        }
                       }}
-                      className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors border ${isActive ? 'bg-teal-950/60 border-teal-800 text-teal-300' : 'bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-neutral-300'}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
+                        selectionMode 
+                          ? 'bg-teal-950/80 text-teal-300 border-teal-500/60 shadow-sm' 
+                          : 'bg-neutral-950/70 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200'
+                      }`}
+                      title={selectionMode ? 'Salir del modo selección' : 'Activar selección para borrar o comparar en lote'}
                     >
-                      {tag}
+                      <CheckSquare className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                      <span className="hidden sm:inline">{selectionMode ? 'Seleccionando' : 'Gestión por lote'}</span>
+                      <span className="sm:hidden">{selectionMode ? 'Salir' : 'Seleccionar'}</span>
+                      {selectedVideoIds.size > 0 && (
+                        <span className="px-1.5 py-0.2 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
+                          {selectedVideoIds.size}
+                        </span>
+                      )}
                     </button>
-                  );
-                })}
+                  </>
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Panel de Filtros Desplegable */}
+            <AnimatePresence>
+              {showFilters && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 1 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  className="border-t border-neutral-800/80 bg-neutral-950/70"
+                >
+                  <div className="p-4 sm:p-5 flex flex-col gap-4">
+                    
+                    {/* BLOQUE 1: Filtros Principales / Habituales */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <SlidersHorizontal className="w-3 h-3 text-teal-400" />
+                          Filtros Principales
+                        </span>
+                        {activeFiltersCount > 0 && (
+                          <button
+                            onClick={handleResetFilters}
+                            className="flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium text-rose-400 hover:text-rose-300 bg-rose-950/40 hover:bg-rose-950/70 border border-rose-900/50 transition-colors cursor-pointer"
+                            title="Restablecer todos los filtros"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            <span>Limpiar filtros ({activeFiltersCount})</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2.5 items-center">
+                        {/* Carpeta */}
+                        <select 
+                          value={filterGroup} 
+                          onChange={e => setFilterGroup(e.target.value)} 
+                          className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500 cursor-pointer"
+                        >
+                          <option value="Todas">📁 Todas las carpetas</option>
+                          {uniqueGroups.map(g => <option key={g} value={g}>{g}</option>)}
+                          <option value="Sin carpeta">Sin carpeta</option>
+                        </select>
+
+                        {/* Modelo AI */}
+                        <select 
+                          value={filterModel} 
+                          onChange={e => setFilterModel(e.target.value)} 
+                          className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500 cursor-pointer"
+                        >
+                          <option value="Todos">🧠 Todos los modelos</option>
+                          {uniqueModels.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+
+                        {/* Tamaño de Parámetros (20B, 33B...) */}
+                        {uniqueModelSizes.length > 0 && (
+                          <select 
+                            value={filterModelSizeB} 
+                            onChange={e => setFilterModelSizeB(e.target.value)} 
+                            className="bg-neutral-900 border border-teal-900/60 hover:border-teal-700 rounded-lg px-3 py-1.5 text-xs text-teal-300 focus:outline-none focus:border-teal-500 cursor-pointer"
+                          >
+                            <option value="Todos">⚡ Parámetros (Todos)</option>
+                            {uniqueModelSizes.map(s => <option key={s} value={String(s)}>{s}B parámetros</option>)}
+                          </select>
+                        )}
+
+                        {/* Resolución */}
+                        <select 
+                          value={filterResolution} 
+                          onChange={e => setFilterResolution(e.target.value)} 
+                          className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500 cursor-pointer"
+                        >
+                          <option value="Todas">📐 Resolución (Todas)</option>
+                          {uniqueResolutions.map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
+
+                        {/* LoRAs */}
+                        <select 
+                          value={filterLora} 
+                          onChange={e => setFilterLora(e.target.value)} 
+                          className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500 cursor-pointer"
+                        >
+                          <option value="Todos">🧩 LoRAs (Todos)</option>
+                          {uniqueLoras.map(l => <option key={l} value={l}>{l}</option>)}
+                        </select>
+
+                        {/* Usuario */}
+                        <select 
+                          value={filterUser} 
+                          onChange={e => setFilterUser(e.target.value)} 
+                          className="bg-neutral-900 border border-neutral-800 hover:border-neutral-700 rounded-lg px-3 py-1.5 text-xs text-neutral-300 focus:outline-none focus:border-teal-500 cursor-pointer"
+                        >
+                          <option value="Todos">👤 Todos los usuarios</option>
+                          {userOptions.map(u => <option key={u.value} value={u.value}>{u.label}</option>)}
+                          <option value="Anónimo">Anónimo</option>
+                        </select>
+
+                        {/* Selector de Orientación */}
+                        <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+                          {['Todas', '16:9', '9:16', '1:1'].map(o => (
+                            <button 
+                              key={o} 
+                              onClick={() => setFilterOrientation(o)} 
+                              className={`px-3 py-1.5 text-[11px] font-medium transition-colors cursor-pointer ${
+                                filterOrientation === o ? 'bg-neutral-800 text-teal-300 font-semibold' : 'text-neutral-400 hover:text-neutral-200'
+                              }`}
+                            >
+                              {o}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Selector de Origen (Local/Cloud) */}
+                        <div className="flex items-center bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+                          {['Todos', 'Local', 'Cloud'].map(s => (
+                            <button 
+                              key={s} 
+                              onClick={() => setFilterSource(s)} 
+                              className={`px-3 py-1.5 text-[11px] font-medium transition-colors cursor-pointer ${
+                                filterSource === s ? 'bg-neutral-800 text-teal-300 font-semibold' : 'text-neutral-400 hover:text-neutral-200'
+                              }`}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* BLOQUE 2: Componentes Técnicos Avanzados (VAE de Vídeo y Text Encoder / Precisión) */}
+                    {(uniqueVaes.length > 0 || uniqueEncoders.length > 0) && (
+                      <div className="pt-3 border-t border-neutral-850 space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <Cpu className="w-3 h-3 text-indigo-400" />
+                          <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
+                            Arquitectura Técnica & Encoders
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2.5 items-center">
+                          {/* Video VAE */}
+                          {uniqueVaes.length > 0 && (
+                            <select 
+                              value={filterVae} 
+                              onChange={e => setFilterVae(e.target.value)} 
+                              className="bg-neutral-900 border border-purple-900/50 hover:border-purple-700 rounded-lg px-3 py-1.5 text-xs text-purple-300 focus:outline-none focus:border-purple-500 cursor-pointer"
+                              title="Filtro por Video VAE (FP8 Mixed Precision, Original VAE...)"
+                            >
+                              <option value="Todos">🔮 Video VAE (Todos)</option>
+                              {uniqueVaes.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          )}
+
+                          {/* Text Encoder & Precisión Cuantizada */}
+                          {uniqueEncoders.length > 0 && (
+                            <select 
+                              value={filterEncoder} 
+                              onChange={e => setFilterEncoder(e.target.value)} 
+                              className="bg-neutral-900 border border-blue-900/50 hover:border-blue-700 rounded-lg px-3 py-1.5 text-xs text-blue-300 focus:outline-none focus:border-blue-500 cursor-pointer"
+                              title="Filtro por Text Encoder y Precisión (Qwen3-VL INT8, BF16, GGUF...)"
+                            >
+                              <option value="Todos">🔤 Text Encoder / Precisión (Todos)</option>
+                              {uniqueEncoders.map(enc => <option key={enc} value={enc}>{enc}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* BLOQUE 3: Etiquetas (Tags) */}
+                    {uniqueTags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 items-center pt-3 border-t border-neutral-850">
+                        <span className="text-[11px] text-neutral-400 uppercase tracking-wider font-semibold mr-1.5">Tags:</span>
+                        {uniqueTags.map(tag => {
+                          const isActive = filterTags.includes(tag);
+                          return (
+                            <button 
+                              key={tag}
+                              onClick={() => {
+                                setFilterTags(prev => isActive ? prev.filter(t => t !== tag) : [...prev, tag]);
+                              }}
+                              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors border cursor-pointer ${
+                                isActive 
+                                  ? 'bg-teal-950/80 border-teal-700 text-teal-300 shadow-sm' 
+                                  : 'bg-neutral-900/90 border-neutral-800 text-neutral-400 hover:text-neutral-200 hover:border-neutral-700'
+                              }`}
+                            >
+                              #{tag}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {view === 'dashboard' ? (
