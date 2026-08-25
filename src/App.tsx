@@ -305,12 +305,11 @@ export default function App() {
     }
   };
 
-  const [loginToast, setLoginToast] = useState(false);
+  const [isLoginAnimating, setIsLoginAnimating] = useState(false);
 
   // Escuchar estado de autenticación
   useEffect(() => {
     if (auth) {
-      let initialChecked = false;
       const unsubscribe = onAuthStateChanged(auth, (user) => {
         setCurrentUser(user);
         if (user) {
@@ -319,15 +318,9 @@ export default function App() {
           if (!user.displayName) {
             setIsNickModalOpen(true);
           }
-          if (initialChecked) {
-            // Se acaba de loguear
-            setLoginToast(true);
-            setTimeout(() => setLoginToast(false), 3500);
-          }
         } else {
           setUserProfile(null);
         }
-        initialChecked = true;
         setAuthLoading(false);
       });
       return () => unsubscribe();
@@ -828,8 +821,13 @@ export default function App() {
     );
   }
 
-  if (!currentUser) {
-    return <AccessGate />;
+  if (!currentUser || isLoginAnimating) {
+    return (
+      <AccessGate 
+        onLoginStart={() => setIsLoginAnimating(true)}
+        onLoginComplete={() => setIsLoginAnimating(false)}
+      />
+    );
   }
 
   return (
@@ -1617,26 +1615,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Toast Notificación: Sesión iniciada */}
-      <AnimatePresence>
-        {loginToast && (
-          <motion.div
-            initial={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
-            exit={{ opacity: 0, y: -20, scale: 0.9, x: '-50%' }}
-            transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 bg-neutral-900/95 border border-teal-500/50 rounded-2xl shadow-[0_10px_30px_rgba(20,184,166,0.3)] backdrop-blur-xl text-white"
-          >
-            <div className="w-8 h-8 rounded-xl bg-teal-500/20 flex items-center justify-center text-teal-400">
-              <CheckCircle2 className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-black text-teal-400 tracking-wider uppercase">Inición sesiada</p>
-              <p className="text-[11px] text-neutral-300">Bienvenido al sistema</p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* Pie de Página */}
       <footer className="border-t border-neutral-800/80 bg-neutral-950/90 py-6 px-6 text-xs text-neutral-500">

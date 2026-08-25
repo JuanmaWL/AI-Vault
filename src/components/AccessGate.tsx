@@ -3,7 +3,12 @@ import { VaultLogo } from './VaultLogo';
 import { CRTBackground } from './CRTBackground';
 import pkg from '../../package.json';
 
-export function AccessGate() {
+interface AccessGateProps {
+  onLoginStart?: () => void;
+  onLoginComplete?: () => void;
+}
+
+export function AccessGate({ onLoginStart, onLoginComplete }: AccessGateProps) {
   return (
     <div className="relative min-h-screen bg-neutral-950 flex flex-col items-center justify-center p-4">
       {/* Background Effect */}
@@ -32,7 +37,7 @@ export function AccessGate() {
           {/* Subtle noise texture over the form card */}
           <div className="absolute inset-0 opacity-[0.04] pointer-events-none mix-blend-overlay bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMDUiLz4KPHBhdGggZD0iTTAgMGg0djRIMHoiIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC4wNSIvPgo8L3N2Zz4=')]" />
           
-          <LoginForm onSuccess={() => {}} />
+          <LoginForm onLoginStart={onLoginStart} onSuccess={onLoginComplete} />
         </div>
         
         {/* App Version */}
