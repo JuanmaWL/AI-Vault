@@ -26,8 +26,7 @@ export interface VideoRecord {
   schemaVersion: 2;
 
   // Origen del vídeo
-  videoUrl: string;        // link original de Google Drive
-  driveFileId: string;     // extraído UNA vez al guardar (regex), no en cada render
+  videoUrl: string;        // URL directa o reproducible del vídeo
 
   // Generación
   title?: string;          // título legible autogenerado o personalizado por el usuario

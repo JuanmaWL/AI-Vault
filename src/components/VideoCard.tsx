@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
 import { VideoRecord } from '../types';
-import { DriveVideoPlayer } from './DriveVideoPlayer';
 import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight } from 'lucide-react';
-import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, extractTechnicalDetails } from '../lib/utils';
+import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -197,16 +196,12 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             </div>
           )}
 
-          {video.driveFileId ? (
-            <DriveVideoPlayer url={video.videoUrl} driveFileId={video.driveFileId} className="w-full h-full min-h-0 aspect-auto rounded-none border-0 shadow-none" />
-          ) : (
-            <video 
-              src={video.videoUrl} 
-              className="w-full h-full object-contain" 
-              controls 
-              preload="metadata"
-            />
-          )}
+          <video 
+            src={getPlayableVideoUrl(video)} 
+            className="w-full h-full object-contain" 
+            controls 
+            preload="metadata"
+          />
         </div>
         
         {/* Metadatos debajo del vídeo en rejilla 2x2 holgada y legible */}
@@ -277,7 +272,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 className="flex items-center gap-1 text-teal-400 hover:text-teal-300 transition-colors font-medium text-xs ml-auto shrink-0 bg-neutral-800/80 px-2 py-0.5 rounded border border-neutral-700/60"
                 title="Abrir vídeo en nueva pestaña"
               >
-                {video.driveFileId ? 'Drive' : 'Link'} <ExternalLink className="w-3 h-3" />
+                Link <ExternalLink className="w-3 h-3" />
               </a>
             </div>
           </div>

@@ -8,8 +8,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export const GPU_LOGOS = {
-  nvidia: 'https://rpe0dhvxrlsesamf.private.blob.vercel-storage.com/iconos/nvidia.ico?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfclBFMGRodnhyTFNFc0FtZiIsIm93bmVySWQiOiJ0ZWFtX3E1eWdHQTY1ZnAxOWxUdHhRNzhpNHV2OCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzg3NjQ5Mzg4MDkzLCJpYXQiOjE3ODc2MDYxODkxNjZ9.D-dTk_TJXoQznAI9JaJ8Khekt1SIQ_2POxMYwDjPsmk&vercel-blob-signature=nmlbpOhiu8bdTOeYbnmINNohcXtCUMuetDNBzQfxE_4',
-  amd: 'https://rpe0dhvxrlsesamf.private.blob.vercel-storage.com/iconos/amd.ico?vercel-blob-delegation=eyJzdG9yZUlkIjoic3RvcmVfclBFMGRodnhyTFNFc0FtZiIsIm93bmVySWQiOiJ0ZWFtX3E1eWdHQTY1ZnAxOWxUdHhRNzhpNHV2OCIsInBhdGhuYW1lIjoiKiIsIm9wZXJhdGlvbnMiOlsiZ2V0IiwiaGVhZCJdLCJ2YWxpZFVudGlsIjoxNzg3NjQ5MzgzMDU0LCJpYXQiOjE3ODc2MDYxODQxMjh9.Ej7doo7ADwaxKDs-_hJ9WLEP19oSbte6TOrwQxcXByo&vercel-blob-signature=yRQZRxzozi5HFq8FCj41GIBjm7GxgL3DCmDljQGw-eI'
+  nvidia: '/icons/nvidia.ico',
+  amd: '/icons/amd.ico'
 } as const;
 
 /**
@@ -54,10 +54,8 @@ export function getGpuVendor(gpuName?: string): 'nvidia' | 'amd' | 'other' {
   return 'other';
 }
 
-export function extractDriveFileId(url: string): string {
-  if (!url) return '';
-  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : '';
+export function getPlayableVideoUrl(video: VideoRecord): string {
+  return video?.videoUrl || '';
 }
 
 export function calculateOrientation(width: number, height: number): VideoOrientation {
@@ -943,7 +941,6 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
   }
 
   const orientation = calculateOrientation(width, height);
-  const driveFileId = extractDriveFileId(url) || '';
 
   const resolvedDisplayName = userDisplayName || userEmail || urlInfo.username || undefined;
   const resolvedCreatedBy = userEmail || userDisplayName || (urlInfo.username ? `@${urlInfo.username}` : undefined);
@@ -952,7 +949,6 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
     schemaVersion: 2,
     videoUrl: url,
     groupName: finalGroupName,
-    driveFileId,
     title,
     prompt,
     model,

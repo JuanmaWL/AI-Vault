@@ -428,64 +428,64 @@ export function EditProfileModal({
             </div>
           </form>
 
-          {/* Section: Sincronizar Vídeos de Mi Dataset (Accessible if permitted or admin) */}
-          <div className="bg-neutral-950/80 border border-neutral-800 rounded-2xl p-5 space-y-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                  <FolderSync className="w-4 h-4 text-amber-400" />
-                  Sincronizar mi Dataset
-                </h3>
-                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
-                  Comprueba si hay nuevos vídeos en tu dataset personal de Hugging Face e impórtalos automáticamente con sus metadatos.
-                </p>
+          {/* Section: Sincronizar Vídeos de Mi Dataset (Accessible ONLY if canImportVideos) */}
+          {canImportVideos && (
+            <div className="bg-neutral-950/80 border border-neutral-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <FolderSync className="w-4 h-4 text-amber-400" />
+                    Sincronizar mi Dataset
+                  </h3>
+                  <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                    Comprueba si hay nuevos vídeos en tu dataset personal de Hugging Face e impórtalos automáticamente con sus metadatos.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleScanHfDataset}
+                  disabled={!currentRepoId || isScanningHf || isImportingHf}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 disabled:bg-neutral-800 disabled:text-neutral-600 text-neutral-950 transition-all shrink-0 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {isScanningHf ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-950" />
+                      <span>Escaneando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 text-neutral-950" />
+                      <span>Escanear</span>
+                    </>
+                  )}
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleScanHfDataset}
-                disabled={!currentRepoId || isScanningHf || isImportingHf}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-400 disabled:bg-neutral-800 disabled:text-neutral-600 text-neutral-950 transition-all shrink-0 disabled:cursor-not-allowed shadow-sm"
-              >
-                {isScanningHf ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-950" />
-                    <span>Escaneando...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 text-neutral-950" />
-                    <span>Escanear</span>
-                  </>
-                )}
-              </button>
-            </div>
+              {/* Active Scanning Status Line */}
+              {isScanningHf && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-neutral-900/90 border border-amber-500/30 text-xs text-amber-300 animate-in fade-in">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-amber-400" />
+                  <span className="truncate font-mono text-[11px]">
+                    {scanProgressMsg || 'Explorando estructura de carpetas en Hugging Face...'}
+                  </span>
+                </div>
+              )}
 
-            {/* Active Scanning Status Line */}
-            {isScanningHf && (
-              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-neutral-900/90 border border-amber-500/30 text-xs text-amber-300 animate-in fade-in">
-                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-amber-400" />
-                <span className="truncate font-mono text-[11px]">
-                  {scanProgressMsg || 'Explorando estructura de carpetas en Hugging Face...'}
-                </span>
-              </div>
-            )}
-
-            {/* Scan Summary & Import Trigger */}
-            {scanResult && (
-              <div className="space-y-3 pt-3 border-t border-neutral-850 animate-in fade-in duration-200">
-                <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="text-white font-semibold flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-teal-400" />
-                      <span>Resultados del escaneo</span>
+              {/* Scan Summary & Import Trigger */}
+              {scanResult && (
+                <div className="space-y-3 pt-3 border-t border-neutral-850 animate-in fade-in duration-200">
+                  <div className="p-3.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="text-white font-semibold flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-teal-400" />
+                        <span>Resultados del escaneo</span>
+                      </div>
+                      <p className="text-neutral-400 text-xs">
+                        <strong>{scanResult.scannedFoldersCount}</strong> carpetas, <strong className="text-amber-300">{scanResult.newVideos.length}</strong> nuevos detectados, <strong className="text-neutral-300">{scanResult.existingCount}</strong> ya existentes.
+                      </p>
                     </div>
-                    <p className="text-neutral-400 text-xs">
-                      <strong>{scanResult.scannedFoldersCount}</strong> carpetas, <strong className="text-amber-300">{scanResult.newVideos.length}</strong> nuevos detectados, <strong className="text-neutral-300">{scanResult.existingCount}</strong> ya existentes.
-                    </p>
-                  </div>
 
-                  {canImportVideos ? (
                     <button
                       type="button"
                       onClick={handleImportNewVideos}
@@ -504,89 +504,85 @@ export function EditProfileModal({
                         </>
                       )}
                     </button>
-                  ) : (
-                    <span className="text-[11px] text-amber-400 italic">
-                      Solo administradores pueden persistir vídeos
-                    </span>
+                  </div>
+
+                  {/* Preview of new videos */}
+                  {scanResult.newVideos.length > 0 && !isImportingHf && (
+                    <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-xs space-y-2 max-h-32 overflow-y-auto">
+                      <div className="font-semibold text-neutral-400 text-[11px] uppercase tracking-wider">
+                        Vídeos nuevos listos para importar a tu cuenta:
+                      </div>
+                      <div className="space-y-1 font-mono text-[11px]">
+                        {scanResult.newVideos.slice(0, 6).map((v, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-neutral-400 gap-2">
+                            <span className="truncate">{v.fileName}</span>
+                            {v.category && (
+                              <span className="px-2 py-0.5 rounded bg-neutral-800 text-amber-300 border border-neutral-700 text-[10px] shrink-0 font-sans">
+                                {v.category}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                        {scanResult.newVideos.length > 6 && (
+                          <div className="text-neutral-500 text-[10px] italic text-center pt-1 font-sans">
+                            + {scanResult.newVideos.length - 6} vídeos adicionales
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Progress bar during HF import */}
+                  {isImportingHf && (
+                    <div className="space-y-1.5 pt-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-semibold text-white">Importando dataset ({hfImportProgress.current} de {hfImportProgress.total})</span>
+                        <button
+                          type="button"
+                          onClick={() => { cancelHfImportRef.current = true; }}
+                          className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300"
+                        >
+                          <Square className="w-3 h-3" />
+                          <span>Detener</span>
+                        </button>
+                      </div>
+                      <div className="w-full bg-neutral-900 rounded-full h-2 overflow-hidden border border-neutral-800">
+                        <div 
+                          className="bg-teal-500 h-full transition-all duration-300"
+                          style={{ width: `${hfImportProgress.total > 0 ? (hfImportProgress.current / hfImportProgress.total) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
+              )}
 
-                {/* Preview of new videos */}
-                {scanResult.newVideos.length > 0 && !isImportingHf && (
-                  <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-xs space-y-2 max-h-32 overflow-y-auto">
-                    <div className="font-semibold text-neutral-400 text-[11px] uppercase tracking-wider">
-                      Vídeos nuevos listos para importar a tu cuenta:
-                    </div>
-                    <div className="space-y-1 font-mono text-[11px]">
-                      {scanResult.newVideos.slice(0, 6).map((v, idx) => (
-                        <div key={idx} className="flex items-center justify-between text-neutral-400 gap-2">
-                          <span className="truncate">{v.fileName}</span>
-                          {v.category && (
-                            <span className="px-2 py-0.5 rounded bg-neutral-800 text-amber-300 border border-neutral-700 text-[10px] shrink-0 font-sans">
-                              {v.category}
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                      {scanResult.newVideos.length > 6 && (
-                        <div className="text-neutral-500 text-[10px] italic text-center pt-1 font-sans">
-                          + {scanResult.newVideos.length - 6} vídeos adicionales
-                        </div>
-                      )}
-                    </div>
+              {/* Real-time Logs */}
+              {hfLogs.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    Registro de sincronización
                   </div>
-                )}
-
-                {/* Progress bar during HF import */}
-                {isImportingHf && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-white">Importando dataset ({hfImportProgress.current} de {hfImportProgress.total})</span>
-                      <button
-                        type="button"
-                        onClick={() => { cancelHfImportRef.current = true; }}
-                        className="flex items-center gap-1 text-xs text-rose-400 hover:text-rose-300"
-                      >
-                        <Square className="w-3 h-3" />
-                        <span>Detener</span>
-                      </button>
-                    </div>
-                    <div className="w-full bg-neutral-900 rounded-full h-2 overflow-hidden border border-neutral-800">
-                      <div 
-                        className="bg-teal-500 h-full transition-all duration-300"
-                        style={{ width: `${hfImportProgress.total > 0 ? (hfImportProgress.current / hfImportProgress.total) * 100 : 0}%` }}
-                      />
-                    </div>
+                  <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 max-h-32 overflow-y-auto font-mono text-[11px] space-y-1">
+                    {hfLogs.map((log) => (
+                      <div key={log.id} className="flex items-start gap-2 leading-relaxed">
+                        <span className="text-neutral-600 shrink-0">{log.timestamp}</span>
+                        <span className={
+                          log.type === 'error' ? 'text-rose-400' :
+                          log.type === 'warn' ? 'text-amber-400' :
+                          log.type === 'success' ? 'text-teal-400' :
+                          'text-neutral-300'
+                        }>
+                          {log.message}
+                        </span>
+                      </div>
+                    ))}
+                    <div ref={hfLogsEndRef} />
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Real-time Logs */}
-            {hfLogs.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-                  Registro de sincronización
                 </div>
-                <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-3 max-h-32 overflow-y-auto font-mono text-[11px] space-y-1">
-                  {hfLogs.map((log) => (
-                    <div key={log.id} className="flex items-start gap-2 leading-relaxed">
-                      <span className="text-neutral-600 shrink-0">{log.timestamp}</span>
-                      <span className={
-                        log.type === 'error' ? 'text-rose-400' :
-                        log.type === 'warn' ? 'text-amber-400' :
-                        log.type === 'success' ? 'text-teal-400' :
-                        'text-neutral-300'
-                      }>
-                        {log.message}
-                      </span>
-                    </div>
-                  ))}
-                  <div ref={hfLogsEndRef} />
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
 
         </div>
 

@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
 import { VideoRecord } from '../types';
-import { DriveVideoPlayer } from './DriveVideoPlayer';
 import { Copy, Check, Sparkles, Edit3, Trash2, Clock, Cpu, User, Tag, ExternalLink, Calendar, SplitSquareVertical, ChevronDown, ChevronUp } from 'lucide-react';
-import { extractCreationDateFromText, getGpuVendor, GPU_LOGOS, extractTechnicalDetails } from '../lib/utils';
+import { extractCreationDateFromText, getGpuVendor, GPU_LOGOS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
 
 interface VideoGridCardProps {
   video: VideoRecord;
@@ -113,16 +112,12 @@ export function VideoGridCard({
           </div>
         )}
 
-        {video.driveFileId ? (
-          <DriveVideoPlayer url={video.videoUrl} driveFileId={video.driveFileId} className="w-full h-full min-h-0 aspect-auto rounded-none border-0" />
-        ) : (
-          <video
-            src={video.videoUrl}
-            className="w-full h-full object-contain"
-            controls
-            preload="metadata"
-          />
-        )}
+        <video
+          src={getPlayableVideoUrl(video)}
+          className="w-full h-full object-contain"
+          controls
+          preload="metadata"
+        />
       </div>
 
       {/* Contenido de la tarjeta */}

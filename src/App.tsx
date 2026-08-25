@@ -14,7 +14,7 @@ import { EditProfileModal } from './components/EditProfileModal';
 import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
-import { extractDriveFileId, calculateOrientation } from './lib/utils';
+import { calculateOrientation } from './lib/utils';
 import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
@@ -27,14 +27,12 @@ function normalizeRecord(raw: any): VideoRecord {
   const width = typeof raw.width === 'number' ? raw.width : 1920;
   const height = typeof raw.height === 'number' ? raw.height : 1080;
   const videoUrl = raw.videoUrl || '';
-  const driveFileId = raw.driveFileId || extractDriveFileId(videoUrl);
   const orientation = raw.orientation || calculateOrientation(width, height);
 
   return {
     id: raw.id,
     schemaVersion: 2,
     videoUrl,
-    driveFileId,
     title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : undefined,
     prompt: raw.prompt || '',
     negativePrompt: raw.negativePrompt,
@@ -73,8 +71,7 @@ const MOCK_DATA: VideoRecord[] = [
   {
     id: 'mock1',
     schemaVersion: 2,
-    videoUrl: 'https://drive.google.com/file/d/1M5uutzAXG3r8b8HS_HtPczRGTa_zBVAD/view?usp=sharing',
-    driveFileId: '1M5uutzAXG3r8b8HS_HtPczRGTa_zBVAD',
+    videoUrl: 'https://huggingface.co/datasets/example/videos/resolve/main/cyberpunk_street.mp4',
     prompt: 'A high quality cinematic shot of a stunning futuristic cyberpunk street, neon lights reflection, masterpiece, detailed.',
     model: 'Wan2.1 FL2VA (Wan2GP)',
     source: 'local',

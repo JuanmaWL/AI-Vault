@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { VideoRecord } from '../types';
 import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2, Sparkles, SplitSquareVertical } from 'lucide-react';
-import { formatBytes } from '../lib/utils';
+import { formatBytes, getPlayableVideoUrl } from '../lib/utils';
 
 interface CompareViewProps {
   videos: VideoRecord[];
@@ -340,9 +340,7 @@ function CompareCard({
 }) {
   const [hasError, setHasError] = useState(false);
   
-  const directUrl = video.driveFileId 
-    ? `https://drive.google.com/uc?id=${video.driveFileId}&export=download`
-    : video.videoUrl;
+  const directUrl = getPlayableVideoUrl(video);
 
   return (
     <div className="relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden transition-all h-full group/card hover:border-neutral-700">
@@ -371,7 +369,7 @@ function CompareCard({
               rel="noopener noreferrer"
               className="flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
             >
-              <ExternalLink className="w-3.5 h-3.5" /> {video.driveFileId ? 'Ver en Drive' : 'Abrir original'}
+              <ExternalLink className="w-3.5 h-3.5" /> Abrir original
             </a>
           </div>
         ) : (

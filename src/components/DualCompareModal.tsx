@@ -9,7 +9,7 @@ import {
   Grid2X2, Grid3X3, LayoutGrid, Info, ArrowUpRight, Loader2,
   Sliders, MoveHorizontal
 } from 'lucide-react';
-import { computeParameterDiff, diffWords, formatBytes } from '../lib/utils';
+import { computeParameterDiff, diffWords, formatBytes, getPlayableVideoUrl } from '../lib/utils';
 
 interface DualCompareModalProps {
   initialVideoA: VideoRecord;
@@ -186,12 +186,8 @@ export function DualCompareModal({
   }, [videoA.prompt, videoB.prompt]);
 
   // URL resolution
-  const urlA = videoA.driveFileId 
-    ? `https://drive.google.com/uc?id=${videoA.driveFileId}&export=download`
-    : videoA.videoUrl;
-  const urlB = videoB.driveFileId 
-    ? `https://drive.google.com/uc?id=${videoB.driveFileId}&export=download`
-    : videoB.videoUrl;
+  const urlA = getPlayableVideoUrl(videoA);
+  const urlB = getPlayableVideoUrl(videoB);
 
   // Sync duration
   const handleLoadedMetadata = (video: 'A' | 'B') => {
@@ -1317,7 +1313,7 @@ export function DualCompareModal({
                       <span className="relative z-10 bg-blue-600 text-white font-black w-8 h-8 rounded-full flex items-center justify-center mb-4 text-sm shadow-[0_0_15px_rgba(37,99,235,0.8)] border border-blue-400">A</span>
                       
                       <div className="relative z-10 w-full aspect-video rounded-xl bg-black mb-4 overflow-hidden ring-1 ring-blue-500/30">
-                        <video src={pickerSelectionBoth[0].driveFileId ? `https://drive.google.com/uc?id=${pickerSelectionBoth[0].driveFileId}&export=download` : pickerSelectionBoth[0].videoUrl} className="w-full h-full object-cover opacity-90" autoPlay loop muted playsInline />
+                        <video src={getPlayableVideoUrl(pickerSelectionBoth[0])} className="w-full h-full object-cover opacity-90" autoPlay loop muted playsInline />
                       </div>
                       
                       <div className="relative z-10 text-sm sm:text-base font-bold text-neutral-100 text-center mb-2">{pickerSelectionBoth[0].model}</div>
@@ -1372,7 +1368,7 @@ export function DualCompareModal({
                       <span className="relative z-10 bg-purple-600 text-white font-black w-8 h-8 rounded-full flex items-center justify-center mb-4 text-sm shadow-[0_0_15px_rgba(147,51,234,0.8)] border border-purple-400">B</span>
                       
                       <div className="relative z-10 w-full aspect-video rounded-xl bg-black mb-4 overflow-hidden ring-1 ring-purple-500/30">
-                        <video src={pickerSelectionBoth[1].driveFileId ? `https://drive.google.com/uc?id=${pickerSelectionBoth[1].driveFileId}&export=download` : pickerSelectionBoth[1].videoUrl} className="w-full h-full object-cover opacity-90" autoPlay loop muted playsInline />
+                        <video src={getPlayableVideoUrl(pickerSelectionBoth[1])} className="w-full h-full object-cover opacity-90" autoPlay loop muted playsInline />
                       </div>
                       
                       <div className="relative z-10 text-sm sm:text-base font-bold text-neutral-100 text-center mb-2">{pickerSelectionBoth[1].model}</div>
@@ -1423,9 +1419,7 @@ export function DualCompareModal({
                     const isSelected2 = pickerTarget === 'both' && pickerSelectionBoth[1]?.id === vid.id;
                     const isCurrentTarget = (pickerTarget === 'A' && isCurrentA) || (pickerTarget === 'B' && isCurrentB) || isSelected1 || isSelected2;
                     
-                    const vidUrl = vid.driveFileId 
-                      ? `https://drive.google.com/uc?id=${vid.driveFileId}&export=download`
-                      : vid.videoUrl;
+                    const vidUrl = getPlayableVideoUrl(vid);
 
                     return (
                       <div

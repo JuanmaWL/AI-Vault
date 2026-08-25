@@ -1,6 +1,6 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { extractDriveFileId, calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
+import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
 import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder, Type, Wrench } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
@@ -66,8 +66,6 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isSubmittingRef = useRef(false);
 
-  const detectedFileId = useMemo(() => extractDriveFileId(videoUrl), [videoUrl]);
-  const isDirectMp4 = useMemo(() => videoUrl.toLowerCase().includes('.mp4'), [videoUrl]);
   const currentOrientation = useMemo(() => calculateOrientation(Number(width) || 0, Number(height) || 0), [width, height]);
   const parsedUrlInfo = useMemo(() => parseVideoUrlInfo(videoUrl), [videoUrl]);
 
@@ -307,7 +305,6 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       id: initialData?.id,
       schemaVersion: 2,
       videoUrl: videoUrl.trim(),
-      driveFileId: detectedFileId || extractDriveFileId(videoUrl),
       title: title.trim() ? title.trim() : (prompt.trim() ? generateTitleFromPrompt(prompt.trim()) : undefined),
       prompt: prompt.trim(),
       negativePrompt: negativePrompt.trim() ? negativePrompt.trim() : undefined,
@@ -434,13 +431,8 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider">
-                  Enlace del Vídeo (Drive / DigiStorage) <span className="text-teal-400">*</span>
+                  Enlace del Vídeo (Hugging Face / Directo) <span className="text-teal-400">*</span>
                 </label>
-                {detectedFileId && (
-                  <span className="text-[11px] text-teal-400 font-mono">
-                    ID extraído: {detectedFileId.slice(0, 10)}...
-                  </span>
-                )}
               </div>
               <div className="relative">
                 <input 
@@ -448,19 +440,9 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   required
                   value={videoUrl}
                   onChange={e => handleVideoUrlChange(e.target.value)}
-                  placeholder="Drive, Hugging Face o DigiStorage (ej: https://huggingface.co/...)"
-                  className={`w-full ${wandSuccess ? 'bg-teal-950/40 border-teal-400 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'bg-neutral-950 border-neutral-800'} rounded-xl pl-4 ${videoUrl.includes('digistorage.es/links/') && !isDirectMp4 ? 'pr-12' : 'pr-4'} py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all duration-300 font-mono`}
+                  placeholder="URL del vídeo (ej: https://huggingface.co/.../video.mp4)"
+                  className={`w-full ${wandSuccess ? 'bg-teal-950/40 border-teal-400 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'bg-neutral-950 border-neutral-800'} rounded-xl pl-4 pr-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all duration-300 font-mono`}
                 />
-                {videoUrl.includes('digistorage.es/links/') && !isDirectMp4 && (
-                  <button
-                    type="button"
-                    onClick={handleExtractDigiStorage}
-                    title="Va a intentar extraer el mp4 directo"
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg transition-all duration-300 ${wandSuccess ? 'bg-teal-500 text-neutral-950 scale-110' : 'bg-teal-500/10 text-teal-400 hover:bg-teal-500/20'}`}
-                  >
-                    {wandSuccess ? <Check className="w-4 h-4" /> : <Wand2 className="w-4 h-4" />}
-                  </button>
-                )}
               </div>
 
               {/* Hugging Face URL Detection Badge */}
@@ -493,25 +475,17 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               )}
               
               {/* Mini Preview Video */}
-              {videoUrl && (detectedFileId || isDirectMp4) && (
+              {videoUrl && (
                 <div className="mt-3 aspect-video w-full rounded-xl bg-black border border-neutral-800 overflow-hidden shadow-lg transition-all duration-500 opacity-100 translate-y-0 relative group">
-                  {detectedFileId ? (
-                    <iframe
-                      src={`https://drive.google.com/file/d/${detectedFileId}/preview`}
-                      className="w-full h-full"
-                      allow="autoplay"
-                    />
-                  ) : (
-                    <video
-                      src={videoUrl}
-                      className="w-full h-full object-contain"
-                      controls
-                      preload="metadata"
-                      autoPlay
-                      muted
-                      loop
-                    />
-                  )}
+                  <video
+                    src={videoUrl}
+                    className="w-full h-full object-contain"
+                    controls
+                    preload="metadata"
+                    autoPlay
+                    muted
+                    loop
+                  />
                   <div className="absolute top-2 right-2 bg-neutral-950/80 backdrop-blur text-[10px] text-neutral-300 px-2 py-1 rounded-md border border-neutral-800 font-medium">
                     Vista previa
                   </div>
