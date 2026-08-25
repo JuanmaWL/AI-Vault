@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <!-- Background / Vault outer ring gradient -->
+    <linearGradient id="vaultOuterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2dd4bf" />
+      <stop offset="50%" stop-color="#0f766e" />
+      <stop offset="100%" stop-color="#115e59" />
+    </linearGradient>
+
+    <!-- Core metallic dark gradient -->
+    <radialGradient id="vaultCoreGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1f1f23" />
+      <stop offset="70%" stop-color="#09090b" />
+      <stop offset="100%" stop-color="#042f2e" />
+    </radialGradient>
+
+    <!-- Video Play gradient -->
+    <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#5eead4" />
+      <stop offset="50%" stop-color="#2dd4bf" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+
+    <!-- Gemini-style multi-color iridescent AI Spark Gradient -->
+    <linearGradient id="geminiAiGradFavicon" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />    <!-- Sky Blue -->
+      <stop offset="35%" stop-color="#818cf8" />   <!-- Indigo -->
+      <stop offset="70%" stop-color="#c084fc" />   <!-- Purple -->
+      <stop offset="100%" stop-color="#f472b6" />  <!-- Pink / Magenta -->
+    </linearGradient>
+  </defs>
+
+  <!-- Base Heavy Octagonal Vault Door Frame -->
+  <path 
+    d="M20 4 L44 4 L60 20 L60 44 L44 60 L20 60 L4 44 L4 20 Z" 
+    fill="url(#vaultCoreGrad)" 
+    stroke="url(#vaultOuterGrad)" 
+    stroke-width="2.5" 
+    stroke-linejoin="round"
+  />
+
+  <!-- Vault Perimeter Locking Bolts / Studs -->
+  <circle cx="32" cy="7" r="1.5" fill="#2dd4bf" />
+  <circle cx="57" cy="32" r="1.5" fill="#2dd4bf" />
+  <circle cx="51" cy="51" r="1.5" fill="#2dd4bf" />
+  <circle cx="32" cy="57" r="1.5" fill="#2dd4bf" />
+  <circle cx="13" cy="51" r="1.5" fill="#2dd4bf" />
+  <circle cx="7" cy="32" r="1.5" fill="#2dd4bf" />
+  <circle cx="13" cy="13" r="1.5" fill="#2dd4bf" />
+
+  <!-- Inner Vault Chamber Rim (Chamber Gear Ring) -->
+  <circle 
+    cx="32" 
+    cy="32" 
+    r="20" 
+    stroke="#14b8a6" 
+    stroke-width="1.5" 
+    stroke-dasharray="7 3"
+    opacity="0.75"
+  />
+
+  <!-- High-Tech Vault Spoke Wheel / Interlocking Handles -->
+  <path d="M32 14 L32 20 M32 44 L32 50 M14 32 L20 32 M44 32 L50 32" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" />
+  <path d="M19.5 19.5 L24 24 M40 40 L44.5 44.5 M44.5 19.5 L40 24 M24 40 L19.5 44.5" stroke="#0f766e" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Inner Camera Aperture / Secure Core Frame -->
+  <circle 
+    cx="32" 
+    cy="32" 
+    r="13" 
+    fill="#09090b" 
+    stroke="#2dd4bf" 
+    stroke-width="1.75"
+  />
+
+  <!-- Cinema Play Triangle (Video Vault) -->
+  <path 
+    d="M27.5 24.5 L40.5 32 L27.5 39.5 Z" 
+    fill="url(#playGrad)" 
+  />
+
+  <!-- Center Camera Core Lens Highlight -->
+  <circle cx="30" cy="30" r="1.5" fill="#ffffff" opacity="0.6" />
+
+  <!-- --- ICONIC AI SPARKLE OVERLAY (Top-Right Gemini-style Spark) --- -->
+  
+  <!-- Sparkle Cutout Backdrop -->
+  <path
+    d="M49 5 Q49 15 59 15 Q49 15 49 25 Q49 15 39 15 Q49 15 49 5 Z"
+    fill="#09090b"
+    stroke="#09090b"
+    stroke-width="3"
+    stroke-linejoin="round"
+  />
+
+  <!-- Primary 4-Pointed AI Star with Gemini Gradient -->
+  <path
+    d="M49 5 Q49 15 59 15 Q49 15 49 25 Q49 15 39 15 Q49 15 49 5 Z"
+    fill="url(#geminiAiGradFavicon)"
+    stroke="#ffffff"
+    stroke-width="0.8"
+    stroke-linejoin="round"
+  />
+
+  <!-- Center core flare -->
+  <circle cx="49" cy="15" r="1.8" fill="#ffffff" />
+
+  <!-- Satellite Sparkle -->
+  <path
+    d="M58 20 Q58 24 62 24 Q58 24 58 28 Q58 24 54 24 Q58 24 58 20 Z"
+    fill="url(#geminiAiGradFavicon)"
+    stroke="#ffffff"
+    stroke-width="0.5"
+  />
+  <circle cx="58" cy="24" r="0.8" fill="#ffffff" />
+</svg>

@@ -14,6 +14,8 @@ import { EditProfileModal } from './components/EditProfileModal';
 import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
+import { VaultLogo } from './components/VaultLogo';
+import { AISparkle } from './components/AISparkle';
 import { calculateOrientation } from './lib/utils';
 import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -836,12 +838,19 @@ export default function App() {
         {/* Header Fijo */}
         <header className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800">
           <div className="max-w-[1600px] mx-auto px-6 h-20 flex items-center justify-between gap-6">
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm">
-                <Database className="w-5 h-5 text-black" />
+            <div className="flex items-center gap-3 shrink-0 group cursor-default">
+              <div className="relative">
+                <div className="w-10 h-10 bg-neutral-900/90 border border-teal-500/30 group-hover:border-teal-400/60 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.15)] group-hover:shadow-[0_0_20px_rgba(45,212,191,0.25)] transition-all duration-300 relative">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/10 via-purple-500/10 to-pink-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                  <VaultLogo className="w-6 h-6 drop-shadow-[0_0_6px_rgba(45,212,191,0.4)] relative z-10" />
+                </div>
+                {/* AI Sparkle badge overlapping top-right corner */}
+                <div className="absolute -top-1.5 -right-1.5 z-20 pointer-events-none">
+                  <AISparkle size="sm" />
+                </div>
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight text-white">AI Video Vault</h1>
+                <h1 className="text-xl font-bold tracking-tight text-white group-hover:text-teal-100 transition-colors">AI Video Vault</h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={`flex h-2 w-2 rounded-full ${usingLocal ? 'bg-amber-500' : 'bg-teal-500'}`}></span>
                   <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">

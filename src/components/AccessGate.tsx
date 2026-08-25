@@ -1,5 +1,6 @@
 import { LoginForm } from './LoginForm';
 import { VaultLogo } from './VaultLogo';
+import { AISparkle } from './AISparkle';
 import { CRTBackground } from './CRTBackground';
 import pkg from '../../package.json';
 
@@ -16,10 +17,17 @@ export function AccessGate({ onLoginStart, onLoginComplete }: AccessGateProps) {
 
       <div className="relative z-10 w-full max-w-sm animate-in fade-in slide-in-from-bottom-4 duration-700 ease-out">
         <div className="mb-8 text-center flex flex-col items-center">
-          <div className="w-20 h-20 bg-neutral-900/80 backdrop-blur-md border border-teal-900/40 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(20,184,166,0.15)] relative overflow-hidden group">
-            {/* Inner glow */}
-            <div className="absolute inset-0 bg-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            <VaultLogo className="w-12 h-12 text-teal-500 drop-shadow-[0_0_8px_rgba(20,184,166,0.5)]" />
+          <div className="relative group cursor-pointer mb-6">
+            <div className="w-20 h-20 bg-neutral-900/80 backdrop-blur-md border border-teal-900/40 group-hover:border-teal-400/60 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(20,184,166,0.15)] group-hover:shadow-[0_0_40px_rgba(168,85,247,0.25)] transition-all duration-500 relative">
+              {/* Inner glow */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/15 via-indigo-500/10 to-pink-500/15 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+              <VaultLogo className="w-12 h-12 text-teal-500 drop-shadow-[0_0_8px_rgba(20,184,166,0.5)] relative z-10" />
+            </div>
+
+            {/* AI Sparkle badge overlapping top-right corner */}
+            <div className="absolute -top-2.5 -right-2.5 z-20 pointer-events-none">
+              <AISparkle size="lg" />
+            </div>
           </div>
           <h1 
             className="text-3xl font-bold text-white tracking-tight"
