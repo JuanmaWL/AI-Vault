@@ -96,10 +96,25 @@ export interface ExtractedTechnicalDetails {
   baseModel?: string;
   modelSizeB?: number;
   modelVariant?: string;
+  modelTypeRaw?: string;
+  softwareSource?: 'wan2gp' | 'maestro' | 'comfyui' | 'other';
+  localTool?: string;
   videoVae: string;
   textEncoder: string;
   precision?: string;
   tags: string[];
+  turboPreset?: string;
+  turboMode?: boolean;
+  skipStepsMultiplier?: number;
+  skipStepsCacheType?: string;
+  overrideAttention?: string;
+  slidingWindowSize?: number;
+  slidingWindowOverlap?: number;
+  cfg?: number;
+  jobId?: string;
+  jobElapsedTimeSeconds?: number;
+  generationTimeBasis?: string;
+  settingsVersion?: number;
 }
 
 /**
@@ -154,22 +169,26 @@ export function generateTitleFromPrompt(prompt: string): string {
 /**
  * Extracts model size in billions of parameters (e.g. 20, 33)
  * Priority:
- * 1. Look in "type" field for pattern /(\d+)\s*B\b/i
- * 2. Look in "model_filename" field for pattern /(\d+)\s*B\b/i
- * 3. Otherwise undefined
+ * 1. Inspect all inputs for known variants/architectures (fl2va, ref2va, 33b, 20b, pruned, full)
+ * 2. Look for pattern /(\d+)\s*B\b/i
+ * 3. Fallback to undefined
  */
-export function extractModelSizeB(typeField?: string, modelFilename?: string): number | undefined {
+export function extractModelSizeB(...inputs: (string | number | undefined | null)[]): number | undefined {
   const sizeRegex = /(\d+)\s*B\b/i;
-  if (typeField && typeof typeField === 'string') {
-    const match = typeField.match(sizeRegex);
-    if (match && match[1]) {
-      const num = parseInt(match[1], 10);
-      if (!isNaN(num) && num > 0) return num;
-    }
-  }
+  for (const input of inputs) {
+    if (input === undefined || input === null) continue;
+    if (typeof input === 'number' && !isNaN(input) && input > 0) return input;
+    if (typeof input !== 'string') continue;
 
-  if (modelFilename && typeof modelFilename === 'string') {
-    const match = modelFilename.match(sizeRegex);
+    const lower = input.toLowerCase();
+    if (lower.includes('33b') || lower.includes('33_b') || lower.includes('fl2va') || lower.includes('ref2va') || lower === 'minimax_h3_full') {
+      return 33;
+    }
+    if (lower.includes('20b') || lower.includes('20_b') || lower.includes('pruned') || lower === 'minimax_h3') {
+      return 20;
+    }
+
+    const match = input.match(sizeRegex);
     if (match && match[1]) {
       const num = parseInt(match[1], 10);
       if (!isNaN(num) && num > 0) return num;
@@ -185,35 +204,109 @@ export function extractTechnicalDetails(
   modelType: string = '',
   typeDesc: string = ''
 ): ExtractedTechnicalDetails {
-  // 1. Technical string restricted ONLY to technical model metadata fields.
-  // Never search narrative prompt, general comments, or full serialized JSON to prevent accidental false positives.
+  // Support nested "params" format (standard in Maestro and some Wan2GP outputs)
+  const actualParams = (parsedJson && typeof parsedJson === 'object' && parsedJson.params && typeof parsedJson.params === 'object')
+    ? parsedJson.params
+    : parsedJson;
+
+  const rawModelType = actualParams?.model_type || parsedJson?.model_type || modelType || '';
+  const typeField = actualParams?.type || parsedJson?.type || typeDesc || '';
+  const modelFilename = actualParams?.model_filename || parsedJson?.model_filename || actualParams?.filename || parsedJson?.filename || '';
+
   const technicalModelStr = [
-    modelType,
-    typeDesc,
-    parsedJson?.model_type,
-    parsedJson?.type,
-    parsedJson?.model_filename,
-    parsedJson?.filename
+    rawModelType,
+    typeField,
+    modelFilename,
+    rawComment
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
   
-  // 1. Base Model Detection
-  // Currently recognized model: Minimax H3.
-  // (Se pueden añadir más ramas de modelos reconocidos aquí en el futuro según se utilicen nuevos modelos)
+  // 1. Software Source Detection (Wan2GP vs Maestro vs ComfyUI)
+  let softwareSource: 'wan2gp' | 'maestro' | 'comfyui' | 'other' = 'wan2gp';
+  let localTool: string = 'Wan2GP';
+
+  // Wan2GP signature:
+  // - "type" field containing "WanGP" or "Wan2GP" (e.g. "WanGP v12.60 by DeepBeepMeep - MiniMax H3 FL2VA 33B")
+  // - "by DeepBeepMeep" in Comment or type field
+  // - "wangp" or "wan2gp" anywhere in metadata
+  const isWanGp = Boolean(
+    typeField.toLowerCase().includes('wangp') ||
+    typeField.toLowerCase().includes('wan2gp') ||
+    typeField.toLowerCase().includes('deepbeepmeep') ||
+    rawComment.toLowerCase().includes('wangp') ||
+    rawComment.toLowerCase().includes('wan2gp') ||
+    rawComment.toLowerCase().includes('deepbeepmeep')
+  );
+
+  // ComfyUI signature
+  const isComfy = Boolean(
+    (parsedJson?.prompt && typeof parsedJson.prompt === 'object' && !Array.isArray(parsedJson.prompt)) ||
+    parsedJson?.workflow ||
+    rawComment.includes('ComfyUI')
+  );
+
+  // Maestro signature (when NOT Wan2GP):
+  // - Explicit Maestro fields (job_id, generation_time_basis, upload_filenames, minimax_h3_text_encoder, etc.)
+  // - Or explicit "software": "maestro"
+  const isMaestro = !isWanGp && Boolean(
+    rawComment.toLowerCase().includes('maestro') ||
+    parsedJson?.software?.toLowerCase() === 'maestro' ||
+    actualParams?.software?.toLowerCase() === 'maestro' ||
+    parsedJson?.generation_time_basis !== undefined ||
+    actualParams?.generation_time_basis !== undefined ||
+    parsedJson?.upload_filenames !== undefined ||
+    actualParams?.upload_filenames !== undefined ||
+    actualParams?.minimax_h3_text_encoder !== undefined ||
+    actualParams?.minimax_h3_turbo_preset !== undefined ||
+    actualParams?.minimax_h3_turbo_mode !== undefined ||
+    actualParams?.skip_steps_cache_type !== undefined ||
+    actualParams?.override_attention !== undefined
+  );
+
+  if (isWanGp) {
+    softwareSource = 'wan2gp';
+    localTool = 'Wan2GP';
+  } else if (isMaestro) {
+    softwareSource = 'maestro';
+    localTool = 'Maestro';
+  } else if (isComfy) {
+    softwareSource = 'comfyui';
+    localTool = 'ComfyUI';
+  } else {
+    softwareSource = 'wan2gp';
+    localTool = 'Wan2GP';
+  }
+
+  // 2. Base Model Detection
   let baseModel: string | undefined = undefined;
   if (technicalModelStr.includes('minimax') || technicalModelStr.includes('h3')) {
     baseModel = 'Minimax H3';
+  } else if (technicalModelStr.includes('wan') || technicalModelStr.includes('2.1')) {
+    baseModel = 'Wan 2.1';
+  } else if (technicalModelStr.includes('ltx')) {
+    baseModel = technicalModelStr.includes('2.5') ? 'LTX 2.5' : 'LTX 2.3';
+  } else if (technicalModelStr.includes('hunyuan')) {
+    baseModel = 'HunyuanVideo';
   }
 
-  // Model size in Billions (modelSizeB) strictly from type/model_filename fields
-  const typeField = parsedJson?.type || typeDesc;
-  const modelFilename = parsedJson?.model_filename || parsedJson?.filename;
-  const modelSizeB = extractModelSizeB(typeField, modelFilename);
+  // Model size in Billions (modelSizeB)
+  const modelSizeB = extractModelSizeB(
+    actualParams?.model_size_b,
+    parsedJson?.model_size_b,
+    rawModelType,
+    typeField,
+    modelFilename,
+    rawComment,
+    actualParams?.model_variant,
+    parsedJson?.model_variant
+  );
 
-  // Model Variant (FL2VA, Ref2VA, SCAIL 2...) restricted to technical model and variant fields
+  // Model Variant (Full, Pruned, FL2VA, Ref2VA, SCAIL 2...)
   let modelVariant: string | undefined = undefined;
   const variantStr = [
     technicalModelStr,
+    actualParams?.model_variant,
     parsedJson?.model_variant,
+    actualParams?.variant,
     parsedJson?.variant
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
@@ -221,15 +314,17 @@ export function extractTechnicalDetails(
     modelVariant = 'FL2VA';
   } else if (variantStr.includes('ref2va')) {
     modelVariant = 'Ref2VA';
+  } else if (rawModelType.toLowerCase() === 'minimax_h3_full' || variantStr.includes('full') || modelSizeB === 33) {
+    modelVariant = 'Full (33B)';
+  } else if (rawModelType.toLowerCase() === 'minimax_h3' || variantStr.includes('pruned') || modelSizeB === 20) {
+    modelVariant = 'Pruned (20B)';
   } else if (variantStr.includes('scail2') || variantStr.includes('scail 2')) {
     modelVariant = 'SCAIL 2';
   }
 
-  // 2. Text Encoder Detection (restricted strictly to text encoder technical fields + Wan2GP config)
+  // 3. Text Encoder Detection
   let textEncoder: string = 'Not Found';
-  
-  // Also extract config string directly if present in rawComment or parsedJson
-  let configStr = parsedJson?.config || '';
+  let configStr = actualParams?.config || parsedJson?.config || '';
   if (!configStr && rawComment) {
     const configMatch = rawComment.match(/"config"\s*:\s*"([^"]+)"/i) || rawComment.match(/config[:=]\s*([a-zA-Z0-9_, -]+)/i);
     if (configMatch && configMatch[1]) {
@@ -239,19 +334,21 @@ export function extractTechnicalDetails(
 
   const rawTextEnc = [
     configStr,
-    parsedJson?.config,
+    actualParams?.minimax_h3_text_encoder,
+    parsedJson?.minimax_h3_text_encoder,
+    actualParams?.text_encoder,
     parsedJson?.text_encoder,
-    parsedJson?.text_encoder_name,
-    parsedJson?.text_encoder_path,
-    parsedJson?.t5_path,
-    parsedJson?.llm,
-    parsedJson?.encoder
+    actualParams?.text_encoder_name,
+    actualParams?.text_encoder_path,
+    actualParams?.t5_path,
+    actualParams?.llm,
+    actualParams?.encoder
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
   if (rawTextEnc.length > 0) {
-    if (rawTextEnc.includes('q4_k_m') || rawTextEnc.includes('q4-k-m') || rawTextEnc.includes('q4km') || rawTextEnc.includes('gguf_q4') || rawTextEnc.includes('q4_k')) {
+    if (rawTextEnc.includes('q4_k_m') || rawTextEnc.includes('q4-k-m') || rawTextEnc.includes('q4km') || rawTextEnc.includes('gguf_q4_k_m') || rawTextEnc.includes('gguf_q4')) {
       textEncoder = 'Qwen3-VL GGUF Q4_K_M';
-    } else if (rawTextEnc.includes('q2_k') || rawTextEnc.includes('q2-k') || rawTextEnc.includes('q2k') || rawTextEnc.includes('gguf_q2')) {
+    } else if (rawTextEnc.includes('q2_k') || rawTextEnc.includes('q2-k') || rawTextEnc.includes('q2k') || rawTextEnc.includes('gguf_q2_k') || rawTextEnc.includes('gguf_q2')) {
       textEncoder = 'Qwen3-VL GGUF Q2_K';
     } else if (rawTextEnc.includes('quanto') || rawTextEnc.includes('int8')) {
       textEncoder = 'Qwen3-VL Quanto INT8';
@@ -266,16 +363,17 @@ export function extractTechnicalDetails(
     }
   }
 
-  // 3. Video VAE Detection (restricted strictly to VAE technical fields + Wan2GP config)
-  let videoVae: string = 'Not Found';
+  // 4. Video VAE Detection - Default is ALWAYS 'Original VAE'
+  let videoVae: string = 'Original VAE';
   const rawVae = [
     configStr,
-    parsedJson?.config,
+    actualParams?.video_vae,
     parsedJson?.video_vae,
+    actualParams?.vae,
     parsedJson?.vae,
-    parsedJson?.vae_name,
-    parsedJson?.vae_model,
-    parsedJson?.vae_path
+    actualParams?.vae_name,
+    actualParams?.vae_model,
+    actualParams?.vae_path
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
   if (rawVae.length > 0) {
@@ -286,17 +384,45 @@ export function extractTechnicalDetails(
     }
   }
 
-  // Tags are reserved for custom user tags; structured details live in their dedicated fields
+  // 5. Specific Maestro & Execution Parameters
+  const turboPreset = actualParams?.minimax_h3_turbo_preset || parsedJson?.minimax_h3_turbo_preset;
+  const turboMode = actualParams?.minimax_h3_turbo_mode ?? parsedJson?.minimax_h3_turbo_mode;
+  const skipStepsMultiplier = actualParams?.skip_steps_multiplier ?? parsedJson?.skip_steps_multiplier;
+  const skipStepsCacheType = actualParams?.skip_steps_cache_type || parsedJson?.skip_steps_cache_type;
+  const overrideAttention = actualParams?.override_attention || parsedJson?.override_attention;
+  const slidingWindowSize = actualParams?.sliding_window_size ?? parsedJson?.sliding_window_size;
+  const slidingWindowOverlap = actualParams?.sliding_window_overlap ?? parsedJson?.sliding_window_overlap;
+  const cfg = actualParams?.guidance_scale ?? parsedJson?.guidance_scale;
+  const jobId = parsedJson?.job_id;
+  const jobElapsedTimeSeconds = parsedJson?.job_elapsed_time !== undefined ? Number(parsedJson.job_elapsed_time) : undefined;
+  const generationTimeBasis = parsedJson?.generation_time_basis;
+  const settingsVersion = actualParams?.settings_version ?? parsedJson?.settings_version;
+
   const tags: string[] = [];
 
   return {
     baseModel,
     modelSizeB,
     modelVariant,
+    modelTypeRaw: rawModelType || undefined,
+    softwareSource,
+    localTool,
     videoVae,
     textEncoder,
     precision: textEncoder !== 'Not Found' ? textEncoder : undefined,
-    tags
+    tags,
+    turboPreset: turboPreset ? String(turboPreset) : undefined,
+    turboMode: typeof turboMode === 'boolean' ? turboMode : undefined,
+    skipStepsMultiplier: skipStepsMultiplier !== undefined ? Number(skipStepsMultiplier) : undefined,
+    skipStepsCacheType: skipStepsCacheType ? String(skipStepsCacheType) : undefined,
+    overrideAttention: overrideAttention ? String(overrideAttention) : undefined,
+    slidingWindowSize: slidingWindowSize !== undefined ? Number(slidingWindowSize) : undefined,
+    slidingWindowOverlap: slidingWindowOverlap !== undefined ? Number(slidingWindowOverlap) : undefined,
+    cfg: cfg !== undefined ? Number(cfg) : undefined,
+    jobId: jobId ? String(jobId) : undefined,
+    jobElapsedTimeSeconds,
+    generationTimeBasis: generationTimeBasis ? String(generationTimeBasis) : undefined,
+    settingsVersion: settingsVersion !== undefined ? Number(settingsVersion) : undefined,
   };
 }
 
@@ -308,6 +434,9 @@ export interface ParsedWanGpMetadata {
   baseModel?: string;
   modelSizeB?: number;
   modelVariant?: string;
+  modelTypeRaw?: string;
+  softwareSource?: 'wan2gp' | 'maestro' | 'comfyui' | 'other';
+  localTool?: string;
   videoVae: string;
   textEncoder: string;
   precision?: string;
@@ -316,13 +445,26 @@ export interface ParsedWanGpMetadata {
   height?: number;
   renderSeconds?: number;
   durationSeconds?: string;
+  fps?: number;
   generatedAt?: number;
   loras: Lora[];
   rawComment?: string;
+  turboPreset?: string;
+  turboMode?: boolean;
+  skipStepsMultiplier?: number;
+  skipStepsCacheType?: string;
+  overrideAttention?: string;
+  slidingWindowSize?: number;
+  slidingWindowOverlap?: number;
+  cfg?: number;
+  jobId?: string;
+  jobElapsedTimeSeconds?: number;
+  generationTimeBasis?: string;
+  settingsVersion?: number;
 }
 
 /**
- * Unified parser for WanGP metadata embedded in video Comment/Track fields.
+ * Unified parser for WanGP and Maestro metadata embedded in video Comment/Track fields or JSON sidecars.
  * Shared between AddVideoModal and BatchImportModal to prevent desync.
  */
 export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: number, fallbackFps = 24): ParsedWanGpMetadata | null {
@@ -332,29 +474,47 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
     const parsed = JSON.parse(commentRaw);
     const techDetails = extractTechnicalDetails(parsed, commentRaw, parsed.model_type || parsed.type || '');
     
+    // Support root level or nested params (Maestro / Wan2GP)
+    const actualParams = (parsed && typeof parsed === 'object' && parsed.params && typeof parsed.params === 'object')
+      ? parsed.params
+      : parsed;
+
     let width: number | undefined = undefined;
     let height: number | undefined = undefined;
-    if (parsed.resolution) {
-      const [w, h] = String(parsed.resolution).split('x');
+    const resString = actualParams.resolution || parsed.resolution || actualParams.aspect_ratio || parsed.aspect_ratio;
+    if (resString && typeof resString === 'string' && resString.includes('x')) {
+      const [w, h] = resString.split('x');
       if (w && h) {
         width = Number(w);
         height = Number(h);
       }
+    } else if (actualParams.width && actualParams.height) {
+      width = Number(actualParams.width);
+      height = Number(actualParams.height);
+    } else if (parsed.width && parsed.height) {
+      width = Number(parsed.width);
+      height = Number(parsed.height);
     }
 
+    const parsedFps = Number(actualParams.fps || parsed.fps || fallbackFps);
+
     let durationSeconds: string | undefined = undefined;
-    if (parsed.video_length !== undefined) {
-      const computedDuration = Number(parsed.video_length) / fallbackFps;
+    const videoLength = actualParams.video_length ?? parsed.video_length ?? actualParams.frame_count ?? parsed.frame_count;
+    if (videoLength !== undefined) {
+      const computedDuration = Number(videoLength) / parsedFps;
       durationSeconds = computedDuration.toFixed(1);
     } else if (fallbackDurationSec !== undefined && fallbackDurationSec > 0) {
       durationSeconds = fallbackDurationSec.toFixed(1);
     }
 
     const loras: Lora[] = [];
-    if (parsed.activated_loras && parsed.loras_multipliers) {
-      const weights = String(parsed.loras_multipliers).split('|');
-      parsed.activated_loras.forEach((loraPath: string, idx: number) => {
-        const nameParts = loraPath.split(/[\/\\]/);
+    const activatedLoras = actualParams.activated_loras || parsed.activated_loras || actualParams.loras || parsed.loras;
+    const lorasMultipliers = actualParams.loras_multipliers || parsed.loras_multipliers;
+
+    if (Array.isArray(activatedLoras) && lorasMultipliers) {
+      const weights = String(lorasMultipliers).split('|');
+      activatedLoras.forEach((loraPath: string, idx: number) => {
+        const nameParts = String(loraPath).split(/[\/\\]/);
         let baseName = nameParts[nameParts.length - 1];
         baseName = baseName.replace(/\.[^/.]+$/, "");
         const weightStr = weights[idx];
@@ -362,29 +522,87 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
           loras.push({ name: baseName, weight: parseFloat(weightStr) });
         }
       });
+    } else if (Array.isArray(activatedLoras)) {
+      activatedLoras.forEach((loraItem: any) => {
+        if (typeof loraItem === 'string') {
+          const nameParts = loraItem.split(/[\/\\]/);
+          let baseName = nameParts[nameParts.length - 1].replace(/\.[^/.]+$/, "");
+          loras.push({ name: baseName, weight: 1 });
+        } else if (loraItem && typeof loraItem === 'object' && loraItem.name) {
+          loras.push({ name: loraItem.name, weight: loraItem.weight ?? 1 });
+        }
+      });
+    }
+
+    const prompt = actualParams.prompt || parsed.prompt || undefined;
+    const seed = actualParams.seed !== undefined ? String(actualParams.seed) : (parsed.seed !== undefined ? String(parsed.seed) : undefined);
+    const steps = actualParams.num_inference_steps !== undefined 
+      ? Number(actualParams.num_inference_steps) 
+      : (parsed.num_inference_steps !== undefined ? Number(parsed.num_inference_steps) : (actualParams.steps !== undefined ? Number(actualParams.steps) : undefined));
+    const shift = actualParams.flow_shift !== undefined 
+      ? String(actualParams.flow_shift) 
+      : (parsed.flow_shift !== undefined ? String(parsed.flow_shift) : (actualParams.shift !== undefined ? String(actualParams.shift) : undefined));
+
+    const renderSeconds = parsed.generation_time !== undefined 
+      ? Number(parsed.generation_time) 
+      : (actualParams.generation_time !== undefined ? Number(actualParams.generation_time) : (parsed.job_elapsed_time !== undefined ? Number(parsed.job_elapsed_time) : undefined));
+
+    let generatedAt: number | undefined = undefined;
+    if (parsed.created_at !== undefined) {
+      const num = Number(parsed.created_at);
+      if (!isNaN(num) && num > 0) {
+        generatedAt = num > 1e11 ? Math.round(num) : Math.round(num * 1000);
+      }
+    } else if (actualParams.created_at !== undefined) {
+      const num = Number(actualParams.created_at);
+      if (!isNaN(num) && num > 0) {
+        generatedAt = num > 1e11 ? Math.round(num) : Math.round(num * 1000);
+      }
+    } else if (parsed.creation_timestamp !== undefined) {
+      generatedAt = Math.round(Number(parsed.creation_timestamp) * 1000);
+    } else if (actualParams.creation_timestamp !== undefined) {
+      generatedAt = Math.round(Number(actualParams.creation_timestamp) * 1000);
+    } else if (parsed.creation_date) {
+      generatedAt = new Date(parsed.creation_date).getTime();
+    } else if (actualParams.creation_date) {
+      generatedAt = new Date(actualParams.creation_date).getTime();
     }
 
     return {
-      prompt: parsed.prompt ? String(parsed.prompt) : undefined,
-      seed: parsed.seed !== undefined ? String(parsed.seed) : undefined,
-      steps: parsed.num_inference_steps !== undefined ? Number(parsed.num_inference_steps) : undefined,
-      shift: parsed.flow_shift !== undefined ? String(parsed.flow_shift) : undefined,
+      prompt: prompt ? String(prompt) : undefined,
+      seed,
+      steps,
+      shift,
       baseModel: techDetails.baseModel,
       modelSizeB: techDetails.modelSizeB,
       modelVariant: techDetails.modelVariant,
+      modelTypeRaw: techDetails.modelTypeRaw,
+      softwareSource: techDetails.softwareSource,
+      localTool: techDetails.localTool,
       videoVae: techDetails.videoVae,
       textEncoder: techDetails.textEncoder,
       precision: techDetails.precision,
       tags: techDetails.tags,
       width,
       height,
-      renderSeconds: parsed.generation_time !== undefined ? Number(parsed.generation_time) : undefined,
+      renderSeconds,
       durationSeconds,
-      generatedAt: parsed.creation_timestamp !== undefined 
-        ? Number(parsed.creation_timestamp) * 1000 
-        : (parsed.creation_date ? new Date(parsed.creation_date).getTime() : undefined),
+      fps: parsedFps,
+      generatedAt,
       loras,
       rawComment: commentRaw,
+      turboPreset: techDetails.turboPreset,
+      turboMode: techDetails.turboMode,
+      skipStepsMultiplier: techDetails.skipStepsMultiplier,
+      skipStepsCacheType: techDetails.skipStepsCacheType,
+      overrideAttention: techDetails.overrideAttention,
+      slidingWindowSize: techDetails.slidingWindowSize,
+      slidingWindowOverlap: techDetails.slidingWindowOverlap,
+      cfg: techDetails.cfg,
+      jobId: techDetails.jobId,
+      jobElapsedTimeSeconds: techDetails.jobElapsedTimeSeconds,
+      generationTimeBasis: techDetails.generationTimeBasis,
+      settingsVersion: techDetails.settingsVersion,
     };
   } catch {
     // Non-JSON comment fallback
@@ -393,12 +611,27 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
       baseModel: techDetails.baseModel,
       modelSizeB: techDetails.modelSizeB,
       modelVariant: techDetails.modelVariant,
+      modelTypeRaw: techDetails.modelTypeRaw,
+      softwareSource: techDetails.softwareSource,
+      localTool: techDetails.localTool,
       videoVae: techDetails.videoVae,
       textEncoder: techDetails.textEncoder,
       precision: techDetails.precision,
       tags: techDetails.tags,
       loras: [],
       rawComment: commentRaw,
+      turboPreset: techDetails.turboPreset,
+      turboMode: techDetails.turboMode,
+      skipStepsMultiplier: techDetails.skipStepsMultiplier,
+      skipStepsCacheType: techDetails.skipStepsCacheType,
+      overrideAttention: techDetails.overrideAttention,
+      slidingWindowSize: techDetails.slidingWindowSize,
+      slidingWindowOverlap: techDetails.slidingWindowOverlap,
+      cfg: techDetails.cfg,
+      jobId: techDetails.jobId,
+      jobElapsedTimeSeconds: techDetails.jobElapsedTimeSeconds,
+      generationTimeBasis: techDetails.generationTimeBasis,
+      settingsVersion: techDetails.settingsVersion,
     };
   }
 }
@@ -434,6 +667,20 @@ export function computeParameterDiff(a: VideoRecord, b: VideoRecord): DiffItem[]
     displayA: a.model || 'No especificado',
     displayB: b.model || 'No especificado',
     isDifferent: modelDiff,
+  });
+
+  // 1.1 Herramienta / Software (Wan2GP / Maestro)
+  const toolA = a.localTool || (a.softwareSource === 'maestro' ? 'Maestro' : 'Wan2GP');
+  const toolB = b.localTool || (b.softwareSource === 'maestro' ? 'Maestro' : 'Wan2GP');
+  diffs.push({
+    id: 'software',
+    category: 'model',
+    label: 'Software / Pipeline',
+    valueA: toolA,
+    valueB: toolB,
+    displayA: toolA,
+    displayB: toolB,
+    isDifferent: toolA.toLowerCase() !== toolB.toLowerCase(),
   });
 
   // 2. Text Encoder
@@ -857,91 +1104,147 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
     ? (customCategory.trim() || undefined)
     : (urlInfo.suggestedGroupName?.trim() || undefined);
 
+  // Parse filename heuristics as initial fallback
+  const rawFileName = urlInfo.fileName ? urlInfo.fileName.replace(/\.[^/.]+$/, "") : "";
+  let fallbackSeed: string | undefined = undefined;
+  const seedMatch = rawFileName.match(/seed[_\-]?(\d+)/i);
+  if (seedMatch && seedMatch[1]) {
+    fallbackSeed = seedMatch[1];
+  }
+
+  let fallbackGeneratedAt: number | undefined = undefined;
+  const dateMatch = rawFileName.match(/(\d{4})_(\d{2})_(\d{2})_(\d{2})h(\d{2})m(\d{2})s/i);
+  if (dateMatch) {
+    const [, yr, mo, da, hr, mi, se] = dateMatch;
+    const parsedDate = new Date(`${yr}-${mo}-${da}T${hr}:${mi}:${se}`);
+    if (!isNaN(parsedDate.getTime())) {
+      fallbackGeneratedAt = parsedDate.getTime();
+    }
+  }
+
+  let prompt = rawFileName ? rawFileName.replace(/seed\d+/i, '').replace(/\d{4}_\d{2}_\d{2}_\d{2}h\d{2}m\d{2}s/i, '').replace(/[_\-]+/g, ' ').trim() : "Importado desde URL";
+  if (!prompt) prompt = "Importado desde URL";
+  let title: string | undefined = generateTitleFromPrompt(prompt) || undefined;
+
+  let width = 1920;
+  let height = 1080;
+  let model = "Wan 2.1";
+  let modelSizeB: number | undefined = undefined;
+  let modelVariant: string | undefined = undefined;
+  let durationSeconds = 5;
+  let steps = 30;
+  let shift = "5.0";
+  let seed = fallbackSeed || "";
+  let tagsInput = "";
+  let videoVae: string = 'Original VAE';
+  let textEncoder: string = 'Not Found';
+  let loras: Lora[] = [];
+  let renderSeconds: number | undefined = undefined;
+  let generatedAt: number | undefined = fallbackGeneratedAt;
+  let fileSizeBytes: number | undefined = undefined;
+  let commentRaw: string | undefined = undefined;
+
+  let softwareSource: 'wan2gp' | 'maestro' | 'comfyui' | 'other' | undefined = source === 'local' ? 'wan2gp' : undefined;
+  let localTool: string | undefined = source === 'local' ? 'Wan2GP' : undefined;
+  let modelTypeRaw: string | undefined = undefined;
+  let turboPreset: string | undefined = undefined;
+  let turboMode: boolean | undefined = undefined;
+  let skipStepsMultiplier: number | undefined = undefined;
+  let skipStepsCacheType: string | undefined = undefined;
+  let overrideAttention: string | undefined = undefined;
+  let slidingWindowSize: number | undefined = undefined;
+  let slidingWindowOverlap: number | undefined = undefined;
+  let cfg: number | undefined = undefined;
+  let jobId: string | undefined = undefined;
+  let jobElapsedTimeSeconds: number | undefined = undefined;
+  let generationTimeBasis: string | undefined = undefined;
+  let settingsVersion: number | undefined = undefined;
+
+  try {
+    const response = await fetch(url);
+    if (response.ok) {
+      const blob = await response.blob();
+      fileSizeBytes = blob.size;
+
+      const getSize = () => blob.size;
+      const readChunk = (chunkSize: number, offset: number) =>
+        new Promise<Uint8Array>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            if (e.target?.error) {
+              reject(e.target.error);
+            } else if (e.target?.result) {
+              resolve(new Uint8Array(e.target.result as ArrayBuffer));
+            } else {
+              reject(new Error("Empty chunk"));
+            }
+          };
+          reader.readAsArrayBuffer(blob.slice(offset, offset + chunkSize));
+        });
+
+      const mediainfoModule = await loadSharedMediaInfo();
+      const mi = await mediainfoModule.default({
+        format: 'object',
+        locateFile: () => wasmUrl
+      });
+
+      const result = await mi.analyzeData(getSize, readChunk);
+      const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General') as any;
+      const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video') as any;
+      commentRaw = generalTrack?.extra?.Comment || generalTrack?.Comment || videoTrack?.extra?.Comment || videoTrack?.Comment;
+
+      if (videoTrack?.Width) width = Number(videoTrack.Width);
+      if (videoTrack?.Height) height = Number(videoTrack.Height);
+      if (generalTrack?.Duration) durationSeconds = parseFloat(generalTrack.Duration);
+
+      if (commentRaw) {
+        const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, 24);
+        if (metadata) {
+          if (metadata.prompt) {
+            prompt = metadata.prompt;
+            const autoTitle = generateTitleFromPrompt(metadata.prompt);
+            if (autoTitle) title = autoTitle;
+          }
+          if (metadata.seed !== undefined) seed = metadata.seed;
+          if (metadata.steps !== undefined) steps = metadata.steps;
+          if (metadata.shift !== undefined) shift = metadata.shift;
+          if (metadata.baseModel) model = metadata.baseModel;
+          if (metadata.modelSizeB !== undefined) modelSizeB = metadata.modelSizeB;
+          if (metadata.modelVariant) modelVariant = metadata.modelVariant;
+          if (metadata.modelTypeRaw) modelTypeRaw = metadata.modelTypeRaw;
+          if (metadata.softwareSource) softwareSource = metadata.softwareSource;
+          if (metadata.localTool) localTool = metadata.localTool;
+          videoVae = metadata.videoVae || 'Original VAE';
+          textEncoder = metadata.textEncoder;
+          if (metadata.tags && metadata.tags.length > 0) tagsInput = metadata.tags.join(', ');
+          if (metadata.renderSeconds !== undefined) renderSeconds = metadata.renderSeconds;
+          if (metadata.generatedAt !== undefined) generatedAt = metadata.generatedAt;
+          if (metadata.loras && metadata.loras.length > 0) loras = metadata.loras;
+          turboPreset = metadata.turboPreset;
+          turboMode = metadata.turboMode;
+          skipStepsMultiplier = metadata.skipStepsMultiplier;
+          skipStepsCacheType = metadata.skipStepsCacheType;
+          overrideAttention = metadata.overrideAttention;
+          slidingWindowSize = metadata.slidingWindowSize;
+          slidingWindowOverlap = metadata.slidingWindowOverlap;
+          cfg = metadata.cfg;
+          jobId = metadata.jobId;
+          jobElapsedTimeSeconds = metadata.jobElapsedTimeSeconds;
+          generationTimeBasis = metadata.generationTimeBasis;
+          settingsVersion = metadata.settingsVersion;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("Extracción binaria remota falló (usando fallback por URL):", err);
+  }
+
+  // Notificar categoría descubierta una vez confirmado el registro
   if (finalGroupName && onAddCategory) {
     onAddCategory(finalGroupName);
   }
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status} (${response.statusText || 'Error de red'})`);
-  }
-  const blob = await response.blob();
-
-  const getSize = () => blob.size;
-  const readChunk = (chunkSize: number, offset: number) =>
-    new Promise<Uint8Array>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.error) {
-          reject(e.target.error);
-        } else if (e.target?.result) {
-          resolve(new Uint8Array(e.target.result as ArrayBuffer));
-        } else {
-          reject(new Error("Empty chunk"));
-        }
-      };
-      reader.readAsArrayBuffer(blob.slice(offset, offset + chunkSize));
-    });
-
-  const mediainfoModule = await loadSharedMediaInfo();
-  const mi = await mediainfoModule.default({
-    format: 'object',
-    locateFile: () => wasmUrl
-  });
-
-  const result = await mi.analyzeData(getSize, readChunk);
-  const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General') as any;
-  const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video') as any;
-  const commentRaw = generalTrack?.extra?.Comment || generalTrack?.Comment || videoTrack?.extra?.Comment || videoTrack?.Comment;
-
-  let width = 1920;
-  let height = 1080;
-  let prompt = "Importado desde URL";
-  let model = "Desconocido";
-  let modelSizeB: number | undefined = undefined;
-  let modelVariant: string | undefined = undefined;
-  let title: string | undefined = undefined;
-  let durationSeconds = 5;
-  let steps = 30;
-  let shift = "5.0";
-  let seed = "";
-  let tagsInput = "";
-  let videoVae: string = 'Not Found';
-  let textEncoder: string = 'Not Found';
-  let loras: Lora[] = [];
-  let renderSeconds: number | undefined = undefined;
-  let generatedAt: number | undefined = undefined;
-  let fileSizeBytes: number | undefined = blob.size;
-
-  if (videoTrack?.Width) width = Number(videoTrack.Width);
-  if (videoTrack?.Height) height = Number(videoTrack.Height);
-  if (generalTrack?.Duration) durationSeconds = parseFloat(generalTrack.Duration);
-
-  if (commentRaw) {
-    const metadata = parseWanGpMetadata(commentRaw, generalTrack?.Duration ? parseFloat(generalTrack.Duration) : undefined, 24);
-    if (metadata) {
-      if (metadata.prompt) {
-        prompt = metadata.prompt;
-        const autoTitle = generateTitleFromPrompt(metadata.prompt);
-        if (autoTitle) title = autoTitle;
-      }
-      if (metadata.seed !== undefined) seed = metadata.seed;
-      if (metadata.steps !== undefined) steps = metadata.steps;
-      if (metadata.shift !== undefined) shift = metadata.shift;
-      if (metadata.baseModel) model = metadata.baseModel;
-      if (metadata.modelSizeB !== undefined) modelSizeB = metadata.modelSizeB;
-      if (metadata.modelVariant) modelVariant = metadata.modelVariant;
-      videoVae = metadata.videoVae;
-      textEncoder = metadata.textEncoder;
-      if (metadata.tags && metadata.tags.length > 0) tagsInput = metadata.tags.join(', ');
-      if (metadata.renderSeconds !== undefined) renderSeconds = metadata.renderSeconds;
-      if (metadata.generatedAt !== undefined) generatedAt = metadata.generatedAt;
-      if (metadata.loras && metadata.loras.length > 0) loras = metadata.loras;
-    }
-  }
-
   const orientation = calculateOrientation(width, height);
-
   const resolvedDisplayName = userDisplayName || userEmail || urlInfo.username || undefined;
   const resolvedCreatedBy = userEmail || userDisplayName || (urlInfo.username ? `@${urlInfo.username}` : undefined);
 
@@ -954,29 +1257,71 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
     model,
     modelSizeB,
     modelVariant,
+    modelTypeRaw,
+    softwareSource,
     source,
-    localTool: source === 'local' ? 'Wan2GP' : undefined,
+    localTool: localTool || (source === 'local' ? (softwareSource === 'maestro' ? 'Maestro' : 'Wan2GP') : undefined),
     tags: tagsInput ? tagsInput.split(',').map(s => s.trim()).filter(Boolean) : [],
     width,
     height,
     orientation,
-    steps,
-    shift: shift ? parseFloat(shift) : undefined,
-    seed: seed ? parseInt(seed) : undefined,
+    steps: steps !== undefined && !isNaN(Number(steps)) ? Number(steps) : 30,
+    shift: shift && !isNaN(parseFloat(shift)) ? parseFloat(shift) : undefined,
+    seed: seed && !isNaN(parseInt(seed, 10)) ? parseInt(seed, 10) : undefined,
     fps: 24,
-    durationSeconds,
-    videoVae,
+    durationSeconds: durationSeconds && !isNaN(Number(durationSeconds)) ? Number(durationSeconds) : 5,
+    videoVae: videoVae && videoVae !== 'Not Found' ? videoVae : 'Original VAE',
     textEncoder,
     loras,
     createdAt: Date.now(),
     createdBy: resolvedCreatedBy,
     creatorUid: userUid,
     creatorDisplayName: resolvedDisplayName,
-    renderSeconds,
-    fileSizeBytes,
-    generatedAt,
-    rawMetadata: commentRaw
+    renderSeconds: renderSeconds !== undefined && !isNaN(renderSeconds) ? renderSeconds : undefined,
+    fileSizeBytes: fileSizeBytes !== undefined && !isNaN(fileSizeBytes) ? fileSizeBytes : undefined,
+    generatedAt: generatedAt !== undefined && !isNaN(generatedAt) ? generatedAt : undefined,
+    rawMetadata: commentRaw,
+    turboPreset,
+    turboMode,
+    skipStepsMultiplier: skipStepsMultiplier !== undefined && !isNaN(skipStepsMultiplier) ? skipStepsMultiplier : undefined,
+    skipStepsCacheType,
+    overrideAttention,
+    slidingWindowSize: slidingWindowSize !== undefined && !isNaN(slidingWindowSize) ? slidingWindowSize : undefined,
+    slidingWindowOverlap: slidingWindowOverlap !== undefined && !isNaN(slidingWindowOverlap) ? slidingWindowOverlap : undefined,
+    cfg: cfg !== undefined && !isNaN(cfg) ? cfg : undefined,
+    jobId,
+    jobElapsedTimeSeconds: jobElapsedTimeSeconds !== undefined && !isNaN(jobElapsedTimeSeconds) ? jobElapsedTimeSeconds : undefined,
+    generationTimeBasis,
+    settingsVersion: settingsVersion !== undefined && !isNaN(settingsVersion) ? settingsVersion : undefined,
   };
 
   return record;
+}
+
+/**
+ * Deep sanitization for Firestore payloads.
+ * Strips out undefined, NaN, Infinity, and invalid nested structures.
+ */
+export function cleanForFirestore(obj: any): any {
+  if (obj === undefined) return undefined;
+  if (typeof obj === 'number') {
+    if (isNaN(obj) || !isFinite(obj)) return undefined;
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj
+      .map(item => cleanForFirestore(item))
+      .filter(item => item !== undefined);
+  }
+  if (obj !== null && typeof obj === 'object') {
+    const res: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const cleaned = cleanForFirestore(v);
+      if (cleaned !== undefined) {
+        res[k] = cleaned;
+      }
+    }
+    return res;
+  }
+  return obj;
 }

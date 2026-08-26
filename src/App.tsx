@@ -16,8 +16,8 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
 import { VaultLogo } from './components/VaultLogo';
 import { AISparkle } from './components/AISparkle';
-import { calculateOrientation } from './lib/utils';
-import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2 } from 'lucide-react';
+import { calculateOrientation, cleanForFirestore, extractTechnicalDetails } from './lib/utils';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
 
@@ -31,6 +31,41 @@ function normalizeRecord(raw: any): VideoRecord {
   const videoUrl = raw.videoUrl || '';
   const orientation = raw.orientation || calculateOrientation(width, height);
 
+  let localTool = typeof raw.localTool === 'string' && raw.localTool.trim() ? raw.localTool.trim() : undefined;
+  let softwareSource = raw.softwareSource;
+
+  // Auto-evaluar desde rawMetadata para corrección precisa de Maestro vs Wan2GP
+  if (raw.rawMetadata) {
+    try {
+      const parsed = typeof raw.rawMetadata === 'string' ? JSON.parse(raw.rawMetadata) : raw.rawMetadata;
+      const tech = extractTechnicalDetails(
+        parsed,
+        typeof raw.rawMetadata === 'string' ? raw.rawMetadata : JSON.stringify(raw.rawMetadata),
+        parsed?.model_type || parsed?.type || raw.model || ''
+      );
+      if (tech.softwareSource) {
+        softwareSource = tech.softwareSource;
+        localTool = tech.localTool;
+      }
+    } catch {}
+  }
+
+  // Fallback de consistencia entre softwareSource y localTool si no hay rawMetadata
+  if (!softwareSource && localTool) {
+    if (localTool.toLowerCase().includes('maestro')) {
+      softwareSource = 'maestro';
+      localTool = 'Maestro';
+    } else if (localTool.toLowerCase().includes('comfy')) {
+      softwareSource = 'comfyui';
+      localTool = 'ComfyUI';
+    } else {
+      softwareSource = 'wan2gp';
+      localTool = 'Wan2GP';
+    }
+  } else if (softwareSource && !localTool) {
+    localTool = softwareSource === 'maestro' ? 'Maestro' : (softwareSource === 'comfyui' ? 'ComfyUI' : 'Wan2GP');
+  }
+
   return {
     id: raw.id,
     schemaVersion: 2,
@@ -41,8 +76,10 @@ function normalizeRecord(raw: any): VideoRecord {
     model: raw.model || 'Desconocido',
     modelSizeB: typeof raw.modelSizeB === 'number' ? raw.modelSizeB : undefined,
     modelVariant: typeof raw.modelVariant === 'string' && raw.modelVariant.trim() ? raw.modelVariant.trim() : undefined,
+    modelTypeRaw: typeof raw.modelTypeRaw === 'string' ? raw.modelTypeRaw : undefined,
+    softwareSource,
     source: raw.source === 'cloud' ? 'cloud' : 'local',
-    localTool: typeof raw.localTool === 'string' && raw.localTool.trim() ? raw.localTool.trim() : undefined,
+    localTool,
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     groupName: typeof raw.groupName === 'string' ? raw.groupName : undefined,
     width,
@@ -58,14 +95,26 @@ function normalizeRecord(raw: any): VideoRecord {
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
     createdBy: raw.createdBy,
     creatorDisplayName: typeof raw.creatorDisplayName === 'string' ? raw.creatorDisplayName : undefined,
-    videoVae: typeof raw.videoVae === 'string' ? raw.videoVae : undefined,
+    videoVae: typeof raw.videoVae === 'string' && raw.videoVae !== 'Not Found' ? raw.videoVae : 'Original VAE',
     textEncoder: typeof raw.textEncoder === 'string' ? raw.textEncoder : undefined,
     precision: typeof raw.precision === 'string' ? raw.precision : undefined,
     renderSeconds: typeof raw.renderSeconds === 'number' ? raw.renderSeconds : undefined,
     fileSizeBytes: typeof raw.fileSizeBytes === 'number' ? raw.fileSizeBytes : undefined,
     generatedAt: typeof raw.generatedAt === 'number' ? raw.generatedAt : undefined,
     rawMetadata: typeof raw.rawMetadata === 'string' ? raw.rawMetadata : undefined,
-    hardware: raw.hardware
+    hardware: raw.hardware,
+    turboPreset: typeof raw.turboPreset === 'string' ? raw.turboPreset : undefined,
+    turboMode: typeof raw.turboMode === 'boolean' ? raw.turboMode : undefined,
+    skipStepsMultiplier: typeof raw.skipStepsMultiplier === 'number' ? raw.skipStepsMultiplier : undefined,
+    skipStepsCacheType: typeof raw.skipStepsCacheType === 'string' ? raw.skipStepsCacheType : undefined,
+    overrideAttention: typeof raw.overrideAttention === 'string' ? raw.overrideAttention : undefined,
+    slidingWindowSize: typeof raw.slidingWindowSize === 'number' ? raw.slidingWindowSize : undefined,
+    slidingWindowOverlap: typeof raw.slidingWindowOverlap === 'number' ? raw.slidingWindowOverlap : undefined,
+    cfg: typeof raw.cfg === 'number' ? raw.cfg : undefined,
+    jobId: typeof raw.jobId === 'string' ? raw.jobId : undefined,
+    jobElapsedTimeSeconds: typeof raw.jobElapsedTimeSeconds === 'number' ? raw.jobElapsedTimeSeconds : undefined,
+    generationTimeBasis: typeof raw.generationTimeBasis === 'string' ? raw.generationTimeBasis : undefined,
+    settingsVersion: typeof raw.settingsVersion === 'number' ? raw.settingsVersion : undefined,
   };
 }
 
@@ -222,6 +271,7 @@ export default function App() {
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [dualComparePair, setDualComparePair] = useState<{ videoA: VideoRecord; videoB: VideoRecord } | null>(null);
   const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
+  const [dbErrorToast, setDbErrorToast] = useState<string | null>(null);
 
   // Fetch or create user profile with Firestore multi-device sync
   const fetchUserProfile = async (user: User) => {
@@ -422,10 +472,6 @@ export default function App() {
     }
   }, [currentUser]);
 
-  const cleanUndefined = (obj: any) => {
-    return Object.fromEntries(Object.entries(obj).filter(([_, v]) => v !== undefined));
-  };
-
   const handleSaveBatch = async (records: VideoRecord[]) => {
     const activeNick = userDisplayName || currentUser?.displayName || userProfile?.displayName;
     const activeEmail = currentUser?.email || userProfile?.email;
@@ -447,29 +493,35 @@ export default function App() {
     });
 
     if (db && !usingLocal) {
+      console.log(`[AI Video Vault] Iniciando guardado de lote (${records.length} vídeos) en Firestore...`, {
+        user: currentUser?.email,
+        uid: currentUser?.uid,
+        isAdmin
+      });
       try {
-        const batchPromises = records.map(record => {
-          const cleanRecord = cleanUndefined(record);
-          return addDoc(collection(db, COLLECTION_NAME), cleanRecord);
+        const batchPromises = records.map(async (record, index) => {
+          const cleanRecord = cleanForFirestore(record);
+          console.log(`[AI Video Vault] Guardando registro #${index + 1}:`, cleanRecord);
+          return await addDoc(collection(db, COLLECTION_NAME), cleanRecord);
         });
-        await Promise.all(batchPromises);
-      } catch (err) {
-        console.error("Error al escribir en Firestore batch", err);
-        const recordsWithIds = records.map(r => ({ ...r, id: `local_${crypto.randomUUID()}` }));
-        const newVids = [...recordsWithIds, ...videos];
-        setVideos(newVids);
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(newVids));
-        } catch {}
-        setUsingLocal(true);
+        const docRefs = await Promise.all(batchPromises);
+        console.log(`[AI Video Vault] ✓ Guardados con éxito ${docRefs.length} documentos en Firestore.`);
+      } catch (err: any) {
+        console.error("[AI Video Vault] ❌ Error crítico al escribir en Firestore batch:", err);
+        const errMsg = err?.code ? `Firebase [${err.code}]: ${err.message}` : (err?.message || 'Error desconocido de Firestore');
+        setDbErrorToast(`Error al guardar en Firebase: ${errMsg}`);
+        throw new Error(errMsg);
       }
     } else {
+      console.log(`[AI Video Vault] Guardando lote de ${records.length} vídeos en modo local...`);
       const recordsWithIds = records.map(r => ({ ...r, id: `local_${crypto.randomUUID()}` }));
       const newVids = [...recordsWithIds, ...videos];
       setVideos(newVids);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newVids));
-      } catch {}
+      } catch (e) {
+        console.error("[AI Video Vault] Error al guardar en localStorage:", e);
+      }
     }
   };
 
@@ -489,20 +541,17 @@ export default function App() {
       record.creatorDisplayName = activeNick;
     }
 
-    const cleanRecord = cleanUndefined(record);
+    const cleanRecord = cleanForFirestore(record);
     if (db && !usingLocal) {
+      console.log("[AI Video Vault] Guardando nuevo vídeo en Firestore:", cleanRecord);
       try {
-        await addDoc(collection(db, COLLECTION_NAME), cleanRecord);
-      } catch (err) {
-        console.error("Error al escribir en Firestore", err);
-        // Fallback inmediato a almacenamiento local si Firebase rechaza la escritura
-        const newRecord = { ...record, id: `local_${Date.now()}` };
-        const updated = [newRecord, ...videos];
-        setVideos(updated);
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        } catch {}
-        setUsingLocal(true);
+        const docRef = await addDoc(collection(db, COLLECTION_NAME), cleanRecord);
+        console.log("[AI Video Vault] ✓ Guardado con éxito con ID:", docRef.id);
+      } catch (err: any) {
+        console.error("[AI Video Vault] ❌ Error al escribir en Firestore:", err);
+        const errMsg = err?.code ? `Firebase [${err.code}]: ${err.message}` : (err?.message || 'Error al guardar en Firestore');
+        setDbErrorToast(`Error al guardar en Firebase: ${errMsg}`);
+        throw new Error(errMsg);
       }
     } else {
       const newRecord = { ...record, id: `local_${Date.now()}` };
@@ -510,22 +559,23 @@ export default function App() {
       setVideos(updated);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {}
+      } catch (e) {
+        console.error("[AI Video Vault] Error al guardar en localStorage:", e);
+      }
     }
   };
 
   const handleEditVideo = async (record: VideoRecord) => {
-    const cleanRecord = cleanUndefined(record);
+    const cleanRecord = cleanForFirestore(record);
     if (db && !usingLocal && record.id && !record.id.startsWith('local_')) {
       try {
         await updateDoc(doc(db, COLLECTION_NAME, record.id), cleanRecord);
-      } catch (err) {
-        console.error("Error al actualizar en Firestore", err);
-        const updated = videos.map(v => v.id === record.id ? record : v);
-        setVideos(updated);
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        } catch {}
+        console.log("[AI Video Vault] ✓ Vídeo actualizado en Firestore:", record.id);
+      } catch (err: any) {
+        console.error("[AI Video Vault] ❌ Error al actualizar en Firestore:", err);
+        const errMsg = err?.code ? `Firebase [${err.code}]: ${err.message}` : (err?.message || 'Error al actualizar');
+        setDbErrorToast(`Error al actualizar en Firebase: ${errMsg}`);
+        throw new Error(errMsg);
       }
     } else {
       const updated = videos.map(v => v.id === record.id ? record : v);
@@ -835,6 +885,23 @@ export default function App() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 font-sans selection:bg-teal-900/50 flex flex-col justify-between">
       <div>
+        {/* Banner de error de base de datos */}
+        {dbErrorToast && (
+          <div className="bg-rose-950/90 border-b border-rose-800/80 px-4 py-3 text-xs text-rose-200 flex items-center justify-between gap-3 sticky top-0 z-50 backdrop-blur-md animate-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2.5 max-w-5xl mx-auto flex-1">
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+              <span className="font-semibold text-rose-100">{dbErrorToast}</span>
+            </div>
+            <button
+              onClick={() => setDbErrorToast(null)}
+              className="p-1 hover:bg-rose-900/50 rounded-lg text-rose-300 hover:text-white cursor-pointer transition-colors"
+              title="Cerrar aviso"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* Header Fijo */}
         <header className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800">
           <div className="max-w-[1600px] mx-auto px-6 h-20 flex items-center justify-between gap-6">

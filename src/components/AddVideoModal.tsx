@@ -1,6 +1,6 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
+import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, processVideoMetadataFromUrl, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
 import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder, Type, Wrench } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
@@ -33,6 +33,8 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [model, setModel] = useState(initialData?.model || '');
   const [modelSizeB, setModelSizeB] = useState<number | undefined>(initialData?.modelSizeB);
   const [modelVariant, setModelVariant] = useState(initialData?.modelVariant || '');
+  const [modelTypeRaw, setModelTypeRaw] = useState<string | undefined>(initialData?.modelTypeRaw);
+  const [softwareSource, setSoftwareSource] = useState<'wan2gp' | 'maestro' | 'comfyui' | 'other' | undefined>(initialData?.softwareSource);
   const [source, setSource] = useState<VideoSource>(initialData?.source || 'local');
   const [localTool, setLocalTool] = useState(initialData?.localTool || 'Wan2GP');
   const [tagsInput, setTagsInput] = useState(initialData?.tags?.join(', ') || '');
@@ -45,7 +47,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [fps, setFps] = useState<string>(initialData?.fps?.toString() || '');
   const [durationSeconds, setDurationSeconds] = useState<string>(initialData?.durationSeconds?.toString() || '');
   const [fileSizeBytes, setFileSizeBytes] = useState<number | undefined>(initialData?.fileSizeBytes);
-  const [videoVae, setVideoVae] = useState<string>(initialData?.videoVae || '');
+  const [videoVae, setVideoVae] = useState<string>(initialData?.videoVae || 'Original VAE');
   const [textEncoder, setTextEncoder] = useState<string>(initialData?.textEncoder || '');
   const [precision, setPrecision] = useState<string>(initialData?.precision || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
@@ -55,6 +57,20 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [renderSeconds, setRenderSeconds] = useState<string>(initialData?.renderSeconds?.toString() || '');
   const [generatedAt, setGeneratedAt] = useState<number | undefined>(initialData?.generatedAt);
   const [rawMetadata, setRawMetadata] = useState<string>(initialData?.rawMetadata || '');
+  
+  // Maestro / Extended technical fields
+  const [turboPreset, setTurboPreset] = useState<string | undefined>(initialData?.turboPreset);
+  const [turboMode, setTurboMode] = useState<boolean | undefined>(initialData?.turboMode);
+  const [skipStepsMultiplier, setSkipStepsMultiplier] = useState<number | undefined>(initialData?.skipStepsMultiplier);
+  const [skipStepsCacheType, setSkipStepsCacheType] = useState<string | undefined>(initialData?.skipStepsCacheType);
+  const [overrideAttention, setOverrideAttention] = useState<string | undefined>(initialData?.overrideAttention);
+  const [slidingWindowSize, setSlidingWindowSize] = useState<number | undefined>(initialData?.slidingWindowSize);
+  const [slidingWindowOverlap, setSlidingWindowOverlap] = useState<number | undefined>(initialData?.slidingWindowOverlap);
+  const [cfg, setCfg] = useState<number | undefined>(initialData?.cfg);
+  const [jobId, setJobId] = useState<string | undefined>(initialData?.jobId);
+  const [jobElapsedTimeSeconds, setJobElapsedTimeSeconds] = useState<number | undefined>(initialData?.jobElapsedTimeSeconds);
+  const [generationTimeBasis, setGenerationTimeBasis] = useState<string | undefined>(initialData?.generationTimeBasis);
+  const [settingsVersion, setSettingsVersion] = useState<number | undefined>(initialData?.settingsVersion);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -158,9 +174,24 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
           if (metadata.baseModel) { setModel(metadata.baseModel); newAutoFilled.model = true; foundSomething = true; }
           if (metadata.modelSizeB !== undefined) { setModelSizeB(metadata.modelSizeB); }
           if (metadata.modelVariant) { setModelVariant(metadata.modelVariant); newAutoFilled.modelVariant = true; foundSomething = true; }
+          if (metadata.modelTypeRaw) { setModelTypeRaw(metadata.modelTypeRaw); }
+          if (metadata.softwareSource) { setSoftwareSource(metadata.softwareSource); }
+          if (metadata.localTool) { setLocalTool(metadata.localTool); newAutoFilled.localTool = true; foundSomething = true; }
           if (metadata.videoVae) { setVideoVae(metadata.videoVae); newAutoFilled.videoVae = true; foundSomething = true; }
           if (metadata.textEncoder) { setTextEncoder(metadata.textEncoder); newAutoFilled.textEncoder = true; foundSomething = true; }
           if (metadata.precision) { setPrecision(metadata.precision); newAutoFilled.precision = true; foundSomething = true; }
+          if (metadata.turboPreset) { setTurboPreset(metadata.turboPreset); }
+          if (metadata.turboMode !== undefined) { setTurboMode(metadata.turboMode); }
+          if (metadata.skipStepsMultiplier !== undefined) { setSkipStepsMultiplier(metadata.skipStepsMultiplier); }
+          if (metadata.skipStepsCacheType) { setSkipStepsCacheType(metadata.skipStepsCacheType); }
+          if (metadata.overrideAttention) { setOverrideAttention(metadata.overrideAttention); }
+          if (metadata.slidingWindowSize !== undefined) { setSlidingWindowSize(metadata.slidingWindowSize); }
+          if (metadata.slidingWindowOverlap !== undefined) { setSlidingWindowOverlap(metadata.slidingWindowOverlap); }
+          if (metadata.cfg !== undefined) { setCfg(metadata.cfg); }
+          if (metadata.jobId) { setJobId(metadata.jobId); }
+          if (metadata.jobElapsedTimeSeconds !== undefined) { setJobElapsedTimeSeconds(metadata.jobElapsedTimeSeconds); }
+          if (metadata.generationTimeBasis) { setGenerationTimeBasis(metadata.generationTimeBasis); }
+          if (metadata.settingsVersion !== undefined) { setSettingsVersion(metadata.settingsVersion); }
           if (metadata.tags && metadata.tags.length > 0) {
             const existingTags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
             const merged = Array.from(new Set([...existingTags, ...metadata.tags]));
@@ -183,6 +214,11 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
           if (metadata.durationSeconds !== undefined && !newAutoFilled.durationSeconds) {
             setDurationSeconds(metadata.durationSeconds);
             newAutoFilled.durationSeconds = true;
+            foundSomething = true;
+          }
+          if (metadata.fps !== undefined && !newAutoFilled.fps) {
+            setFps(String(metadata.fps));
+            newAutoFilled.fps = true;
             foundSomething = true;
           }
           if (metadata.generatedAt !== undefined) {
@@ -311,6 +347,8 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       model: model.trim(),
       modelSizeB,
       modelVariant: modelVariant.trim() ? modelVariant.trim() : undefined,
+      modelTypeRaw,
+      softwareSource: softwareSource || (source === 'local' ? (localTool.toLowerCase().includes('maestro') ? 'maestro' : 'wan2gp') : undefined),
       source,
       localTool: source === 'local' ? (localTool.trim() || undefined) : undefined,
       tags: cleanTags.length > 0 ? cleanTags : undefined,
@@ -333,7 +371,19 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       precision: precision.trim() ? precision.trim() : undefined,
       generatedAt,
       rawMetadata: rawMetadata.trim() !== '' ? rawMetadata : undefined,
-      groupName: groupName.trim() !== '' ? groupName.trim() : undefined
+      groupName: groupName.trim() !== '' ? groupName.trim() : undefined,
+      turboPreset,
+      turboMode,
+      skipStepsMultiplier,
+      skipStepsCacheType,
+      overrideAttention,
+      slidingWindowSize,
+      slidingWindowOverlap,
+      cfg,
+      jobId,
+      jobElapsedTimeSeconds,
+      generationTimeBasis,
+      settingsVersion,
     };
 
     if (groupName.trim() && onAddCategory) {
@@ -434,15 +484,95 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   Enlace del Vídeo (Hugging Face / Directo) <span className="text-teal-400">*</span>
                 </label>
               </div>
-              <div className="relative">
+              <div className="relative flex gap-2">
                 <input 
                   type="url" 
                   required
                   value={videoUrl}
                   onChange={e => handleVideoUrlChange(e.target.value)}
                   placeholder="URL del vídeo (ej: https://huggingface.co/.../video.mp4)"
-                  className={`w-full ${wandSuccess ? 'bg-teal-950/40 border-teal-400 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'bg-neutral-950 border-neutral-800'} rounded-xl pl-4 pr-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all duration-300 font-mono`}
+                  className={`flex-1 ${wandSuccess ? 'bg-teal-950/40 border-teal-400 shadow-[0_0_15px_rgba(45,212,191,0.2)]' : 'bg-neutral-950 border-neutral-800'} rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all duration-300 font-mono`}
                 />
+                {videoUrl.startsWith('http') && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setExtracting(true);
+                      setExtractError(null);
+                      try {
+                        const rec = await processVideoMetadataFromUrl({
+                          url: videoUrl,
+                          source,
+                          userEmail,
+                          onAddCategory,
+                        });
+                        if (rec.prompt) {
+                          setPrompt(rec.prompt);
+                          if (!title) setTitle(rec.title || generateTitleFromPrompt(rec.prompt));
+                        }
+                        if (rec.model) setModel(rec.model);
+                        if (rec.modelSizeB !== undefined) setModelSizeB(rec.modelSizeB);
+                        if (rec.modelVariant) setModelVariant(rec.modelVariant);
+                        if (rec.modelTypeRaw) setModelTypeRaw(rec.modelTypeRaw);
+                        if (rec.softwareSource) setSoftwareSource(rec.softwareSource);
+                        if (rec.localTool) setLocalTool(rec.localTool);
+                        if (rec.steps) setSteps(rec.steps);
+                        if (rec.shift !== undefined) setShift(String(rec.shift));
+                        if (rec.seed !== undefined) setSeed(String(rec.seed));
+                        if (rec.width) setWidth(rec.width);
+                        if (rec.height) setHeight(rec.height);
+                        if (rec.durationSeconds) setDurationSeconds(String(rec.durationSeconds));
+                        if (rec.videoVae) setVideoVae(rec.videoVae);
+                        if (rec.textEncoder) setTextEncoder(rec.textEncoder);
+                        if (rec.precision) setPrecision(rec.precision);
+                        if (rec.loras && rec.loras.length > 0) setLoras(rec.loras);
+                        if (rec.renderSeconds) setRenderSeconds(String(rec.renderSeconds));
+                        if (rec.generatedAt) setGeneratedAt(rec.generatedAt);
+                        if (rec.fileSizeBytes) setFileSizeBytes(rec.fileSizeBytes);
+                        if (rec.rawMetadata) setRawMetadata(rec.rawMetadata);
+                        if (rec.groupName && !groupName) setGroupName(rec.groupName);
+                        if (rec.turboPreset) setTurboPreset(rec.turboPreset);
+                        if (rec.turboMode !== undefined) setTurboMode(rec.turboMode);
+                        if (rec.skipStepsMultiplier !== undefined) setSkipStepsMultiplier(rec.skipStepsMultiplier);
+                        if (rec.skipStepsCacheType) setSkipStepsCacheType(rec.skipStepsCacheType);
+                        if (rec.overrideAttention) setOverrideAttention(rec.overrideAttention);
+                        if (rec.slidingWindowSize !== undefined) setSlidingWindowSize(rec.slidingWindowSize);
+                        if (rec.slidingWindowOverlap !== undefined) setSlidingWindowOverlap(rec.slidingWindowOverlap);
+                        if (rec.cfg !== undefined) setCfg(rec.cfg);
+                        if (rec.jobId) setJobId(rec.jobId);
+                        if (rec.jobElapsedTimeSeconds !== undefined) setJobElapsedTimeSeconds(rec.jobElapsedTimeSeconds);
+                        if (rec.generationTimeBasis) setGenerationTimeBasis(rec.generationTimeBasis);
+                        if (rec.settingsVersion !== undefined) setSettingsVersion(rec.settingsVersion);
+                        
+                        setAutoFilled({
+                          prompt: true,
+                          title: true,
+                          model: true,
+                          steps: true,
+                          width: true,
+                          height: true,
+                          videoUrl: true,
+                          groupName: true,
+                        });
+                      } catch (err: any) {
+                        console.error("Error al extraer metadatos de URL", err);
+                        setExtractError(`No se pudieron extraer metadatos de la URL: ${err.message || 'Error desconocido'}`);
+                      } finally {
+                        setExtracting(false);
+                      }
+                    }}
+                    disabled={extracting}
+                    className="px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-700/60 transition-colors flex items-center gap-1.5 shrink-0 disabled:opacity-50 cursor-pointer"
+                    title="Analizar y rellenar automáticamente los metadatos desde esta URL"
+                  >
+                    {extracting ? (
+                      <div className="w-3.5 h-3.5 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Wand2 className="w-3.5 h-3.5" />
+                    )}
+                    <span>Autocompletar</span>
+                  </button>
+                )}
               </div>
 
               {/* Hugging Face URL Detection Badge */}
@@ -606,20 +736,38 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
-                  <Wrench className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Herramienta</span>
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <Wrench className="w-3.5 h-3.5 text-teal-400" />
+                    <span>Herramienta</span>
+                  </label>
+                  {softwareSource === 'maestro' || localTool.toLowerCase().includes('maestro') ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                      <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                      Maestro
+                    </span>
+                  ) : autoFilled.localTool ? (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                      Auto-detectada
+                    </span>
+                  ) : null}
+                </div>
                 <input 
                   type="text" 
                   list="local-tools-list"
                   value={localTool}
-                  onChange={e => setLocalTool(e.target.value)}
-                  placeholder="Wan2GP, ComfyUI, SwarmUI..."
+                  onChange={e => {
+                    const val = e.target.value;
+                    setLocalTool(val);
+                    if (val.toLowerCase().includes('maestro')) setSoftwareSource('maestro');
+                    else if (val.toLowerCase().includes('comfy')) setSoftwareSource('comfyui');
+                    else if (val.toLowerCase().includes('wan')) setSoftwareSource('wan2gp');
+                  }}
+                  placeholder="Maestro, Wan2GP, ComfyUI..."
                   className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-teal-500/50 transition-all"
                 />
                 <datalist id="local-tools-list">
-                  {['Wan2GP', 'ComfyUI', 'SwarmUI', 'Forge', 'WebUI', 'Diffusers'].map(tool => (
+                  {['Maestro', 'Wan2GP', 'ComfyUI', 'SwarmUI', 'Forge', 'WebUI', 'Diffusers'].map(tool => (
                     <option key={tool} value={tool} />
                   ))}
                 </datalist>
@@ -918,7 +1066,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   </div>
                   <div className="relative">
                     <select
-                      value={videoVae || 'Not Found'}
+                      value={videoVae || 'Original VAE'}
                       onChange={e => setVideoVae(e.target.value)}
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-purple-500/50 appearance-none font-sans"
                     >

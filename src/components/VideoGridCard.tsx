@@ -65,8 +65,10 @@ export function VideoGridCard({
     let vae = video.videoVae && video.videoVae !== 'Not Found' ? video.videoVae : undefined;
     let variant = video.modelVariant;
     let sizeB = video.modelSizeB;
+    let softwareSource = video.softwareSource;
+    let localTool = video.localTool;
 
-    if ((!textEnc || !vae || !variant || sizeB === undefined) && video.rawMetadata) {
+    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool) && video.rawMetadata) {
       try {
         const parsed = typeof video.rawMetadata === 'string' ? JSON.parse(video.rawMetadata) : video.rawMetadata;
         const extracted = extractTechnicalDetails(
@@ -78,16 +80,25 @@ export function VideoGridCard({
         if (!vae && extracted.videoVae !== 'Not Found') vae = extracted.videoVae;
         if (!variant && extracted.modelVariant) variant = extracted.modelVariant;
         if (sizeB === undefined && extracted.modelSizeB !== undefined) sizeB = extracted.modelSizeB;
+        if (extracted.softwareSource) {
+          softwareSource = extracted.softwareSource;
+          localTool = extracted.localTool;
+        }
       } catch {}
     }
+
+    const effectiveSoftware = softwareSource || (localTool?.toLowerCase().includes('maestro') ? 'maestro' : (localTool?.toLowerCase().includes('comfy') ? 'comfyui' : 'wan2gp'));
+    const displayToolName = effectiveSoftware === 'maestro' ? 'Maestro' : (effectiveSoftware === 'comfyui' ? 'ComfyUI' : (localTool || 'Wan2GP'));
 
     return {
       textEncoder: textEnc,
       videoVae: vae,
       modelVariant: variant,
       modelSizeB: sizeB,
+      softwareSource: effectiveSoftware,
+      displayToolName,
     };
-  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.rawMetadata]);
+  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.rawMetadata]);
 
   const mainHeadline = video.title || video.model || 'Vídeo sin título';
   const authorName = video.creatorDisplayName || video.createdBy;
@@ -111,6 +122,26 @@ export function VideoGridCard({
             />
           </div>
         )}
+
+        {/* Badge flotante en la esquina superior derecha del thumbnail para software (Maestro / Wan2GP) */}
+        <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
+          {resolvedTech.softwareSource === 'maestro' ? (
+            <span 
+              className="px-2 py-0.5 rounded-md bg-amber-500/90 text-neutral-950 font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-lg backdrop-blur-sm"
+              title="Generado con Maestro"
+            >
+              <Sparkles className="w-2.5 h-2.5 text-neutral-950 fill-neutral-950" />
+              {resolvedTech.displayToolName || 'Maestro'}
+            </span>
+          ) : (
+            <span 
+              className="px-2 py-0.5 rounded-md bg-neutral-950/80 border border-neutral-700/80 text-teal-300 font-semibold text-[10px] shadow-lg backdrop-blur-sm"
+              title={`Herramienta: ${resolvedTech.displayToolName || 'Wan2GP'}`}
+            >
+              {resolvedTech.displayToolName || 'Wan2GP'}
+            </span>
+          )}
+        </div>
 
         <video
           src={getPlayableVideoUrl(video)}
@@ -149,9 +180,14 @@ export function VideoGridCard({
                 {resolvedTech.modelSizeB ?? video.modelSizeB}B
               </span>
             )}
-            {video.localTool && (
+            {resolvedTech.softwareSource === 'maestro' ? (
+              <span className="px-2 py-0.5 rounded-md bg-amber-950/50 border border-amber-800/60 text-amber-300 font-medium text-xs flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                {resolvedTech.displayToolName || 'Maestro'}
+              </span>
+            ) : (
               <span className="px-2.5 py-0.5 rounded-md bg-neutral-800/80 border border-neutral-700/60 text-xs font-medium text-neutral-300">
-                {video.localTool}
+                {resolvedTech.displayToolName || 'Wan2GP'}
               </span>
             )}
             {resolvedTech.textEncoder && (

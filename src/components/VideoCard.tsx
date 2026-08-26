@@ -107,8 +107,10 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
     let variant = video.modelVariant;
     let sizeB = video.modelSizeB;
     let precision = video.precision;
+    let softwareSource = video.softwareSource;
+    let localTool = video.localTool;
 
-    if ((!textEnc || !vae || !variant || sizeB === undefined) && video.rawMetadata) {
+    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool) && video.rawMetadata) {
       try {
         const parsed = typeof video.rawMetadata === 'string' ? JSON.parse(video.rawMetadata) : video.rawMetadata;
         const extracted = extractTechnicalDetails(
@@ -121,16 +123,25 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
         if (!variant && extracted.modelVariant) variant = extracted.modelVariant;
         if (sizeB === undefined && extracted.modelSizeB !== undefined) sizeB = extracted.modelSizeB;
         if (!precision && extracted.precision) precision = extracted.precision;
+        if (extracted.softwareSource) {
+          softwareSource = extracted.softwareSource;
+          localTool = extracted.localTool;
+        }
       } catch {}
     }
+
+    const effectiveSoftware = softwareSource || (localTool?.toLowerCase().includes('maestro') ? 'maestro' : (localTool?.toLowerCase().includes('comfy') ? 'comfyui' : 'wan2gp'));
+    const displayToolName = effectiveSoftware === 'maestro' ? 'Maestro' : (effectiveSoftware === 'comfyui' ? 'ComfyUI' : (localTool || 'Wan2GP'));
 
     return {
       textEncoder: textEnc,
       videoVae: vae,
       modelVariant: variant,
-      modelSizeB: sizeB
+      modelSizeB: sizeB,
+      softwareSource: effectiveSoftware,
+      displayToolName,
     };
-  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.rawMetadata]);
+  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.rawMetadata]);
 
   const hasTechDetails = Boolean(
     resolvedTech.textEncoder ||
@@ -146,7 +157,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
       {/* Zona de previsualización de vídeo amplia */}
       <div className="w-full lg:w-[540px] xl:w-[620px] shrink-0 bg-neutral-950 p-4 sm:p-6 flex flex-col justify-start border-b lg:border-b-0 lg:border-r border-neutral-800">
         
-        {/* Barra superior encima del vídeo: Modelo, Parámetros B, Variante y Herramienta */}
+        {/* Barra superior encima del vídeo: Modelo, Parámetros B, Variante y Herramienta (Wan2GP / Maestro) */}
         <div className="mb-2.5 flex items-center justify-between gap-2 flex-wrap min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className="text-xs font-semibold text-neutral-200 bg-neutral-900 px-2.5 py-1 rounded-lg border border-neutral-800 flex items-center gap-1.5 shadow-sm">
@@ -173,14 +184,33 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             )}
           </div>
 
-          {video.localTool && (
-            <span 
-              className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-teal-300 shadow-sm shrink-0"
-              title={`Herramienta de generación: ${video.localTool}`}
-            >
-              {video.localTool}
-            </span>
-          )}
+          {/* Insignia de origen software en la esquina superior derecha: Wan2GP o Maestro */}
+          <div className="shrink-0 flex items-center">
+            {resolvedTech.softwareSource === 'maestro' ? (
+              <span 
+                className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 shadow-sm flex items-center gap-1"
+                title="Generado con Maestro (Local AI Pipeline)"
+              >
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                <span>{resolvedTech.displayToolName || 'Maestro'}</span>
+              </span>
+            ) : resolvedTech.softwareSource === 'comfyui' ? (
+              <span 
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-300 shadow-sm flex items-center gap-1"
+                title="Generado con ComfyUI"
+              >
+                <Cpu className="w-3 h-3 text-purple-400" />
+                <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
+              </span>
+            ) : (
+              <span 
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-teal-300 shadow-sm flex items-center gap-1"
+                title={`Herramienta de generación: ${resolvedTech.displayToolName || 'Wan2GP'}`}
+              >
+                <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Contenedor del video */}

@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { VideoRecord, VideoSource } from '../types';
 import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl } from '../lib/utils';
-import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Upload, FileText, Terminal, Layers } from 'lucide-react';
+import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Upload, FileText, Terminal, Layers, Copy } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 
 interface BatchImportModalProps {
@@ -34,7 +34,13 @@ export function BatchImportModal({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [logs, setLogs] = useState<{ type: 'info' | 'success' | 'error'; msg: string }[]>([]);
+  const [logs, setLogs] = useState<{ type: 'info' | 'success' | 'error' | 'warning'; msg: string }[]>([]);
+  const [softwareCounts, setSoftwareCounts] = useState<{ wan2gp: number; maestro: number; comfyui: number; other: number }>({
+    wan2gp: 0,
+    maestro: 0,
+    comfyui: 0,
+    other: 0,
+  });
   
   const isProcessingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,7 +71,7 @@ export function BatchImportModal({
     reader.readAsText(file);
   };
 
-  const addLog = (type: 'info' | 'success' | 'error', msg: string) => {
+  const addLog = (type: 'info' | 'success' | 'error' | 'warning', msg: string) => {
     setLogs(prev => [...prev, { type, msg }]);
     setTimeout(() => {
       logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -108,6 +114,16 @@ export function BatchImportModal({
     };
   }, [urlsInput]);
 
+  const [copiedLogs, setCopiedLogs] = useState(false);
+
+  const handleCopyLogs = () => {
+    if (logs.length === 0) return;
+    const text = logs.map(l => `[${l.type.toUpperCase()}] ${l.msg}`).join('\n');
+    navigator.clipboard.writeText(text);
+    setCopiedLogs(true);
+    setTimeout(() => setCopiedLogs(false), 2000);
+  };
+
   const handleProcess = async () => {
     if (isProcessingRef.current || isProcessing || isCompleted) return;
     
@@ -121,7 +137,9 @@ export function BatchImportModal({
     setIsProcessing(true);
     setProgress({ current: 0, total: lines.length });
     setLogs([]);
+    setSoftwareCounts({ wan2gp: 0, maestro: 0, comfyui: 0, other: 0 });
     const results: VideoRecord[] = [];
+    const counts = { wan2gp: 0, maestro: 0, comfyui: 0, other: 0 };
 
     try {
       for (let i = 0; i < lines.length; i++) {
@@ -145,21 +163,48 @@ export function BatchImportModal({
           });
 
           results.push(record);
-          addLog('success', `✓ ${record.model} (${record.width}x${record.height}) ${record.groupName ? `· [${record.groupName}]` : ''}`);
+          
+          const sSource = record.softwareSource || 'wan2gp';
+          if (sSource === 'maestro') counts.maestro++;
+          else if (sSource === 'comfyui') counts.comfyui++;
+          else if (sSource === 'other') counts.other++;
+          else counts.wan2gp++;
+          setSoftwareCounts({ ...counts });
+
+          const toolLabel = sSource === 'maestro' ? '[Maestro]' : sSource === 'comfyui' ? '[ComfyUI]' : '[Wan2GP]';
+          addLog('success', `✓ ${record.model} (${record.width}x${record.height}) ${toolLabel} ${record.groupName ? `· [${record.groupName}]` : ''}`);
 
         } catch (e: any) {
-          addLog('error', `Error en ${urlInfo.fileName || url}: ${e.message}`);
+          console.error(`[Batch Import] Error procesando URL #${i + 1}:`, url, e);
+          addLog('error', `Error en ${urlInfo.fileName || url}: ${e.message || e}`);
         }
       }
 
       if (results.length > 0) {
         addLog('info', `Guardando ${results.length} vídeos en la base de datos...`);
-        await onSaveBatch(results);
-        setIsCompleted(true);
-        addLog('success', `¡Proceso completado! Se han guardado ${results.length} vídeos.`);
-        setTimeout(() => {
-          onClose();
-        }, 1500);
+        try {
+          await onSaveBatch(results);
+          setIsCompleted(true);
+          
+          const summaryParts = [];
+          if (counts.maestro > 0) summaryParts.push(`${counts.maestro} Maestro`);
+          if (counts.wan2gp > 0) summaryParts.push(`${counts.wan2gp} Wan2GP`);
+          if (counts.comfyui > 0) summaryParts.push(`${counts.comfyui} ComfyUI`);
+          if (counts.other > 0) summaryParts.push(`${counts.other} otros`);
+          const breakdownText = summaryParts.length > 0 ? ` (${summaryParts.join(', ')})` : '';
+
+          addLog('success', `¡Proceso completado! Se han guardado ${results.length} vídeos${breakdownText} con éxito.`);
+          setTimeout(() => {
+            onClose();
+          }, 2000);
+        } catch (saveErr: any) {
+          console.error("[Batch Import] ❌ Error crítico al persistir en base de datos:", saveErr);
+          addLog('error', `❌ ERROR AL GUARDAR EN BASE DE DATOS: ${saveErr.message || saveErr}`);
+          addLog('warning', `⚠️ No se han cerrado los registros. Comprueba tu conexión, sesión o permisos en Firebase.`);
+          setIsProcessing(false);
+          isProcessingRef.current = false;
+          return;
+        }
       } else {
         addLog('error', 'No se ha podido procesar ningún vídeo.');
         setIsProcessing(false);
@@ -167,7 +212,8 @@ export function BatchImportModal({
       }
 
     } catch (e: any) {
-      addLog('error', `Fallo del proceso: ${e.message}`);
+      console.error("[Batch Import] Fallo general del proceso:", e);
+      addLog('error', `Fallo general del proceso: ${e.message || e}`);
       setIsProcessing(false);
       isProcessingRef.current = false;
     }
@@ -483,11 +529,24 @@ export function BatchImportModal({
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-teal-300 flex items-center gap-1.5">
                         <Terminal className="w-3.5 h-3.5 text-teal-400" />
-                        {isCompleted ? 'Completado' : 'Procesando metadatos...'}
+                        {isCompleted ? 'Completado' : isProcessing ? 'Procesando metadatos...' : 'Registro de importación'}
                       </span>
-                      <span className="font-mono text-neutral-400 text-xs">
-                        {progress.current} / {progress.total}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {logs.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleCopyLogs}
+                            className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-teal-300 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                            title="Copiar registro de logs al portapapeles"
+                          >
+                            {copiedLogs ? <Check className="w-3 h-3 text-teal-400" /> : <Copy className="w-3 h-3" />}
+                            <span>{copiedLogs ? '¡Copiado!' : 'Copiar logs'}</span>
+                          </button>
+                        )}
+                        <span className="font-mono text-neutral-400 text-xs">
+                          {progress.current} / {progress.total}
+                        </span>
+                      </div>
                     </div>
                     <div className="w-full bg-neutral-900 rounded-full h-1.5 overflow-hidden border border-neutral-800">
                       <div 
@@ -495,13 +554,50 @@ export function BatchImportModal({
                         style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
                       />
                     </div>
+
+                    {/* Live software breakdown badges */}
+                    {(softwareCounts.maestro > 0 || softwareCounts.wan2gp > 0 || softwareCounts.comfyui > 0) && (
+                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5 animate-in fade-in">
+                        <span className="text-[10px] uppercase font-semibold text-neutral-400">Detectados:</span>
+                        {softwareCounts.maestro > 0 && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                            <span>{softwareCounts.maestro} Maestro</span>
+                          </span>
+                        )}
+                        {softwareCounts.wan2gp > 0 && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30">
+                            {softwareCounts.wan2gp} Wan2GP
+                          </span>
+                        )}
+                        {softwareCounts.comfyui > 0 && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            {softwareCounts.comfyui} ComfyUI
+                          </span>
+                        )}
+                        {softwareCounts.other > 0 && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-neutral-800 text-neutral-300 border border-neutral-700">
+                            {softwareCounts.other} Otros
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Terminal console */}
+                    {/* Terminal console */}
                   <div className="flex-1 overflow-y-auto custom-scrollbar font-mono text-[11px] flex flex-col gap-1 p-2 bg-neutral-900/60 rounded-lg border border-neutral-850">
                     {logs.map((log, i) => (
-                      <div key={i} className={`flex items-start gap-1.5 leading-relaxed ${log.type === 'error' ? 'text-rose-400' : log.type === 'success' ? 'text-teal-300' : 'text-neutral-400'}`}>
+                      <div key={i} className={`flex items-start gap-1.5 leading-relaxed ${
+                        log.type === 'error' 
+                          ? 'text-rose-400 font-semibold' 
+                          : log.type === 'warning'
+                          ? 'text-amber-300'
+                          : log.type === 'success' 
+                          ? 'text-teal-300' 
+                          : 'text-neutral-400'
+                      }`}>
                         {log.type === 'error' && <AlertCircle className="w-3 h-3 shrink-0 mt-0.5 text-rose-400" />}
+                        {log.type === 'warning' && <AlertCircle className="w-3 h-3 shrink-0 mt-0.5 text-amber-400" />}
                         {log.type === 'success' && <Check className="w-3 h-3 shrink-0 mt-0.5 text-teal-400" />}
                         {log.type === 'info' && <span className="w-3 h-3 shrink-0 mt-0.5 opacity-40">→</span>}
                         <span className="break-all">{log.msg}</span>

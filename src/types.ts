@@ -20,6 +20,7 @@ export interface Lora {
 
 export type VideoOrientation = '16:9' | '9:16' | '1:1' | 'other';
 export type VideoSource = 'local' | 'cloud';
+export type SoftwareSource = 'wan2gp' | 'maestro' | 'comfyui' | 'other';
 
 export interface VideoRecord {
   id?: string;
@@ -34,9 +35,11 @@ export interface VideoRecord {
   negativePrompt?: string;
   model: string;           // texto libre con autocompletado (histórico de valores usados)
   modelSizeB?: number;     // tamaño del modelo en billones de parámetros (ej. 20, 33)
-  modelVariant?: string;   // variante del modelo (ej. "FL2VA", "Ref2VA", "SCAIL 2")
+  modelVariant?: string;   // variante del modelo (ej. "FL2VA", "Ref2VA", "SCAIL 2", "Pruned", "Full")
+  modelTypeRaw?: string;   // identificador interno del modelo en el backend (ej: "minimax_h3", "minimax_h3_full", "ltx_video")
   source: VideoSource;     // 'local' | 'cloud'
-  localTool?: string;      // herramienta local utilizada (ej. "Wan2GP", "ComfyUI")
+  localTool?: string;      // herramienta local utilizada (ej. "Wan2GP", "Maestro", "ComfyUI")
+  softwareSource?: SoftwareSource; // software detectado/asignado de generación
   tags?: string[];         // etiquetas libres del usuario
   groupName?: string;      // carpeta o grupo de comparación
 
@@ -48,15 +51,26 @@ export interface VideoRecord {
   height: number;
   orientation: VideoOrientation; // derivado automáticamente de width/height al guardar
   steps: number;
-  shift?: number;           // opcional: no todos los modelos lo usan
+  cfg?: number;             // guidance_scale / CFG
+  shift?: number;           // opcional: no todos los modelos lo usan (flow_shift)
   seed?: number;
   fps?: number;
   durationSeconds?: number;
+  framesCount?: number;     // número total de frames generados (video_length)
   fileSizeBytes?: number;
   videoVae?: string;        // Video VAE (ej: "Wan 2.1 VAE", "TAESD", etc.)
-  textEncoder?: string;     // Text Encoder (ej: "Qwen3-VL", "umt5_xxl", etc.)
+  textEncoder?: string;     // Text Encoder / Cuantización (ej: "gguf_q2_k", "gguf_q4_k_m", "umt5_xxl")
   precision?: string;       // Formato/precisión/cuantización (ej: "GGUF Q4_K_M", "FP8", "BF16")
   loras: Lora[];
+
+  // Metadatos técnicos específicos de Maestro / Optimizaciones
+  turboPreset?: string;      // Preset turbo (ej: "v4-step600-ema")
+  turboMode?: boolean;       // Si el modo turbo estaba activado
+  skipStepsMultiplier?: number; // Multiplicador de salto de pasos
+  skipStepsCacheType?: string;  // Tipo de caché de pasos (ej: "first_block")
+  overrideAttention?: string;   // Modo de atención (ej: "sol")
+  slidingWindowSize?: number;   // Tamaño de ventana deslizante
+  slidingWindowOverlap?: number;// Solapamiento de ventana deslizante
 
   notes?: string;
   createdAt: number;
@@ -66,6 +80,10 @@ export interface VideoRecord {
   
   // Metadatos adicionales importados
   renderSeconds?: number;
-  generatedAt?: number;     // timestamp Unix (ms)
-  rawMetadata?: string;     // JSON original sin parsear
+  jobElapsedTimeSeconds?: number; // Tiempo total del job en segundos
+  generationTimeBasis?: string;   // Base de cálculo (ej: "active")
+  jobId?: string;                 // ID único del job en Maestro/Wan2GP
+  settingsVersion?: number;       // Versión de settings (ej: 2.52 en Maestro)
+  generatedAt?: number;           // timestamp Unix (ms)
+  rawMetadata?: string;           // JSON original sin parsear
 }
