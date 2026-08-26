@@ -581,27 +581,33 @@ export default function App() {
       return false;
     }
 
-    // Administrador del sistema
-    if (isAdmin) {
-      return true;
-    }
-
     const currentUid = (currentUser?.uid || userProfile?.uid)?.trim();
     const currentEmail = (currentUser?.email || userProfile?.email)?.trim().toLowerCase();
     const currentNick = (userDisplayName || currentUser?.displayName || userProfile?.displayName)?.trim().toLowerCase();
 
+    const hasCreatorUid = Boolean(video.creatorUid && video.creatorUid.trim());
+    const hasCreatedBy = Boolean(video.createdBy && video.createdBy.trim());
+    const hasCreatorNick = Boolean(video.creatorDisplayName && video.creatorDisplayName.trim());
+    const hasAnyAttribution = hasCreatorUid || hasCreatedBy || hasCreatorNick;
+
+    // Caso de vídeos antiguos (legacy) huérfanos sin ningún campo de atribución:
+    // Si el usuario actual es admin, puede editarlos / reclamarlos
+    if (!hasAnyAttribution && isAdmin) {
+      return true;
+    }
+
     // 1. Comprobación por UID de Firebase (la más estricta y segura)
-    if (video.creatorUid && currentUid && video.creatorUid.trim() === currentUid) {
+    if (hasCreatorUid && currentUid && video.creatorUid!.trim() === currentUid) {
       return true;
     }
 
     // 2. Comprobación por Email del creador
-    if (video.createdBy && currentEmail && video.createdBy.trim().toLowerCase() === currentEmail) {
+    if (hasCreatedBy && currentEmail && video.createdBy!.trim().toLowerCase() === currentEmail) {
       return true;
     }
 
     // 3. Comprobación por Apodo / Display Name si no hay UID/email registrado
-    if (video.creatorDisplayName && currentNick && video.creatorDisplayName.trim().toLowerCase() === currentNick) {
+    if (hasCreatorNick && currentNick && video.creatorDisplayName!.trim().toLowerCase() === currentNick) {
       return true;
     }
 
@@ -616,6 +622,21 @@ export default function App() {
       const errMsg = "Permiso denegado: No puedes editar un vídeo que no es de tu propiedad.";
       setDbErrorToast(errMsg);
       throw new Error(errMsg);
+    }
+
+    // Si el registro original o actual no tenía creatorUid (vídeo legacy huérfano), asignarlo al usuario actual al editar
+    const activeUid = (currentUser?.uid || userProfile?.uid)?.trim();
+    const activeEmail = (currentUser?.email || userProfile?.email)?.trim().toLowerCase();
+    const activeNick = (userDisplayName || currentUser?.displayName || userProfile?.displayName)?.trim();
+
+    if (!record.creatorUid && activeUid) {
+      record.creatorUid = activeUid;
+    }
+    if (!record.createdBy && activeEmail) {
+      record.createdBy = activeEmail;
+    }
+    if (!record.creatorDisplayName && activeNick) {
+      record.creatorDisplayName = activeNick;
     }
 
     const cleanRecord = cleanForFirestore(record);
