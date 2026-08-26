@@ -63,7 +63,7 @@ export interface VideoRecord {
   precision?: string;       // Formato/precisión/cuantización (ej: "GGUF Q4_K_M", "FP8", "BF16")
   loras: Lora[];
 
-  // Metadatos técnicos específicos de Maestro / Optimizaciones
+  // Metadatos técnicos de render / Optimizaciones (Wan2GP / Maestro)
   turboPreset?: string;      // Preset turbo (ej: "v4-step600-ema")
   turboMode?: boolean;       // Si el modo turbo estaba activado
   skipStepsMultiplier?: number; // Multiplicador de salto de pasos

@@ -1,6 +1,6 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../types';
-import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, processVideoMetadataFromUrl, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS } from '../lib/utils';
+import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, processVideoMetadataFromUrl, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS, SOFTWARE_ICONS } from '../lib/utils';
 import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder, Type, Wrench } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
@@ -364,6 +364,8 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       notes: notes.trim() ? notes.trim() : undefined,
       createdAt: initialData?.createdAt || Date.now(),
       createdBy: initialData?.createdBy || userEmail || undefined,
+      creatorUid: initialData?.creatorUid || undefined,
+      creatorDisplayName: initialData?.creatorDisplayName || undefined,
       renderSeconds: renderSeconds.trim() !== '' ? Number(renderSeconds) : undefined,
       fileSizeBytes,
       videoVae: videoVae.trim() ? videoVae.trim() : undefined,
@@ -743,8 +745,13 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   </label>
                   {softwareSource === 'maestro' || localTool.toLowerCase().includes('maestro') ? (
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                      <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                      <img src={SOFTWARE_ICONS.maestro} alt="Maestro" className="w-2.5 h-2.5 object-contain" referrerPolicy="no-referrer" />
                       Maestro
+                    </span>
+                  ) : softwareSource === 'wan2gp' || localTool.toLowerCase().includes('wan') ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                      <img src={SOFTWARE_ICONS.wan2gp} alt="Wan2GP" className="w-2.5 h-2.5 object-contain" referrerPolicy="no-referrer" />
+                      Wan2GP
                     </span>
                   ) : autoFilled.localTool ? (
                     <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30">

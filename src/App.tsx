@@ -94,6 +94,7 @@ function normalizeRecord(raw: any): VideoRecord {
     notes: raw.notes,
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
     createdBy: raw.createdBy,
+    creatorUid: typeof raw.creatorUid === 'string' ? raw.creatorUid : undefined,
     creatorDisplayName: typeof raw.creatorDisplayName === 'string' ? raw.creatorDisplayName : undefined,
     videoVae: typeof raw.videoVae === 'string' && raw.videoVae !== 'Not Found' ? raw.videoVae : 'Original VAE',
     textEncoder: typeof raw.textEncoder === 'string' ? raw.textEncoder : undefined,
@@ -565,7 +566,58 @@ export default function App() {
     }
   };
 
+  const isVideoOwner = (video: VideoRecord): boolean => {
+    // Si estamos en modo local y no hay usuario autenticado (desarrollo offline)
+    if (usingLocal && !currentUser && !userProfile) {
+      return true;
+    }
+    
+    // Registros locales en memoria o de prueba
+    if (video.id?.startsWith('local_') || video.id?.startsWith('mock')) {
+      return true;
+    }
+
+    if (!currentUser && !userProfile) {
+      return false;
+    }
+
+    // Administrador del sistema
+    if (isAdmin) {
+      return true;
+    }
+
+    const currentUid = (currentUser?.uid || userProfile?.uid)?.trim();
+    const currentEmail = (currentUser?.email || userProfile?.email)?.trim().toLowerCase();
+    const currentNick = (userDisplayName || currentUser?.displayName || userProfile?.displayName)?.trim().toLowerCase();
+
+    // 1. Comprobación por UID de Firebase (la más estricta y segura)
+    if (video.creatorUid && currentUid && video.creatorUid.trim() === currentUid) {
+      return true;
+    }
+
+    // 2. Comprobación por Email del creador
+    if (video.createdBy && currentEmail && video.createdBy.trim().toLowerCase() === currentEmail) {
+      return true;
+    }
+
+    // 3. Comprobación por Apodo / Display Name si no hay UID/email registrado
+    if (video.creatorDisplayName && currentNick && video.creatorDisplayName.trim().toLowerCase() === currentNick) {
+      return true;
+    }
+
+    return false;
+  };
+
   const handleEditVideo = async (record: VideoRecord) => {
+    // Verificación estricta de permisos de edición
+    const originalVideo = videos.find(v => v.id === record.id);
+    const videoToCheck = originalVideo || record;
+    if (!isVideoOwner(videoToCheck)) {
+      const errMsg = "Permiso denegado: No puedes editar un vídeo que no es de tu propiedad.";
+      setDbErrorToast(errMsg);
+      throw new Error(errMsg);
+    }
+
     const cleanRecord = cleanForFirestore(record);
     if (db && !usingLocal && record.id && !record.id.startsWith('local_')) {
       try {
@@ -766,20 +818,6 @@ export default function App() {
     const allMatch = filteredVideos.every(v => v.prompt === firstPrompt);
     return allMatch ? firstPrompt : null;
   }, [filteredVideos, filterGroup]);
-
-  const isVideoOwner = (video: VideoRecord): boolean => {
-    // Si estamos en modo local y no hay usuario, permitir (para desarrollo/pruebas)
-    if (usingLocal && !currentUser) {
-      return true;
-    }
-    
-    // Solo el administrador (y registros locales/mock para preview) tiene permisos de edición/borrado
-    if (video.id?.startsWith('local_') || video.id?.startsWith('mock')) {
-      return true;
-    }
-
-    return isAdmin;
-  };
 
   const handleOpenDualCompare = (videoA: VideoRecord, videoB?: VideoRecord) => {
     if (videoB) {

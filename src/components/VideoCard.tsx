@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { VideoRecord } from '../types';
 import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight } from 'lucide-react';
-import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
+import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -188,25 +188,42 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
           <div className="shrink-0 flex items-center">
             {resolvedTech.softwareSource === 'maestro' ? (
               <span 
-                className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 shadow-sm flex items-center gap-1"
+                className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 shadow-sm flex items-center gap-1.5"
                 title="Generado con Maestro (Local AI Pipeline)"
               >
-                <Sparkles className="w-3 h-3 text-amber-400" />
+                <img 
+                  src={SOFTWARE_ICONS.maestro} 
+                  alt="Maestro" 
+                  className="w-3.5 h-3.5 object-contain shrink-0" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
                 <span>{resolvedTech.displayToolName || 'Maestro'}</span>
               </span>
             ) : resolvedTech.softwareSource === 'comfyui' ? (
               <span 
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-300 shadow-sm flex items-center gap-1"
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-purple-500/15 border border-purple-500/40 text-purple-300 shadow-sm flex items-center gap-1.5"
                 title="Generado con ComfyUI"
               >
-                <Cpu className="w-3 h-3 text-purple-400" />
+                <Cpu className="w-3.5 h-3.5 text-purple-400" />
                 <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
               </span>
             ) : (
               <span 
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-teal-300 shadow-sm flex items-center gap-1"
+                className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 shadow-sm flex items-center gap-1.5"
                 title={`Herramienta de generación: ${resolvedTech.displayToolName || 'Wan2GP'}`}
               >
+                <img 
+                  src={SOFTWARE_ICONS.wan2gp} 
+                  alt="Wan2GP" 
+                  className="w-3.5 h-3.5 object-contain shrink-0" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
                 <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
               </span>
             )}
@@ -345,12 +362,12 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                     onClick={handleToggleTechDetails}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                       showTechDetails
-                        ? 'bg-teal-500/15 text-teal-300 border border-teal-500/40 shadow-sm'
-                        : 'bg-neutral-950/80 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                        ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                        : 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-750'
                     }`}
                     title={showTechDetails ? "Ocultar detalles técnicos" : "Ver detalles técnicos"}
                   >
-                    <Cpu className="w-3.5 h-3.5" />
+                    <Cpu className={`w-3.5 h-3.5 ${showTechDetails ? 'text-cyan-400' : 'text-neutral-400'}`} />
                     <span className="hidden sm:inline">Detalles técnicos</span>
                     {showTechDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   </button>
@@ -362,10 +379,10 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                     {onCompareClick && (
                       <button
                         onClick={onCompareClick}
-                        className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-lg bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/40 hover:border-teal-400/70 transition-all shadow-sm cursor-pointer active:scale-95"
+                        className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 hover:text-violet-200 border border-violet-500/40 hover:border-violet-400/70 transition-all shadow-sm cursor-pointer active:scale-95"
                         title="Comparar 1 vs 1 (pantalla dividida con otro vídeo)"
                       >
-                        <SplitSquareVertical className="w-3.5 h-3.5 text-teal-400" />
+                        <SplitSquareVertical className="w-3.5 h-3.5 text-violet-400" />
                         <span>Comparar 1 vs 1</span>
                       </button>
                     )}

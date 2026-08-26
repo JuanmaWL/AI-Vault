@@ -12,6 +12,11 @@ export const GPU_LOGOS = {
   amd: '/icons/amd.ico'
 } as const;
 
+export const SOFTWARE_ICONS = {
+  maestro: '/icons/maestro.ico',
+  wan2gp: '/icons/Wan2GP.ico',
+} as const;
+
 /**
  * Extracts creation timestamp formatted in Spanish from filename, title, or url
  * Pattern: 2026-08-21-20h02m49s or 2026-08-21_20h02m49s or ISO 2026-08-17T15:36:47
@@ -220,58 +225,45 @@ export function extractTechnicalDetails(
     rawComment
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
   
-  // 1. Software Source Detection (Wan2GP vs Maestro vs ComfyUI)
+  // 1. Software Source Detection (ComfyUI > Maestro > Wan2GP > fallback Wan2GP)
   let softwareSource: 'wan2gp' | 'maestro' | 'comfyui' | 'other' = 'wan2gp';
   let localTool: string = 'Wan2GP';
 
-  // Wan2GP signature:
-  // - "type" field containing "WanGP" or "Wan2GP" (e.g. "WanGP v12.60 by DeepBeepMeep - MiniMax H3 FL2VA 33B")
-  // - "by DeepBeepMeep" in Comment or type field
-  // - "wangp" or "wan2gp" anywhere in metadata
-  const isWanGp = Boolean(
-    typeField.toLowerCase().includes('wangp') ||
-    typeField.toLowerCase().includes('wan2gp') ||
-    typeField.toLowerCase().includes('deepbeepmeep') ||
-    rawComment.toLowerCase().includes('wangp') ||
-    rawComment.toLowerCase().includes('wan2gp') ||
-    rawComment.toLowerCase().includes('deepbeepmeep')
-  );
-
-  // ComfyUI signature
+  // ComfyUI signature:
+  // - Object-based prompt structure, explicit workflow graph, or ComfyUI in raw comment
   const isComfy = Boolean(
     (parsedJson?.prompt && typeof parsedJson.prompt === 'object' && !Array.isArray(parsedJson.prompt)) ||
     parsedJson?.workflow ||
-    rawComment.includes('ComfyUI')
+    (typeof rawComment === 'string' && rawComment.includes('ComfyUI'))
   );
 
-  // Maestro signature (when NOT Wan2GP):
-  // - Explicit Maestro fields (job_id, generation_time_basis, upload_filenames, minimax_h3_text_encoder, etc.)
-  // - Or explicit "software": "maestro"
-  const isMaestro = !isWanGp && Boolean(
-    rawComment.toLowerCase().includes('maestro') ||
-    parsedJson?.software?.toLowerCase() === 'maestro' ||
-    actualParams?.software?.toLowerCase() === 'maestro' ||
-    parsedJson?.generation_time_basis !== undefined ||
+  // Maestro signature:
+  // Exclusivo de la capa de orquestación de Maestro (contabilidad de tiempos)
+  const isMaestro = !isComfy && Boolean(
     actualParams?.generation_time_basis !== undefined ||
-    parsedJson?.upload_filenames !== undefined ||
-    actualParams?.upload_filenames !== undefined ||
-    actualParams?.minimax_h3_text_encoder !== undefined ||
-    actualParams?.minimax_h3_turbo_preset !== undefined ||
-    actualParams?.minimax_h3_turbo_mode !== undefined ||
-    actualParams?.skip_steps_cache_type !== undefined ||
-    actualParams?.override_attention !== undefined
+    parsedJson?.generation_time_basis !== undefined
   );
 
-  if (isWanGp) {
-    softwareSource = 'wan2gp';
-    localTool = 'Wan2GP';
+  // Wan2GP signature:
+  // Exige AMBOS tokens "wangp" y "deepbeepmeep" próximos entre sí (<= 30 caracteres)
+  // Ej: "WanGP v12.60 by DeepBeepMeep - MiniMax H3 FL2VA 33B"
+  const wanGpRegex = /wangp.{0,30}deepbeepmeep|deepbeepmeep.{0,30}wangp/i;
+  const isWanGp = !isComfy && !isMaestro && Boolean(
+    (typeof typeField === 'string' && wanGpRegex.test(typeField)) ||
+    (typeof rawComment === 'string' && wanGpRegex.test(rawComment))
+  );
+
+  if (isComfy) {
+    softwareSource = 'comfyui';
+    localTool = 'ComfyUI';
   } else if (isMaestro) {
     softwareSource = 'maestro';
     localTool = 'Maestro';
-  } else if (isComfy) {
-    softwareSource = 'comfyui';
-    localTool = 'ComfyUI';
+  } else if (isWanGp) {
+    softwareSource = 'wan2gp';
+    localTool = 'Wan2GP';
   } else {
+    // Fallback por defecto a Wan2GP
     softwareSource = 'wan2gp';
     localTool = 'Wan2GP';
   }

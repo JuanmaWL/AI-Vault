@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import { VideoRecord, VideoSource } from '../types';
-import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl } from '../lib/utils';
+import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl, SOFTWARE_ICONS } from '../lib/utils';
 import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Upload, FileText, Terminal, Layers, Copy } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
 
@@ -561,13 +561,14 @@ export function BatchImportModal({
                         <span className="text-[10px] uppercase font-semibold text-neutral-400">Detectados:</span>
                         {softwareCounts.maestro > 0 && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
-                            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                            <img src={SOFTWARE_ICONS.maestro} alt="Maestro" className="w-2.5 h-2.5 object-contain" referrerPolicy="no-referrer" />
                             <span>{softwareCounts.maestro} Maestro</span>
                           </span>
                         )}
                         {softwareCounts.wan2gp > 0 && (
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-teal-500/15 text-teal-300 border border-teal-500/30">
-                            {softwareCounts.wan2gp} Wan2GP
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center gap-1">
+                            <img src={SOFTWARE_ICONS.wan2gp} alt="Wan2GP" className="w-2.5 h-2.5 object-contain" referrerPolicy="no-referrer" />
+                            <span>{softwareCounts.wan2gp} Wan2GP</span>
                           </span>
                         )}
                         {softwareCounts.comfyui > 0 && (

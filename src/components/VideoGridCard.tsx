@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { VideoRecord } from '../types';
 import { Copy, Check, Sparkles, Edit3, Trash2, Clock, Cpu, User, Tag, ExternalLink, Calendar, SplitSquareVertical, ChevronDown, ChevronUp } from 'lucide-react';
-import { extractCreationDateFromText, getGpuVendor, GPU_LOGOS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
+import { extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
 
 interface VideoGridCardProps {
   video: VideoRecord;
@@ -127,18 +127,43 @@ export function VideoGridCard({
         <div className="absolute top-2.5 right-2.5 z-10 pointer-events-none">
           {resolvedTech.softwareSource === 'maestro' ? (
             <span 
-              className="px-2 py-0.5 rounded-md bg-amber-500/90 text-neutral-950 font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-lg backdrop-blur-sm"
+              className="px-2 py-0.5 rounded-md bg-amber-500/95 border border-amber-400/80 text-neutral-950 font-extrabold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-lg backdrop-blur-sm"
               title="Generado con Maestro"
             >
-              <Sparkles className="w-2.5 h-2.5 text-neutral-950 fill-neutral-950" />
-              {resolvedTech.displayToolName || 'Maestro'}
+              <img 
+                src={SOFTWARE_ICONS.maestro} 
+                alt="Maestro" 
+                className="w-3 h-3 object-contain shrink-0" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
+              <span>{resolvedTech.displayToolName || 'Maestro'}</span>
+            </span>
+          ) : resolvedTech.softwareSource === 'comfyui' ? (
+            <span 
+              className="px-2 py-0.5 rounded-md bg-purple-600/90 border border-purple-400/80 text-white font-bold text-[10px] shadow-lg backdrop-blur-sm flex items-center gap-1"
+              title="Generado con ComfyUI"
+            >
+              <Cpu className="w-3 h-3 text-purple-200" />
+              <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
             </span>
           ) : (
             <span 
-              className="px-2 py-0.5 rounded-md bg-neutral-950/80 border border-neutral-700/80 text-teal-300 font-semibold text-[10px] shadow-lg backdrop-blur-sm"
+              className="px-2 py-0.5 rounded-md bg-indigo-600/90 border border-indigo-400/80 text-white font-bold text-[10px] shadow-lg backdrop-blur-sm flex items-center gap-1.5"
               title={`Herramienta: ${resolvedTech.displayToolName || 'Wan2GP'}`}
             >
-              {resolvedTech.displayToolName || 'Wan2GP'}
+              <img 
+                src={SOFTWARE_ICONS.wan2gp} 
+                alt="Wan2GP" 
+                className="w-3 h-3 object-contain shrink-0" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
+              <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
             </span>
           )}
         </div>
@@ -181,13 +206,35 @@ export function VideoGridCard({
               </span>
             )}
             {resolvedTech.softwareSource === 'maestro' ? (
-              <span className="px-2 py-0.5 rounded-md bg-amber-950/50 border border-amber-800/60 text-amber-300 font-medium text-xs flex items-center gap-1">
-                <Sparkles className="w-2.5 h-2.5 text-amber-400" />
-                {resolvedTech.displayToolName || 'Maestro'}
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center gap-1.5 shadow-xs">
+                <img 
+                  src={SOFTWARE_ICONS.maestro} 
+                  alt="Maestro" 
+                  className="w-3 h-3 object-contain shrink-0" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <span>{resolvedTech.displayToolName || 'Maestro'}</span>
+              </span>
+            ) : resolvedTech.softwareSource === 'comfyui' ? (
+              <span className="px-2 py-0.5 rounded-md bg-purple-500/15 border border-purple-500/40 text-purple-300 font-semibold text-xs flex items-center gap-1.5 shadow-xs">
+                <Cpu className="w-3 h-3 text-purple-400" />
+                <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
               </span>
             ) : (
-              <span className="px-2.5 py-0.5 rounded-md bg-neutral-800/80 border border-neutral-700/60 text-xs font-medium text-neutral-300">
-                {resolvedTech.displayToolName || 'Wan2GP'}
+              <span className="px-2 py-0.5 rounded-md bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 font-bold text-xs flex items-center gap-1.5 shadow-xs">
+                <img 
+                  src={SOFTWARE_ICONS.wan2gp} 
+                  alt="Wan2GP" 
+                  className="w-3 h-3 object-contain shrink-0" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
               </span>
             )}
             {resolvedTech.textEncoder && (
@@ -330,10 +377,10 @@ export function VideoGridCard({
             {onCompareClick && (
               <button
                 onClick={onCompareClick}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/40 hover:border-teal-400/60 transition-colors cursor-pointer text-xs font-bold shadow-sm active:scale-95"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 hover:text-violet-200 border border-violet-500/40 hover:border-violet-400/60 transition-colors cursor-pointer text-xs font-bold shadow-sm active:scale-95"
                 title="Comparar 1 vs 1 (pantalla dividida con otro vídeo)"
               >
-                <SplitSquareVertical className="w-4 h-4 text-teal-400" />
+                <SplitSquareVertical className="w-4 h-4 text-violet-400" />
                 <span>1 vs 1</span>
               </button>
             )}
