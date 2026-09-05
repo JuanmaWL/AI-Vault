@@ -297,6 +297,7 @@ export default function App() {
     } catch {}
 
     let firestoreHardware: UserHardware | undefined;
+    let firestoreInitialHardware: UserHardware | undefined;
     let firestoreHistory: HardwareMilestone[] | undefined;
     let firestoreDisplayName: string | undefined;
     let firestoreRole: 'admin' | 'viewer' | undefined;
@@ -308,6 +309,7 @@ export default function App() {
         if (userDoc.exists()) {
           const data = userDoc.data();
           if (data.hardware) firestoreHardware = data.hardware as UserHardware;
+          if (data.initialHardware) firestoreInitialHardware = data.initialHardware as UserHardware;
           if (Array.isArray(data.hardwareHistory)) firestoreHistory = data.hardwareHistory as HardwareMilestone[];
           if (data.displayName) firestoreDisplayName = data.displayName as string;
           if (data.role) firestoreRole = data.role as 'admin' | 'viewer';
@@ -374,6 +376,7 @@ export default function App() {
       email: user.email || '', 
       displayName: activeDisplayName,
       hardware: activeHardware,
+      initialHardware: firestoreInitialHardware,
       hardwareHistory: effectiveHistory,
       role: firestoreRole,
       huggingfaceDatasetUrl: activeHfUrl
@@ -410,7 +413,7 @@ export default function App() {
     }
   }, []);
 
-  const handleSaveHardware = async (hardware: UserHardware, history?: HardwareMilestone[]) => {
+  const handleSaveHardware = async (hardware: UserHardware, history?: HardwareMilestone[], initialHardware?: UserHardware) => {
     if (!currentUser) return;
     try {
       localStorage.setItem('ai_video_vault_hardware', JSON.stringify(hardware));
@@ -420,22 +423,30 @@ export default function App() {
 
     if (db) {
       try {
-        await setDoc(doc(db, 'users', currentUser.uid), {
+        const updatePayload: any = {
           uid: currentUser.uid,
           email: currentUser.email || '',
           displayName: currentUser.displayName || userDisplayName || '',
           hardware,
           hardwareHistory: history || [],
           updatedAt: Date.now()
-        }, { merge: true });
+        };
+        if (initialHardware) {
+          updatePayload.initialHardware = initialHardware;
+        } else {
+          // Si no se define o se limpia
+          updatePayload.initialHardware = null;
+        }
+
+        await setDoc(doc(db, 'users', currentUser.uid), updatePayload, { merge: true });
       } catch (err) {
         console.warn('Could not sync hardware to Firestore', err);
       }
     }
 
     setUserProfile(prev => {
-      if (prev) return { ...prev, hardware, hardwareHistory: history };
-      return { uid: currentUser.uid, email: currentUser.email || '', displayName: userDisplayName, hardware, hardwareHistory: history };
+      if (prev) return { ...prev, hardware, hardwareHistory: history, initialHardware };
+      return { uid: currentUser.uid, email: currentUser.email || '', displayName: userDisplayName, hardware, hardwareHistory: history, initialHardware };
     });
     setIsHardwareModalOpen(false);
   };
@@ -2012,6 +2023,7 @@ export default function App() {
       {isHardwareModalOpen && currentUser && (
         <HardwareProfileModal
           initialData={userProfile?.hardware}
+          initialHardware={userProfile?.initialHardware}
           initialHistory={userProfile?.hardwareHistory}
           isMandatory={!userProfile?.hardware}
           onClose={() => setIsHardwareModalOpen(false)}

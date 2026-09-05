@@ -4,14 +4,16 @@ import { Cpu, X, Server, MemoryStick, Calendar, Plus, Trash2, History, AlertCirc
 
 interface HardwareProfileModalProps {
   initialData?: UserHardware;
+  initialHardware?: UserHardware;
   initialHistory?: HardwareMilestone[];
   onClose?: () => void;
-  onSave: (hardware: UserHardware, history?: HardwareMilestone[]) => Promise<void>;
+  onSave: (hardware: UserHardware, history?: HardwareMilestone[], initialHardware?: UserHardware) => Promise<void>;
   isMandatory?: boolean;
 }
 
 export function HardwareProfileModal({ 
   initialData, 
+  initialHardware,
   initialHistory, 
   onClose, 
   onSave, 
@@ -21,6 +23,11 @@ export function HardwareProfileModal({
   const [vram, setVram] = useState<number | ''>(initialData?.vram || '');
   const [ram, setRam] = useState<number | ''>(initialData?.ram || '');
   
+  // Configuración de origen (anterior al primer hito de hardware)
+  const [initialGpu, setInitialGpu] = useState(initialHardware?.gpu || '');
+  const [initialVram, setInitialVram] = useState<number | ''>(initialHardware?.vram || '');
+  const [initialRam, setInitialRam] = useState<number | ''>(initialHardware?.ram || '');
+
   const [history, setHistory] = useState<HardwareMilestone[]>(initialHistory || []);
   const [showHistory, setShowHistory] = useState(Boolean(initialHistory && initialHistory.length > 0));
   const [showAddForm, setShowAddForm] = useState(false);
@@ -129,11 +136,19 @@ export function HardwareProfileModal({
     setIsSaving(true);
     setErrorMsg('');
     try {
+      const resolvedInitialHardware: UserHardware | undefined = (history.length > 0 && initialGpu.trim() && initialVram && initialRam)
+        ? {
+            gpu: initialGpu.trim(),
+            vram: Number(initialVram),
+            ram: Number(initialRam)
+          }
+        : undefined;
+
       await onSave({
         gpu: gpu.trim(),
         vram: Number(vram),
         ram: Number(ram)
-      }, history);
+      }, history, resolvedInitialHardware);
     } catch (err: any) {
       console.error(err);
       setErrorMsg('Error al guardar el perfil localmente.');
@@ -423,35 +438,87 @@ export function HardwareProfileModal({
 
                 {/* Lista de hitos existentes */}
                 {sortedHistory.length > 0 ? (
-                  <div className="space-y-2">
-                    {sortedHistory.map((item) => (
-                      <div 
-                        key={item.sinceDate} 
-                        className="flex items-center justify-between text-xs bg-neutral-950 px-3 py-2.5 rounded-xl border border-neutral-800/80 hover:border-neutral-700 transition-colors"
-                      >
-                        <div className="flex items-center gap-2.5">
-                          <span className="px-2 py-0.5 bg-neutral-900 text-teal-300 font-mono text-[11px] rounded border border-neutral-800">
-                            {item.sinceDate}
-                          </span>
-                          <div>
-                            <span className="text-neutral-200 font-medium">
-                              {item.gpu}
-                            </span>
-                            <span className="text-neutral-400 ml-1">
-                              ({item.vram}GB VRAM / {item.ram}GB RAM)
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveMilestone(item.sinceDate)}
-                          className="text-neutral-500 hover:text-rose-400 p-1 transition-colors rounded hover:bg-neutral-900"
-                          title="Eliminar este hito"
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      {sortedHistory.map((item) => (
+                        <div 
+                          key={item.sinceDate} 
+                          className="flex items-center justify-between text-xs bg-neutral-950 px-3 py-2.5 rounded-xl border border-neutral-800/80 hover:border-neutral-700 transition-colors"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          <div className="flex items-center gap-2.5">
+                            <span className="px-2 py-0.5 bg-neutral-900 text-teal-300 font-mono text-[11px] rounded border border-neutral-800">
+                              {item.sinceDate}
+                            </span>
+                            <div>
+                              <span className="text-neutral-200 font-medium">
+                                {item.gpu}
+                              </span>
+                              <span className="text-neutral-400 ml-1">
+                                ({item.vram}GB VRAM / {item.ram}GB RAM)
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMilestone(item.sinceDate)}
+                            className="text-neutral-500 hover:text-rose-400 p-1 transition-colors rounded hover:bg-neutral-900"
+                            title="Eliminar este hito"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Configuración de origen (opcional, aplicable a vídeos anteriores al primer hito) */}
+                    <div className="bg-neutral-950/70 border border-neutral-800/80 rounded-xl p-3.5 space-y-3 mt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <History className="w-3.5 h-3.5 text-teal-400" />
+                          Configuración de Origen (Opcional)
+                        </span>
+                        <span className="text-[10px] text-neutral-500">Antes del 1er hito ({sortedHistory[sortedHistory.length - 1]?.sinceDate})</span>
                       </div>
-                    ))}
+                      <p className="text-[11px] text-neutral-400 leading-normal">
+                        Hardware que utilizabas para generar vídeos <strong className="text-neutral-300">antes de tu primer hito registrado</strong>. Si se deja vacío, el sistema estimará automáticamente los valores para mantener compatibilidad.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                        <div>
+                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">GPU Origen</label>
+                          <input
+                            type="text"
+                            placeholder="Ej: RTX 4080"
+                            value={initialGpu}
+                            onChange={e => setInitialGpu(e.target.value)}
+                            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">VRAM (GB)</label>
+                          <input
+                            type="number"
+                            min="4"
+                            max="192"
+                            placeholder="Ej: 16"
+                            value={initialVram}
+                            onChange={e => setInitialVram(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-teal-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">RAM (GB)</label>
+                          <input
+                            type="number"
+                            min="8"
+                            max="512"
+                            placeholder="Ej: 32"
+                            value={initialRam}
+                            onChange={e => setInitialRam(e.target.value === '' ? '' : Number(e.target.value))}
+                            className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-teal-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
                   !showAddForm && (

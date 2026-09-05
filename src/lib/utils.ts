@@ -107,15 +107,21 @@ export function resolveHardwareForDate(
     }
   }
 
-  // If video is older than the first milestone, fallback to the earliest known configuration or base
+  // If video is older than the first milestone, fallback to initialHardware (if configured) or earliest known configuration
   if (!matchedHardware) {
-    // If there is an initial milestone starting later (e.g., upgrade to 64GB on 2026-09-04),
-    // and video was before that date:
-    // If the base hardware is currently 64GB, the previous was 32GB (or earliest milestone before upgrade)
     const firstMilestone = sortedMilestones[0];
     const firstMilestoneTime = new Date(`${firstMilestone.sinceDate}T00:00:00`).getTime();
     if (timestamp < firstMilestoneTime) {
-      // Prior to first milestone
+      // If the user explicitly defined an initial hardware baseline prior to their first milestone:
+      if (userProfile.initialHardware && userProfile.initialHardware.gpu && userProfile.initialHardware.vram && userProfile.initialHardware.ram) {
+        return {
+          gpu: userProfile.initialHardware.gpu,
+          vram: userProfile.initialHardware.vram,
+          ram: userProfile.initialHardware.ram
+        };
+      }
+
+      // Prior to first milestone fallback (retrocompatibility for profiles without initialHardware):
       return {
         gpu: firstMilestone.gpu || baseHardware.gpu,
         vram: firstMilestone.vram || baseHardware.vram,

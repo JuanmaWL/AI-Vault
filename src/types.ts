@@ -17,6 +17,7 @@ export interface UserProfile {
   email: string;
   displayName?: string;
   hardware?: UserHardware;
+  initialHardware?: UserHardware; // Configuración previa al primer hito de hardware registrado
   hardwareHistory?: HardwareMilestone[];
   role?: 'admin' | 'viewer';
   huggingfaceDatasetUrl?: string;
