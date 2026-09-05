@@ -121,7 +121,9 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       
       const result = await mi.analyzeData(getSize, readChunk);
       
-      console.log("MediaInfo Result:", JSON.stringify(result, null, 2));
+      if (import.meta.env.DEV) {
+        console.log("MediaInfo Result:", JSON.stringify(result, null, 2));
+      }
 
       const generalTrack = result.media?.track?.find((t: any) => t['@type'] === 'General') as any;
       const videoTrack = result.media?.track?.find((t: any) => t['@type'] === 'Video') as any;

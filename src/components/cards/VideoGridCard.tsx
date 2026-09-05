@@ -396,6 +396,7 @@ export function VideoGridCard({
             {onEditClick && (
               <button
                 onClick={onEditClick}
+                aria-label="Editar registro"
                 className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-colors cursor-pointer"
                 title="Editar registro"
               >
@@ -405,6 +406,7 @@ export function VideoGridCard({
             {onDeleteClick && (
               <button
                 onClick={onDeleteClick}
+                aria-label="Eliminar vídeo"
                 className="p-2 rounded-lg bg-rose-950/30 hover:bg-rose-900/50 text-rose-400 hover:text-rose-300 border border-rose-900/40 transition-colors cursor-pointer"
                 title="Eliminar vídeo"
               >

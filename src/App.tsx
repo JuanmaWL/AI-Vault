@@ -515,19 +515,25 @@ export default function App() {
     });
 
     if (db && !usingLocal) {
-      console.log(`[AI Video Vault] Iniciando guardado de lote (${records.length} vídeos) en Firestore...`, {
-        user: currentUser?.email,
-        uid: currentUser?.uid,
-        isAdmin
-      });
+      if (import.meta.env.DEV) {
+        console.log(`[AI Video Vault] Iniciando guardado de lote (${records.length} vídeos) en Firestore...`, {
+          user: currentUser?.email,
+          uid: currentUser?.uid,
+          isAdmin
+        });
+      }
       try {
         const batchPromises = records.map(async (record, index) => {
           const cleanRecord = cleanForFirestore(record);
-          console.log(`[AI Video Vault] Guardando registro #${index + 1}:`, cleanRecord);
+          if (import.meta.env.DEV) {
+            console.log(`[AI Video Vault] Guardando registro #${index + 1}:`, cleanRecord);
+          }
           return await addDoc(collection(db, COLLECTION_NAME), cleanRecord);
         });
         const docRefs = await Promise.all(batchPromises);
-        console.log(`[AI Video Vault] ✓ Guardados con éxito ${docRefs.length} documentos en Firestore.`);
+        if (import.meta.env.DEV) {
+          console.log(`[AI Video Vault] ✓ Guardados con éxito ${docRefs.length} documentos en Firestore.`);
+        }
       } catch (err: any) {
         console.error("[AI Video Vault] ❌ Error crítico al escribir en Firestore batch:", err);
         const errMsg = err?.code ? `Firebase [${err.code}]: ${err.message}` : (err?.message || 'Error desconocido de Firestore');
@@ -535,7 +541,9 @@ export default function App() {
         throw new Error(errMsg);
       }
     } else {
-      console.log(`[AI Video Vault] Guardando lote de ${records.length} vídeos en modo local...`);
+      if (import.meta.env.DEV) {
+        console.log(`[AI Video Vault] Guardando lote de ${records.length} vídeos en modo local...`);
+      }
       const recordsWithIds = records.map(r => ({ ...r, id: `local_${crypto.randomUUID()}`, isMock: true }));
       const newVids = [...recordsWithIds, ...videos];
       setVideos(newVids);
@@ -565,10 +573,14 @@ export default function App() {
 
     const cleanRecord = cleanForFirestore(record);
     if (db && !usingLocal) {
-      console.log("[AI Video Vault] Guardando nuevo vídeo en Firestore:", cleanRecord);
+      if (import.meta.env.DEV) {
+        console.log("[AI Video Vault] Guardando nuevo vídeo en Firestore:", cleanRecord);
+      }
       try {
         const docRef = await addDoc(collection(db, COLLECTION_NAME), cleanRecord);
-        console.log("[AI Video Vault] ✓ Guardado con éxito con ID:", docRef.id);
+        if (import.meta.env.DEV) {
+          console.log("[AI Video Vault] ✓ Guardado con éxito con ID:", docRef.id);
+        }
       } catch (err: any) {
         console.error("[AI Video Vault] ❌ Error al escribir en Firestore:", err);
         const errMsg = err?.code ? `Firebase [${err.code}]: ${err.message}` : (err?.message || 'Error al guardar en Firestore');
@@ -665,7 +677,9 @@ export default function App() {
     if (db && !usingLocal && record.id && !isLocalRecord) {
       try {
         await updateDoc(doc(db, COLLECTION_NAME, record.id), cleanRecord);
-        console.log("[AI Video Vault] ✓ Vídeo actualizado en Firestore:", record.id);
+        if (import.meta.env.DEV) {
+          console.log("[AI Video Vault] ✓ Vídeo actualizado en Firestore:", record.id);
+        }
       } catch (err: any) {
         console.error("[AI Video Vault] ❌ Error al actualizar en Firestore:", err);
         const errMsg = err?.code ? `Firebase [${err.code}]: ${err.message}` : (err?.message || 'Error al actualizar');
@@ -1053,8 +1067,9 @@ export default function App() {
                 {isAdmin && (
                   <button
                     onClick={() => setIsHardwareModalOpen(true)}
+                    aria-label="Perfil de Hardware"
                     title="Perfil de Hardware"
-                    className="p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                    className="p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors cursor-pointer"
                   >
                     <Cpu className={`w-3.5 h-3.5 ${userProfile?.hardware ? 'text-teal-400' : 'text-amber-500'}`} />
                   </button>
@@ -1062,8 +1077,9 @@ export default function App() {
 
                 <button
                   onClick={handleLogout}
+                  aria-label="Cerrar sesión"
                   title="Cerrar sesión"
-                  className="p-1.5 rounded-full text-neutral-400 hover:text-rose-400 hover:bg-neutral-800 transition-colors"
+                  className="p-1.5 rounded-full text-neutral-400 hover:text-rose-400 hover:bg-neutral-800 transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -1289,6 +1305,7 @@ export default function App() {
                           <button
                             key={cols}
                             onClick={() => handleSetGridColumns(cols)}
+                            aria-label={`${cols} columnas por fila`}
                             className={`px-2 py-1 rounded-md text-[11px] font-mono font-bold transition-all cursor-pointer ${
                               gridColumns === cols
                                 ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
@@ -1933,6 +1950,7 @@ export default function App() {
                       setSelectionMode(false);
                       setSelectedVideoIds(new Set());
                     }}
+                    aria-label="Salir del modo selección"
                     className="p-1.5 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-xl transition-colors cursor-pointer"
                     title="Salir del modo selección"
                   >

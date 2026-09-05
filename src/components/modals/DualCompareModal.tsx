@@ -23,6 +23,55 @@ type ActiveTab = 'diffs' | 'prompt' | 'all';
 type PickerCols = 2 | 3 | 4 | 5;
 type AudioSelection = 'muted' | 'A' | 'B' | 'both';
 
+interface CompareTabsProps {
+  activeTab: ActiveTab;
+  setActiveTab: (tab: ActiveTab) => void;
+  differentCount: number;
+  promptDiff: { hasDifferences: boolean };
+}
+
+function CompareTabs({ activeTab, setActiveTab, differentCount, promptDiff }: CompareTabsProps) {
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 min-w-0">
+      <button
+        onClick={() => setActiveTab('diffs')}
+        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
+          activeTab === 'diffs' 
+            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' 
+            : 'text-neutral-400 hover:text-neutral-200'
+        }`}
+      >
+        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+        <span>Diferencias ({differentCount})</span>
+      </button>
+
+      <button
+        onClick={() => setActiveTab('prompt')}
+        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
+          activeTab === 'prompt' 
+            ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm' 
+            : 'text-neutral-400 hover:text-neutral-200'
+        }`}
+      >
+        <FileText className="w-3.5 h-3.5 shrink-0" />
+        <span>Diff de Prompt {promptDiff.hasDifferences ? '(Diferente)' : '(Idéntico)'}</span>
+      </button>
+
+      <button
+        onClick={() => setActiveTab('all')}
+        className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
+          activeTab === 'all' 
+            ? 'bg-neutral-800 text-white border border-neutral-700 shadow-sm' 
+            : 'text-neutral-400 hover:text-neutral-200'
+        }`}
+      >
+        <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+        <span>Todos los Parámetros</span>
+      </button>
+    </div>
+  );
+}
+
 export function DualCompareModal({
   initialVideoA,
   initialVideoB,
@@ -563,6 +612,7 @@ export function DualCompareModal({
           {/* Swap Button */}
           <button
             onClick={handleSwap}
+            aria-label="Intercambiar Vídeo A y Vídeo B"
             className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition-all hover:scale-105 active:scale-95 shrink-0 border border-neutral-700 cursor-pointer"
             title="Intercambiar Vídeo A y Vídeo B"
           >
@@ -576,6 +626,7 @@ export function DualCompareModal({
           <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5">
             <button
               onClick={() => setLayout('split')}
+              aria-label="Vista lado a lado"
               className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${layout === 'split' ? 'bg-neutral-800 text-teal-400' : 'text-neutral-400 hover:text-neutral-200'}`}
               title="Lado a lado (Split 50/50)"
             >
@@ -583,6 +634,7 @@ export function DualCompareModal({
             </button>
             <button
               onClick={() => setLayout('vertical')}
+              aria-label="Vista arriba y abajo con panel de análisis"
               className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${layout === 'vertical' ? 'bg-neutral-800 text-teal-400' : 'text-neutral-400 hover:text-neutral-200'}`}
               title="Arriba / Abajo (Con panel de análisis a la derecha)"
             >
@@ -590,6 +642,7 @@ export function DualCompareModal({
             </button>
             <button
               onClick={() => setLayout('slider')}
+              aria-label="Vista cortinilla interactiva"
               className={`p-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${layout === 'slider' ? 'bg-neutral-800 text-teal-400' : 'text-neutral-400 hover:text-neutral-200'}`}
               title="Slider Cortinilla con Ratón (Wipe Compare)"
             >
@@ -599,6 +652,7 @@ export function DualCompareModal({
 
           <button
             onClick={toggleFullscreen}
+            aria-label={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
             className="p-2 rounded-lg bg-neutral-800/80 hover:bg-neutral-700 text-neutral-300 transition-colors cursor-pointer"
             title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"}
           >
@@ -607,6 +661,7 @@ export function DualCompareModal({
 
           <button
             onClick={onClose}
+            aria-label="Cerrar comparador"
             className="p-2 rounded-lg bg-neutral-800/80 hover:bg-rose-900/60 hover:text-rose-300 text-neutral-300 transition-colors ml-1 cursor-pointer"
             title="Cerrar comparador (Esc)"
           >
@@ -681,38 +736,12 @@ export function DualCompareModal({
             <div className="lg:w-2/5 border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-950 flex flex-col overflow-hidden shrink-0">
               {/* Right Panel Tabs */}
               <div className="p-3 bg-neutral-900/70 border-b border-neutral-800 flex items-center justify-between gap-2 shrink-0 overflow-x-auto no-scrollbar">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <button
-                    onClick={() => setActiveTab('diffs')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
-                      activeTab === 'diffs' 
-                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' 
-                        : 'text-neutral-400 hover:text-neutral-200'
-                    }`}
-                  >
-                    Diferencias ({differentCount})
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('prompt')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
-                      activeTab === 'prompt' 
-                        ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm' 
-                        : 'text-neutral-400 hover:text-neutral-200'
-                    }`}
-                  >
-                    Prompt Diff
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('all')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
-                      activeTab === 'all' 
-                        ? 'bg-neutral-800 text-white border border-neutral-700 shadow-sm' 
-                        : 'text-neutral-400 hover:text-neutral-200'
-                    }`}
-                  >
-                    Todos
-                  </button>
-                </div>
+                <CompareTabs
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  differentCount={differentCount}
+                  promptDiff={promptDiff}
+                />
               </div>
 
               {/* Right Panel Scrollable Content */}
@@ -899,6 +928,7 @@ export function DualCompareModal({
             <button
               onClick={handleReset}
               disabled={!areBothVideosReady}
+              aria-label="Rebobinar al inicio"
               className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               title="Rebobinar al inicio (R)"
             >
@@ -908,6 +938,7 @@ export function DualCompareModal({
             <button
               onClick={() => stepFrame(-1)}
               disabled={!areBothVideosReady}
+              aria-label="Fotograma anterior"
               className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               title="Fotograma anterior (-1 Frame: Flecha Izquierda)"
             >
@@ -917,6 +948,7 @@ export function DualCompareModal({
             <button
               onClick={() => stepFrame(1)}
               disabled={!areBothVideosReady}
+              aria-label="Siguiente fotograma"
               className="p-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-mono transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               title="Siguiente fotograma (+1 Frame: Flecha Derecha)"
             >
@@ -926,6 +958,7 @@ export function DualCompareModal({
             {/* Loop Toggle */}
             <button
               onClick={() => setIsLooping(!isLooping)}
+              aria-label={isLooping ? "Desactivar bucle" : "Activar bucle"}
               className={`p-2 rounded-lg text-xs font-medium transition-colors border cursor-pointer ${
                 isLooping 
                   ? 'bg-teal-950/60 border-teal-800 text-teal-300' 
@@ -1007,43 +1040,12 @@ export function DualCompareModal({
         <div className="flex-1 max-h-[35vh] min-h-0 overflow-y-auto bg-neutral-950 border-t border-neutral-800 flex flex-col shrink-0">
           {/* Navigation Tabs */}
           <div className="px-4 sm:px-6 py-2.5 bg-neutral-900/60 border-b border-neutral-800/80 flex items-center justify-between gap-4 sticky top-0 z-20 backdrop-blur-md">
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 min-w-0">
-              <button
-                onClick={() => setActiveTab('diffs')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
-                  activeTab === 'diffs' 
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' 
-                    : 'text-neutral-400 hover:text-neutral-200'
-                }`}
-              >
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>Diferencias ({differentCount})</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('prompt')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
-                  activeTab === 'prompt' 
-                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm' 
-                    : 'text-neutral-400 hover:text-neutral-200'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5 shrink-0" />
-                <span>Diff de Prompt {promptDiff.hasDifferences ? '(Diferente)' : '(Idéntico)'}</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('all')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
-                  activeTab === 'all' 
-                    ? 'bg-neutral-800 text-white border border-neutral-700 shadow-sm' 
-                    : 'text-neutral-400 hover:text-neutral-200'
-                }`}
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
-                <span>Todos los Parámetros</span>
-              </button>
-            </div>
+            <CompareTabs
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              differentCount={differentCount}
+              promptDiff={promptDiff}
+            />
 
             <div className="hidden sm:flex items-center gap-4 text-xs shrink-0">
               <span className="flex items-center gap-1.5 text-blue-400 font-semibold">
@@ -1107,6 +1109,7 @@ export function DualCompareModal({
 
               <button
                 onClick={() => setPickerTarget(null)}
+                aria-label="Cerrar selector"
                 className="p-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white transition-colors cursor-pointer"
                 title="Cerrar selector"
               >
@@ -1130,6 +1133,7 @@ export function DualCompareModal({
                 {pickerSearch && (
                   <button
                     onClick={() => setPickerSearch('')}
+                    aria-label="Borrar búsqueda"
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 text-xs"
                   >
                     ×

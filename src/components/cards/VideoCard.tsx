@@ -397,6 +397,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                     {onEditClick && (
                       <button
                         onClick={onEditClick}
+                        aria-label="Editar vídeo"
                         className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-neutral-800 rounded-lg transition-colors border border-transparent hover:border-neutral-700 cursor-pointer"
                         title="Editar vídeo"
                       >
@@ -406,6 +407,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                     {onDeleteClick && (
                       <button
                         onClick={onDeleteClick}
+                        aria-label="Borrar vídeo"
                         className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors border border-transparent hover:border-rose-900/50 cursor-pointer"
                         title="Borrar vídeo"
                       >
