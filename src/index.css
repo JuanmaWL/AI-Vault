@@ -17,3 +17,13 @@
   background-size: 300% 300%;
   animation: rgbGlow 4s linear infinite;
 }
+
+/* Ocultar barra de scroll pero mantener funcionalidad de scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

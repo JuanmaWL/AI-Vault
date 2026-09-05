@@ -680,11 +680,11 @@ export function DualCompareModal({
             {/* Right Side Analysis & Differences Column */}
             <div className="lg:w-2/5 border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-950 flex flex-col overflow-hidden shrink-0">
               {/* Right Panel Tabs */}
-              <div className="p-3 bg-neutral-900/70 border-b border-neutral-800 flex items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-1.5">
+              <div className="p-3 bg-neutral-900/70 border-b border-neutral-800 flex items-center justify-between gap-2 shrink-0 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <button
                     onClick={() => setActiveTab('diffs')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
                       activeTab === 'diffs' 
                         ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' 
                         : 'text-neutral-400 hover:text-neutral-200'
@@ -694,7 +694,7 @@ export function DualCompareModal({
                   </button>
                   <button
                     onClick={() => setActiveTab('prompt')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
                       activeTab === 'prompt' 
                         ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm' 
                         : 'text-neutral-400 hover:text-neutral-200'
@@ -704,7 +704,7 @@ export function DualCompareModal({
                   </button>
                   <button
                     onClick={() => setActiveTab('all')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0 ${
                       activeTab === 'all' 
                         ? 'bg-neutral-800 text-white border border-neutral-700 shadow-sm' 
                         : 'text-neutral-400 hover:text-neutral-200'
@@ -1004,48 +1004,48 @@ export function DualCompareModal({
 
       {/* Bottom Panel: Differences Matrix & Diff Spotlight (Used when layout !== 'vertical') */}
       {layout !== 'vertical' && (
-        <div className="max-h-[35vh] overflow-y-auto bg-neutral-950 border-t border-neutral-800 flex flex-col shrink-0">
+        <div className="flex-1 max-h-[35vh] min-h-0 overflow-y-auto bg-neutral-950 border-t border-neutral-800 flex flex-col shrink-0">
           {/* Navigation Tabs */}
-          <div className="px-6 py-2.5 bg-neutral-900/60 border-b border-neutral-800/80 flex items-center justify-between gap-4 sticky top-0 z-20 backdrop-blur-md">
-            <div className="flex items-center gap-2">
+          <div className="px-4 sm:px-6 py-2.5 bg-neutral-900/60 border-b border-neutral-800/80 flex items-center justify-between gap-4 sticky top-0 z-20 backdrop-blur-md">
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5 min-w-0">
               <button
                 onClick={() => setActiveTab('diffs')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
                   activeTab === 'diffs' 
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm' 
                     : 'text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                <AlertCircle className="w-3.5 h-3.5" />
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                 <span>Diferencias ({differentCount})</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('prompt')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
                   activeTab === 'prompt' 
                     ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm' 
                     : 'text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" />
+                <FileText className="w-3.5 h-3.5 shrink-0" />
                 <span>Diff de Prompt {promptDiff.hasDifferences ? '(Diferente)' : '(Idéntico)'}</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('all')}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shrink-0 ${
                   activeTab === 'all' 
                     ? 'bg-neutral-800 text-white border border-neutral-700 shadow-sm' 
                     : 'text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
                 <span>Todos los Parámetros</span>
               </button>
             </div>
 
-            <div className="hidden sm:flex items-center gap-4 text-xs">
+            <div className="hidden sm:flex items-center gap-4 text-xs shrink-0">
               <span className="flex items-center gap-1.5 text-blue-400 font-semibold">
                 <span className="w-2.5 h-2.5 rounded bg-blue-500 inline-block"></span>
                 Vídeo A: {videoA.model}
