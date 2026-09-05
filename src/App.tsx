@@ -23,6 +23,8 @@ import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckS
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
 
+declare const __APP_BUILD_TIME__: string;
+
 const COLLECTION_NAME = 'videos';
 const STORAGE_KEY = 'local_ai_videos_v2';
 
@@ -945,51 +947,28 @@ export default function App() {
     setVideosToDelete(null);
   };
 
+  const appBuildDate = useMemo(() => {
+    try {
+      const d = typeof __APP_BUILD_TIME__ !== 'undefined' ? new Date(__APP_BUILD_TIME__) : new Date();
+      return new Intl.DateTimeFormat('es-ES', {
+        dateStyle: 'medium',
+      }).format(d);
+    } catch {
+      return null;
+    }
+  }, []);
+
   const latestUploadDate = useMemo(() => {
     if (!videos || videos.length === 0) return null;
     const timestamps = videos
-      .map((v) => v.createdAt)
-      .filter((t): t is number => typeof t === 'number' && !isNaN(t));
+      .map((v) => v.createdAt || v.generatedAt)
+      .filter((t): t is number => typeof t === 'number' && !isNaN(t) && t > 0);
     if (timestamps.length === 0) return null;
     const maxTime = Math.max(...timestamps);
     return new Intl.DateTimeFormat('es-ES', {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(new Date(maxTime));
-  }, [videos]);
-
-  const footerStats = useMemo(() => {
-    let wan2gp = 0;
-    let maestro = 0;
-    let comfyui = 0;
-    let other = 0;
-    const modelSet = new Set<string>();
-    const folderSet = new Set<string>();
-
-    videos.forEach((v) => {
-      const src = v.softwareSource || 'other';
-      if (src === 'wan2gp') wan2gp++;
-      else if (src === 'maestro') maestro++;
-      else if (src === 'comfyui') comfyui++;
-      else other++;
-
-      if (v.model?.trim()) {
-        modelSet.add(v.model.trim().toLowerCase());
-      }
-      if (v.groupName?.trim()) {
-        folderSet.add(v.groupName.trim());
-      }
-    });
-
-    return {
-      total: videos.length,
-      wan2gp,
-      maestro,
-      comfyui,
-      other,
-      modelsCount: modelSet.size,
-      foldersCount: folderSet.size,
-    };
   }, [videos]);
 
   const handleNavigateToVideo = (id: string) => {
@@ -1973,102 +1952,59 @@ export default function App() {
 
 
       {/* Pie de Página */}
-      <footer className="border-t border-neutral-800/80 bg-neutral-950/90 py-4 sm:py-5 px-4 sm:px-6 text-xs text-neutral-400">
-        <div className="max-w-[1600px] mx-auto grid grid-cols-1 md:grid-cols-3 items-center gap-4">
-          {/* Columna 1: Identidad, versión y estado de actividad */}
-          <div className="flex flex-col items-center md:items-start gap-1">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-neutral-200 tracking-tight">AI Video Vault</span>
-              <span className="px-2 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-teal-400 font-semibold shadow-xs">
-                v{pkg.version}
-              </span>
+      <footer className="border-t border-neutral-800/80 bg-neutral-950/95 py-3.5 sm:py-4 px-4 sm:px-8 text-xs text-neutral-400">
+        <div className="max-w-[1600px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6">
+          {/* Bloque Izquierdo: Identidad, Versión con fecha de release y Último vídeo subido */}
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3">
+            <span className="font-bold text-neutral-200 tracking-tight text-[13px]">AI Video Vault</span>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-neutral-900 border border-neutral-800 text-[11px] font-mono text-teal-400 font-semibold shadow-xs" title={appBuildDate ? `Versión de la app lanzada el ${appBuildDate}` : undefined}>
+              <span>v{pkg.version}</span>
+              {appBuildDate && (
+                <>
+                  <span className="text-neutral-700">•</span>
+                  <span className="text-neutral-400 font-normal">{appBuildDate}</span>
+                </>
+              )}
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+            <span className="text-neutral-700 hidden sm:inline">•</span>
+            <div className="flex items-center gap-1.5 text-neutral-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 inline-block shadow-xs" />
-              <span>Último update</span>
-              <span className="text-neutral-300 font-medium">
+              <span className="text-neutral-500">Último vídeo:</span>
+              <span className="text-neutral-300 font-medium font-mono text-[11px]">
                 {latestUploadDate ? latestUploadDate : 'Sin registros'}
               </span>
             </div>
           </div>
 
-          {/* Columna 2: Métricas clave y desglose por software */}
-          <div className="flex flex-col items-center justify-center gap-1.5 text-center">
-            <div className="flex items-center gap-2 text-neutral-300 font-medium text-xs">
-              <span className="text-white font-semibold">{footerStats.total}</span> vídeos
-              <span className="text-neutral-700">•</span>
-              <span className="text-white font-semibold">{footerStats.modelsCount}</span> {footerStats.modelsCount === 1 ? 'modelo' : 'modelos'}
-              <span className="text-neutral-700">•</span>
-              <span className="text-white font-semibold">{footerStats.foldersCount}</span> {footerStats.foldersCount === 1 ? 'carpeta' : 'carpetas'}
-            </div>
-            {footerStats.total > 0 && (
-              <div className="flex flex-wrap items-center justify-center gap-1.5 text-[11px] font-mono">
-                {footerStats.wan2gp > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-teal-500/10 border border-teal-500/20 text-teal-300 font-medium" title="Generados con Wan2GP">
-                    {footerStats.wan2gp} Wan2GP
-                  </span>
-                )}
-                {footerStats.maestro > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 text-blue-300 font-medium" title="Generados con Maestro">
-                    {footerStats.maestro} Maestro
-                  </span>
-                )}
-                {footerStats.comfyui > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300 font-medium" title="Generados con ComfyUI">
-                    {footerStats.comfyui} ComfyUI
-                  </span>
-                )}
-                {footerStats.other > 0 && (
-                  <span className="px-1.5 py-0.5 rounded bg-neutral-900 border border-neutral-800 text-neutral-400 font-medium" title="Generados con otros o Cloud">
-                    {footerStats.other} otros
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Columna 3: Entorno, hardware y perfil de usuario */}
-          <div className="flex flex-col items-center md:items-end gap-1.5">
-            {userProfile?.hardware ? (
+          {/* Bloque Derecho: Hardware Activo y Usuario/Rol */}
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2.5 sm:gap-4 text-neutral-300">
+            {userProfile?.hardware && (
               <button
                 type="button"
                 onClick={() => setIsHardwareModalOpen(true)}
-                className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-neutral-900/90 hover:bg-neutral-900 border border-neutral-800 hover:border-teal-500/40 text-neutral-300 hover:text-teal-300 transition-all cursor-pointer text-xs group shadow-xs"
+                className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-neutral-900/80 hover:bg-neutral-900 border border-neutral-800/90 hover:border-teal-500/40 text-neutral-300 hover:text-teal-300 transition-all cursor-pointer text-xs group"
                 title="Hardware activo (clic para configurar o ver historial)"
               >
                 <Cpu className="w-3.5 h-3.5 text-teal-400 group-hover:scale-110 transition-transform shrink-0" />
                 <span className="font-semibold text-neutral-200 group-hover:text-teal-200">{userProfile.hardware.gpu}</span>
-                <span className="text-neutral-500">•</span>
+                <span className="text-neutral-600 font-mono text-[10px]">|</span>
                 <span className="font-mono text-[11px] text-neutral-400">
-                  {userProfile.hardware.vram}GB VRAM / {userProfile.hardware.ram}GB RAM
+                  {userProfile.hardware.vram}GB / {userProfile.hardware.ram}GB
                 </span>
               </button>
-            ) : (
-              currentUser && (
-                <button
-                  type="button"
-                  onClick={() => setIsHardwareModalOpen(true)}
-                  className="flex items-center gap-1.5 text-xs text-amber-400/90 hover:text-amber-300 underline cursor-pointer"
-                >
-                  <Cpu className="w-3.5 h-3.5" />
-                  <span>Configurar hardware de referencia</span>
-                </button>
-              )
             )}
 
-            <div className="flex items-center gap-2 text-[11px] text-neutral-500">
-              {currentUser && (
-                <div className="flex items-center gap-1.5">
-                  <UserIcon className="w-3 h-3 text-neutral-400" />
-                  <span className="text-neutral-300 font-medium">
-                    {userDisplayName || currentUser.displayName || currentUser.email?.split('@')[0]}
-                  </span>
-                  <span className="px-1.5 py-0.2 rounded bg-neutral-900 border border-neutral-800 text-[10px] text-neutral-400 font-mono">
-                    {isAdmin ? 'Admin' : 'Viewer'}
-                  </span>
-                </div>
-              )}
-            </div>
+            {currentUser && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-900/50 border border-neutral-800/60 text-neutral-300 text-xs">
+                <UserIcon className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <span className="font-medium text-neutral-200">
+                  {userDisplayName || currentUser.displayName || currentUser.email?.split('@')[0]}
+                </span>
+                <span className="px-1.5 py-0.2 rounded bg-neutral-950 border border-neutral-800 text-[10px] text-teal-400 font-mono font-medium">
+                  {isAdmin ? 'Admin' : 'Viewer'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </footer>

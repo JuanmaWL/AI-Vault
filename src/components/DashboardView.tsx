@@ -6,7 +6,8 @@ import {
 } from 'recharts';
 import { 
   Cpu, Clock, Sliders, Layers, Sparkles, Filter, Info, AlertCircle, 
-  Zap, RotateCcw, Box, Monitor, Gauge, ArrowRight, CheckCircle2, TrendingDown, TrendingUp
+  Zap, RotateCcw, Box, Monitor, Gauge, ArrowRight, CheckCircle2, TrendingDown, TrendingUp,
+  Folder, Wrench, Film
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -270,6 +271,47 @@ export function DashboardView({ videos }: DashboardViewProps) {
   }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedLoraFilter]);
 
   const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedLoraFilter !== 'all';
+
+  // Software pipeline and catalog distribution analysis for current filtered view
+  const softwareStats = useMemo(() => {
+    let wan2gp = 0;
+    let maestro = 0;
+    let comfyui = 0;
+    let other = 0;
+    const modelSet = new Set<string>();
+    const folderSet = new Set<string>();
+
+    dashboardVideos.forEach((v) => {
+      const src = v.softwareSource || 'other';
+      if (src === 'wan2gp') wan2gp++;
+      else if (src === 'maestro') maestro++;
+      else if (src === 'comfyui') comfyui++;
+      else other++;
+
+      if (v.model?.trim()) {
+        modelSet.add(v.model.trim().toLowerCase());
+      }
+      if (v.groupName?.trim()) {
+        folderSet.add(v.groupName.trim());
+      }
+    });
+
+    const total = dashboardVideos.length;
+
+    return {
+      total,
+      wan2gp,
+      maestro,
+      comfyui,
+      other,
+      wan2gpPct: total > 0 ? Math.round((wan2gp / total) * 100) : 0,
+      maestroPct: total > 0 ? Math.round((maestro / total) * 100) : 0,
+      comfyuiPct: total > 0 ? Math.round((comfyui / total) * 100) : 0,
+      otherPct: total > 0 ? Math.round((other / total) * 100) : 0,
+      modelsCount: modelSet.size,
+      foldersCount: folderSet.size,
+    };
+  }, [dashboardVideos]);
 
   const resetFilters = () => {
     setSelectedGpu('all');
@@ -723,6 +765,145 @@ export function DashboardView({ videos }: DashboardViewProps) {
         </div>
       ) : (
         <>
+          {/* SECTION 0: CATALOG & PIPELINE DISTRIBUTION */}
+          <div className="bg-neutral-900/60 border border-neutral-800 rounded-2xl p-5 sm:p-6 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-800/70 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-400">
+                  <Wrench className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-200 uppercase tracking-wider">
+                    Desglose por Herramienta y Catálogo
+                  </h3>
+                  <p className="text-xs text-neutral-400">
+                    Distribución de pipelines de generación y diversidad de modelos en la muestra actual
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 text-xs text-neutral-400 font-mono">
+                <span className="flex items-center gap-1.5">
+                  <Film className="w-3.5 h-3.5 text-neutral-500" />
+                  <strong className="text-neutral-200">{softwareStats.total}</strong> vídeos
+                </span>
+                <span className="text-neutral-700">•</span>
+                <span className="flex items-center gap-1.5">
+                  <Box className="w-3.5 h-3.5 text-neutral-500" />
+                  <strong className="text-neutral-200">{softwareStats.modelsCount}</strong> {softwareStats.modelsCount === 1 ? 'modelo' : 'modelos'}
+                </span>
+                <span className="text-neutral-700">•</span>
+                <span className="flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-neutral-500" />
+                  <strong className="text-neutral-200">{softwareStats.foldersCount}</strong> {softwareStats.foldersCount === 1 ? 'carpeta' : 'carpetas'}
+                </span>
+              </div>
+            </div>
+
+            {/* Pipeline Cards Grid (Only showing tools that actually exist in the current catalog) */}
+            <div className={`grid gap-3.5 ${
+              [softwareStats.wan2gp > 0, softwareStats.maestro > 0, softwareStats.comfyui > 0, softwareStats.other > 0].filter(Boolean).length === 1
+                ? 'grid-cols-1 sm:grid-cols-2'
+                : [softwareStats.wan2gp > 0, softwareStats.maestro > 0, softwareStats.comfyui > 0, softwareStats.other > 0].filter(Boolean).length === 2
+                  ? 'grid-cols-1 sm:grid-cols-2'
+                  : [softwareStats.wan2gp > 0, softwareStats.maestro > 0, softwareStats.comfyui > 0, softwareStats.other > 0].filter(Boolean).length === 3
+                    ? 'grid-cols-1 sm:grid-cols-3'
+                    : 'grid-cols-2 lg:grid-cols-4'
+            }`}>
+              {/* Wan2GP */}
+              {softwareStats.wan2gp > 0 && (
+                <div className="p-3.5 rounded-xl bg-neutral-950/70 border border-neutral-800/80 hover:border-teal-500/30 transition-all flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-teal-400">Wan2GP</span>
+                    <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 border border-teal-500/20">
+                      {softwareStats.wan2gpPct}%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-2xl font-bold font-mono text-neutral-100">{softwareStats.wan2gp}</span>
+                    <span className="text-xs text-neutral-500">{softwareStats.wan2gp === 1 ? 'vídeo' : 'vídeos'}</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-neutral-900 rounded-full h-1.5 overflow-hidden mt-1">
+                    <div 
+                      className="bg-teal-500 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${softwareStats.wan2gpPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Maestro */}
+              {softwareStats.maestro > 0 && (
+                <div className="p-3.5 rounded-xl bg-neutral-950/70 border border-neutral-800/80 hover:border-blue-500/30 transition-all flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-blue-400">Maestro</span>
+                    <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                      {softwareStats.maestroPct}%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-2xl font-bold font-mono text-neutral-100">{softwareStats.maestro}</span>
+                    <span className="text-xs text-neutral-500">{softwareStats.maestro === 1 ? 'vídeo' : 'vídeos'}</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-neutral-900 rounded-full h-1.5 overflow-hidden mt-1">
+                    <div 
+                      className="bg-blue-500 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${softwareStats.maestroPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ComfyUI */}
+              {softwareStats.comfyui > 0 && (
+                <div className="p-3.5 rounded-xl bg-neutral-950/70 border border-neutral-800/80 hover:border-purple-500/30 transition-all flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-purple-400">ComfyUI</span>
+                    <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                      {softwareStats.comfyuiPct}%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-2xl font-bold font-mono text-neutral-100">{softwareStats.comfyui}</span>
+                    <span className="text-xs text-neutral-500">{softwareStats.comfyui === 1 ? 'vídeo' : 'vídeos'}</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-neutral-900 rounded-full h-1.5 overflow-hidden mt-1">
+                    <div 
+                      className="bg-purple-500 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${softwareStats.comfyuiPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Otros / Cloud */}
+              {softwareStats.other > 0 && (
+                <div className="p-3.5 rounded-xl bg-neutral-950/70 border border-neutral-800/80 hover:border-neutral-700 transition-all flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-neutral-300">Otros / Cloud</span>
+                    <span className="text-[11px] font-mono font-medium px-2 py-0.5 rounded-full bg-neutral-900 text-neutral-400 border border-neutral-800">
+                      {softwareStats.otherPct}%
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5 mt-1">
+                    <span className="text-2xl font-bold font-mono text-neutral-100">{softwareStats.other}</span>
+                    <span className="text-xs text-neutral-500">{softwareStats.other === 1 ? 'vídeo' : 'vídeos'}</span>
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-neutral-900 rounded-full h-1.5 overflow-hidden mt-1">
+                    <div 
+                      className="bg-neutral-600 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${softwareStats.otherPct}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* SECTION 1: RENDERING METRICS & BENCHMARKS */}
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between px-1">
