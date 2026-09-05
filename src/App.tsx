@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { db, auth } from './lib/firebase';
 import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -7,15 +7,17 @@ import { VideoCard } from './components/VideoCard';
 import { VideoGridCard } from './components/VideoGridCard';
 import { CompareView } from './components/CompareView';
 import { DashboardView } from './components/DashboardView';
-import { AddVideoModal } from './components/AddVideoModal';
-import { BatchImportModal } from './components/BatchImportModal';
 import { AccessGate } from './components/AccessGate';
-import { EditProfileModal } from './components/EditProfileModal';
-import { HardwareProfileModal } from './components/HardwareProfileModal';
 import { DeleteConfirmModal } from './components/DeleteConfirmModal';
-import { DualCompareModal } from './components/DualCompareModal';
 import { VaultLogo } from './components/VaultLogo';
 import { AISparkle } from './components/AISparkle';
+
+// Carga perezosa (lazy) de los modales secundarios pesados para optimizar el bundle principal
+const AddVideoModal = lazy(() => import('./components/AddVideoModal').then(m => ({ default: m.AddVideoModal })));
+const BatchImportModal = lazy(() => import('./components/BatchImportModal').then(m => ({ default: m.BatchImportModal })));
+const EditProfileModal = lazy(() => import('./components/EditProfileModal').then(m => ({ default: m.EditProfileModal })));
+const HardwareProfileModal = lazy(() => import('./components/HardwareProfileModal').then(m => ({ default: m.HardwareProfileModal })));
+const DualCompareModal = lazy(() => import('./components/DualCompareModal').then(m => ({ default: m.DualCompareModal })));
 import { calculateOrientation, cleanForFirestore, extractTechnicalDetails, resolveHardwareForDate } from './lib/utils';
 import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -1973,72 +1975,74 @@ export default function App() {
         );
       })()}
 
-      {isModalOpen && (
-        <AddVideoModal 
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingVideo(undefined);
-          }} 
-          onSave={editingVideo ? handleEditVideo : handleAddVideo}
-          userEmail={currentUser?.email || userProfile?.email || undefined}
-          initialData={editingVideo}
-          existingGroups={uniqueGroups}
-          onAddCategory={handleAddCategory}
-        />
-      )}
+      <Suspense fallback={null}>
+        {isModalOpen && (
+          <AddVideoModal 
+            onClose={() => {
+              setIsModalOpen(false);
+              setEditingVideo(undefined);
+            }} 
+            onSave={editingVideo ? handleEditVideo : handleAddVideo}
+            userEmail={currentUser?.email || userProfile?.email || undefined}
+            initialData={editingVideo}
+            existingGroups={uniqueGroups}
+            onAddCategory={handleAddCategory}
+          />
+        )}
 
-      {isBatchModalOpen && (
-        <BatchImportModal 
-          onClose={() => setIsBatchModalOpen(false)}
-          onSaveBatch={handleSaveBatch}
-          userEmail={currentUser?.email || userProfile?.email || undefined}
-          userDisplayName={userDisplayName || currentUser?.displayName || userProfile?.displayName || undefined}
-          userUid={currentUser?.uid || userProfile?.uid || undefined}
-          userProfile={userProfile}
-          availableCategories={uniqueGroups}
-          onAddCategory={handleAddCategory}
-        />
-      )}
+        {isBatchModalOpen && (
+          <BatchImportModal 
+            onClose={() => setIsBatchModalOpen(false)}
+            onSaveBatch={handleSaveBatch}
+            userEmail={currentUser?.email || userProfile?.email || undefined}
+            userDisplayName={userDisplayName || currentUser?.displayName || userProfile?.displayName || undefined}
+            userUid={currentUser?.uid || userProfile?.uid || undefined}
+            userProfile={userProfile}
+            availableCategories={uniqueGroups}
+            onAddCategory={handleAddCategory}
+          />
+        )}
 
-      {isNickModalOpen && currentUser && (
-        <EditProfileModal
-          user={currentUser}
-          userProfile={userProfile}
-          videos={videos}
-          canImportVideos={isAdmin}
-          onSaveBatch={handleSaveBatch}
-          onAddCategory={handleAddCategory}
-          onClose={() => setIsNickModalOpen(false)}
-          onUpdated={(newNick, newHfUrl) => {
-            setUserDisplayName(newNick);
-            setUserProfile(prev => prev ? {
-              ...prev,
-              displayName: newNick,
-              huggingfaceDatasetUrl: newHfUrl !== undefined ? newHfUrl : prev.huggingfaceDatasetUrl
-            } : prev);
-          }}
-        />
-      )}
+        {isNickModalOpen && currentUser && (
+          <EditProfileModal
+            user={currentUser}
+            userProfile={userProfile}
+            videos={videos}
+            canImportVideos={isAdmin}
+            onSaveBatch={handleSaveBatch}
+            onAddCategory={handleAddCategory}
+            onClose={() => setIsNickModalOpen(false)}
+            onUpdated={(newNick, newHfUrl) => {
+              setUserDisplayName(newNick);
+              setUserProfile(prev => prev ? {
+                ...prev,
+                displayName: newNick,
+                huggingfaceDatasetUrl: newHfUrl !== undefined ? newHfUrl : prev.huggingfaceDatasetUrl
+              } : prev);
+            }}
+          />
+        )}
 
-      {isHardwareModalOpen && currentUser && (
-        <HardwareProfileModal
-          initialData={userProfile?.hardware}
-          initialHardware={userProfile?.initialHardware}
-          initialHistory={userProfile?.hardwareHistory}
-          isMandatory={!userProfile?.hardware}
-          onClose={() => setIsHardwareModalOpen(false)}
-          onSave={handleSaveHardware}
-        />
-      )}
+        {isHardwareModalOpen && currentUser && (
+          <HardwareProfileModal
+            initialData={userProfile?.hardware}
+            initialHardware={userProfile?.initialHardware}
+            initialHistory={userProfile?.hardwareHistory}
+            isMandatory={!userProfile?.hardware}
+            onClose={() => setIsHardwareModalOpen(false)}
+            onSave={handleSaveHardware}
+          />
+        )}
 
-      {dualComparePair && (
-        <DualCompareModal
-          initialVideoA={dualComparePair.videoA}
-          initialVideoB={dualComparePair.videoB}
-          allVideos={videos}
-          onClose={() => setDualComparePair(null)}
-        />
-      )}
+        {dualComparePair && (
+          <DualCompareModal
+            initialVideoA={dualComparePair.videoA}
+            initialVideoB={dualComparePair.videoB}
+            allVideos={videos}
+            onClose={() => setDualComparePair(null)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
