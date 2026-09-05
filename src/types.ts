@@ -4,11 +4,20 @@ export interface UserHardware {
   ram: number;
 }
 
+export interface HardwareMilestone {
+  sinceDate: string; // Formato YYYY-MM-DD (ej: "2026-09-04")
+  gpu: string;
+  vram: number;
+  ram: number;
+  label?: string;   // ej: "Ampliación a 64GB RAM"
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
   displayName?: string;
   hardware?: UserHardware;
+  hardwareHistory?: HardwareMilestone[];
   role?: 'admin' | 'viewer';
   huggingfaceDatasetUrl?: string;
 }

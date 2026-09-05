@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { db, auth } from './lib/firebase';
 import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { VideoRecord, UserProfile, UserHardware } from './types';
+import { VideoRecord, UserProfile, UserHardware, HardwareMilestone } from './types';
 import { VideoCard } from './components/VideoCard';
 import { VideoGridCard } from './components/VideoGridCard';
 import { CompareView } from './components/CompareView';
@@ -16,7 +16,7 @@ import { DeleteConfirmModal } from './components/DeleteConfirmModal';
 import { DualCompareModal } from './components/DualCompareModal';
 import { VaultLogo } from './components/VaultLogo';
 import { AISparkle } from './components/AISparkle';
-import { calculateOrientation, cleanForFirestore, extractTechnicalDetails } from './lib/utils';
+import { calculateOrientation, cleanForFirestore, extractTechnicalDetails, resolveHardwareForDate } from './lib/utils';
 import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
@@ -288,6 +288,7 @@ export default function App() {
     } catch {}
 
     let firestoreHardware: UserHardware | undefined;
+    let firestoreHistory: HardwareMilestone[] | undefined;
     let firestoreDisplayName: string | undefined;
     let firestoreRole: 'admin' | 'viewer' | undefined;
     let firestoreHfUrl: string | undefined;
@@ -298,6 +299,7 @@ export default function App() {
         if (userDoc.exists()) {
           const data = userDoc.data();
           if (data.hardware) firestoreHardware = data.hardware as UserHardware;
+          if (Array.isArray(data.hardwareHistory)) firestoreHistory = data.hardwareHistory as HardwareMilestone[];
           if (data.displayName) firestoreDisplayName = data.displayName as string;
           if (data.role) firestoreRole = data.role as 'admin' | 'viewer';
           if (data.huggingfaceDatasetUrl) firestoreHfUrl = data.huggingfaceDatasetUrl as string;
@@ -327,6 +329,20 @@ export default function App() {
       } catch {}
     }
 
+    // Default historical milestone for admin user (upgraded to 64GB on 2026-09-04) if none configured
+    let effectiveHistory = firestoreHistory;
+    if (!effectiveHistory && activeHardware && activeHardware.ram >= 64) {
+      effectiveHistory = [
+        {
+          sinceDate: '2026-09-04',
+          gpu: activeHardware.gpu,
+          vram: activeHardware.vram,
+          ram: activeHardware.ram,
+          label: 'Ampliación a 64GB RAM'
+        }
+      ];
+    }
+
     // If we had local hardware but not yet in Firestore, sync it up
     if (db && localHardware && !firestoreHardware) {
       try {
@@ -335,6 +351,7 @@ export default function App() {
           email: user.email || '',
           displayName: activeDisplayName,
           hardware: localHardware,
+          hardwareHistory: effectiveHistory || [],
           huggingfaceDatasetUrl: activeHfUrl || '',
           updatedAt: Date.now()
         }, { merge: true });
@@ -348,6 +365,7 @@ export default function App() {
       email: user.email || '', 
       displayName: activeDisplayName,
       hardware: activeHardware,
+      hardwareHistory: effectiveHistory,
       role: firestoreRole,
       huggingfaceDatasetUrl: activeHfUrl
     };
@@ -383,7 +401,7 @@ export default function App() {
     }
   }, []);
 
-  const handleSaveHardware = async (hardware: UserHardware) => {
+  const handleSaveHardware = async (hardware: UserHardware, history?: HardwareMilestone[]) => {
     if (!currentUser) return;
     try {
       localStorage.setItem('ai_video_vault_hardware', JSON.stringify(hardware));
@@ -398,6 +416,7 @@ export default function App() {
           email: currentUser.email || '',
           displayName: currentUser.displayName || userDisplayName || '',
           hardware,
+          hardwareHistory: history || [],
           updatedAt: Date.now()
         }, { merge: true });
       } catch (err) {
@@ -406,8 +425,8 @@ export default function App() {
     }
 
     setUserProfile(prev => {
-      if (prev) return { ...prev, hardware };
-      return { uid: currentUser.uid, email: currentUser.email || '', displayName: userDisplayName, hardware };
+      if (prev) return { ...prev, hardware, hardwareHistory: history };
+      return { uid: currentUser.uid, email: currentUser.email || '', displayName: userDisplayName, hardware, hardwareHistory: history };
     });
     setIsHardwareModalOpen(false);
   };
@@ -480,7 +499,7 @@ export default function App() {
 
     records.forEach(record => {
       if (!record.hardware && userProfile?.hardware) {
-        record.hardware = { ...userProfile.hardware };
+        record.hardware = resolveHardwareForDate(userProfile, record.generatedAt || record.createdAt, record.title || record.videoUrl) || { ...userProfile.hardware };
       }
       if (!record.createdBy && activeEmail) {
         record.createdBy = activeEmail;
@@ -529,7 +548,7 @@ export default function App() {
   const handleAddVideo = async (record: VideoRecord) => {
     // Inject hardware & creator stamp from user profile if not already present
     if (!record.hardware && userProfile?.hardware) {
-      record.hardware = { ...userProfile.hardware };
+      record.hardware = resolveHardwareForDate(userProfile, record.generatedAt || record.createdAt, record.title || record.videoUrl) || { ...userProfile.hardware };
     }
     if (!record.createdBy && (currentUser?.email || userProfile?.email)) {
       record.createdBy = currentUser?.email || userProfile?.email;
@@ -1809,6 +1828,7 @@ export default function App() {
           userEmail={currentUser?.email || userProfile?.email || undefined}
           userDisplayName={userDisplayName || currentUser?.displayName || userProfile?.displayName || undefined}
           userUid={currentUser?.uid || userProfile?.uid || undefined}
+          userProfile={userProfile}
           availableCategories={uniqueGroups}
           onAddCategory={handleAddCategory}
         />
@@ -1837,6 +1857,7 @@ export default function App() {
       {isHardwareModalOpen && currentUser && (
         <HardwareProfileModal
           initialData={userProfile?.hardware}
+          initialHistory={userProfile?.hardwareHistory}
           isMandatory={!userProfile?.hardware}
           onClose={() => setIsHardwareModalOpen(false)}
           onSave={handleSaveHardware}

@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { VideoOrientation, VideoRecord, Lora, VideoSource } from '../types';
+import { VideoOrientation, VideoRecord, Lora, VideoSource, UserHardware, UserProfile, HardwareMilestone } from '../types';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 export function cn(...inputs: ClassValue[]) {
@@ -16,6 +16,117 @@ export const SOFTWARE_ICONS = {
   maestro: '/icons/maestro.ico',
   wan2gp: '/icons/Wan2GP.ico',
 } as const;
+
+/**
+ * Extracts a numeric timestamp (epoch ms) from a filename, title, ISO string or generatedAt
+ */
+export function extractTimestampFromTextOrNumber(val?: string | number): number | null {
+  if (typeof val === 'number') {
+    if (val > 1000000000000) return val; // Milliseconds
+    if (val > 1000000000) return val * 1000; // Seconds
+  }
+  if (!val || typeof val !== 'string') return null;
+
+  const decoded = decodeURIComponent(val);
+
+  // Pattern 1: 2026-08-21-20h02m49s or 2026-08-21_20h02m49s or 2026_09_04_...
+  const match1 = decoded.match(/(\d{4})[-_](\d{2})[-_](\d{2})[-_\s](\d{2})h(\d{2})m(\d{2})s/i);
+  if (match1) {
+    const [, y, m, d, hh, mm, ss] = match1;
+    const date = new Date(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss));
+    return isNaN(date.getTime()) ? null : date.getTime();
+  }
+
+  // Pattern 2: 2026-08-17T15:36:47 or 2026-08-17 15:36:47
+  const match2 = decoded.match(/(\d{4})[-_](\d{2})[-_](\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/i);
+  if (match2) {
+    const [, y, m, d, hh, mm, ss] = match2;
+    const date = new Date(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss));
+    return isNaN(date.getTime()) ? null : date.getTime();
+  }
+
+  // Pattern 3: Date only YYYY-MM-DD or YYYY_MM_DD
+  const match3 = decoded.match(/(\d{4})[-_](\d{2})[-_](\d{2})/);
+  if (match3) {
+    const [, y, m, d] = match3;
+    const date = new Date(Number(y), Number(m) - 1, Number(d), 12, 0, 0);
+    return isNaN(date.getTime()) ? null : date.getTime();
+  }
+
+  return null;
+}
+
+/**
+ * Resolves the historical hardware configuration for a video based on its creation/generation date
+ * and the user profile's hardware history timeline.
+ */
+export function resolveHardwareForDate(
+  userProfile?: UserProfile | null,
+  videoDate?: number | string,
+  videoTitleOrUrl?: string
+): UserHardware | undefined {
+  if (!userProfile?.hardware) return undefined;
+  
+  const baseHardware = userProfile.hardware;
+  const history = userProfile.hardwareHistory;
+  if (!history || history.length === 0) {
+    return { ...baseHardware };
+  }
+
+  // Determine timestamp of the video
+  let timestamp: number | null = null;
+  if (videoDate) {
+    timestamp = extractTimestampFromTextOrNumber(videoDate);
+  }
+  if (!timestamp && videoTitleOrUrl) {
+    timestamp = extractTimestampFromTextOrNumber(videoTitleOrUrl);
+  }
+
+  // If we can't extract a date, default to current base hardware
+  if (!timestamp) {
+    return { ...baseHardware };
+  }
+
+  // Sort milestones chronologically ascending
+  const sortedMilestones = [...history].sort((a, b) => {
+    return new Date(a.sinceDate).getTime() - new Date(b.sinceDate).getTime();
+  });
+
+  // Find the milestone applicable for this timestamp
+  // A milestone applies if videoTimestamp >= milestone.sinceDate
+  let matchedHardware: UserHardware | null = null;
+
+  for (const milestone of sortedMilestones) {
+    const milestoneTime = new Date(`${milestone.sinceDate}T00:00:00`).getTime();
+    if (timestamp >= milestoneTime) {
+      matchedHardware = {
+        gpu: milestone.gpu,
+        vram: milestone.vram,
+        ram: milestone.ram
+      };
+    }
+  }
+
+  // If video is older than the first milestone, fallback to the earliest known configuration or base
+  if (!matchedHardware) {
+    // If there is an initial milestone starting later (e.g., upgrade to 64GB on 2026-09-04),
+    // and video was before that date:
+    // If the base hardware is currently 64GB, the previous was 32GB (or earliest milestone before upgrade)
+    const firstMilestone = sortedMilestones[0];
+    const firstMilestoneTime = new Date(`${firstMilestone.sinceDate}T00:00:00`).getTime();
+    if (timestamp < firstMilestoneTime) {
+      // Prior to first milestone
+      return {
+        gpu: firstMilestone.gpu || baseHardware.gpu,
+        vram: firstMilestone.vram || baseHardware.vram,
+        ram: firstMilestone.ram === 64 ? 32 : (baseHardware.ram === 64 ? 32 : baseHardware.ram)
+      };
+    }
+    return { ...baseHardware };
+  }
+
+  return matchedHardware;
+}
 
 /**
  * Extracts creation timestamp formatted in Spanish from filename, title, or url
@@ -1085,11 +1196,12 @@ export interface ProcessVideoUrlOptions {
   userEmail?: string;
   userDisplayName?: string;
   userUid?: string;
+  userProfile?: UserProfile | null;
   onAddCategory?: (category: string) => void;
 }
 
 export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOptions): Promise<VideoRecord> {
-  const { url, source = 'local', customCategory, userEmail, userDisplayName, userUid, onAddCategory } = options;
+  const { url, source = 'local', customCategory, userEmail, userDisplayName, userUid, userProfile, onAddCategory } = options;
   const urlInfo = parseVideoUrlInfo(url);
 
   const finalGroupName: string | undefined = customCategory !== undefined 
@@ -1239,6 +1351,7 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
   const orientation = calculateOrientation(width, height);
   const resolvedDisplayName = userDisplayName || userEmail || urlInfo.username || undefined;
   const resolvedCreatedBy = userEmail || userDisplayName || (urlInfo.username ? `@${urlInfo.username}` : undefined);
+  const resolvedHardware = resolveHardwareForDate(userProfile, generatedAt || fallbackGeneratedAt, rawFileName || url);
 
   const record: VideoRecord = {
     schemaVersion: 2,
@@ -1253,6 +1366,7 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
     softwareSource,
     source,
     localTool: localTool || (source === 'local' ? (softwareSource === 'maestro' ? 'Maestro' : 'Wan2GP') : undefined),
+    hardware: resolvedHardware,
     tags: tagsInput ? tagsInput.split(',').map(s => s.trim()).filter(Boolean) : [],
     width,
     height,

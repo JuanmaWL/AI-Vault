@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
-import { VideoRecord, VideoSource } from '../types';
+import { VideoRecord, VideoSource, UserProfile } from '../types';
 import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl, SOFTWARE_ICONS } from '../lib/utils';
 import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Upload, FileText, Terminal, Layers, Copy } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
@@ -10,6 +10,7 @@ interface BatchImportModalProps {
   userEmail?: string;
   userDisplayName?: string;
   userUid?: string;
+  userProfile?: UserProfile | null;
   availableCategories?: string[];
   onAddCategory?: (category: string) => void;
 }
@@ -22,6 +23,7 @@ export function BatchImportModal({
   userEmail,
   userDisplayName,
   userUid,
+  userProfile,
   availableCategories = [],
   onAddCategory,
 }: BatchImportModalProps) {
@@ -159,6 +161,7 @@ export function BatchImportModal({
             userEmail,
             userDisplayName,
             userUid,
+            userProfile,
             onAddCategory,
           });
 
