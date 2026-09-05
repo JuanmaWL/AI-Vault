@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { VideoRecord } from '../types';
+import { VideoRecord } from '../../types';
 import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2, Sparkles, SplitSquareVertical } from 'lucide-react';
-import { formatBytes, getPlayableVideoUrl } from '../lib/utils';
+import { formatBytes, getPlayableVideoUrl } from '../../lib/utils';
 
 interface CompareViewProps {
   videos: VideoRecord[];

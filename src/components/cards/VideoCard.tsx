@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
-import { VideoRecord } from '../types';
+import { VideoRecord } from '../../types';
 import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight } from 'lucide-react';
-import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
-import { useInViewport } from '../hooks/useInViewport';
+import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../../lib/utils';
+import { useInViewport } from '../../hooks/useInViewport';
 
 interface VideoCardProps {
   video: VideoRecord;

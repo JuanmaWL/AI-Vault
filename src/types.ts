@@ -35,6 +35,7 @@ export type SoftwareSource = 'wan2gp' | 'maestro' | 'comfyui' | 'other';
 export interface VideoRecord {
   id?: string;
   schemaVersion: 2;
+  isMock?: boolean;        // Indicador explícito de registro de prueba / mock / no persistido en Firestore
 
   // Origen del vídeo
   videoUrl: string;        // URL directa o reproducible del vídeo

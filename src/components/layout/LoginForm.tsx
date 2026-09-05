@@ -1,6 +1,6 @@
 import { useState, FormEvent, useEffect } from 'react';
 import { signInWithEmailAndPassword, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth } from '../../lib/firebase';
 import { Lock, Mail, AlertCircle, LogIn, Eye, EyeOff, CheckSquare, Square, CheckCircle2, ShieldCheck, Sparkles, Terminal } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 

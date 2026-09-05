@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { VideoRecord } from '../types';
+import { VideoRecord } from '../../types';
 import { 
   Play, Pause, RotateCcw, Volume2, VolumeX, X, ArrowLeftRight, 
   Sparkles, Layers, Cpu, Clock, HardDrive, Check,
@@ -9,7 +9,7 @@ import {
   Grid2X2, Grid3X3, LayoutGrid, Info, ArrowUpRight, Loader2,
   Sliders, MoveHorizontal
 } from 'lucide-react';
-import { computeParameterDiff, diffWords, formatBytes, getPlayableVideoUrl } from '../lib/utils';
+import { computeParameterDiff, diffWords, formatBytes, getPlayableVideoUrl } from '../../lib/utils';
 
 interface DualCompareModalProps {
   initialVideoA: VideoRecord;

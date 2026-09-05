@@ -1,8 +1,8 @@
 import { useState, useRef, useMemo } from 'react';
-import { VideoRecord, VideoSource, UserProfile } from '../types';
-import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl, SOFTWARE_ICONS } from '../lib/utils';
+import { VideoRecord, VideoSource, UserProfile } from '../../types';
+import { parseVideoUrlInfo, ParsedVideoUrlInfo, processVideoMetadataFromUrl, SOFTWARE_ICONS } from '../../lib/utils';
 import { X, Check, FileVideo, AlertCircle, Loader2, Sparkles, Folder, Upload, FileText, Terminal, Layers, Copy } from 'lucide-react';
-import { CategorySelector } from './CategorySelector';
+import { CategorySelector } from '../layout/CategorySelector';
 
 interface BatchImportModalProps {
   onClose: () => void;

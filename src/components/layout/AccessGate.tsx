@@ -2,7 +2,7 @@ import { LoginForm } from './LoginForm';
 import { VaultLogo } from './VaultLogo';
 import { AISparkle } from './AISparkle';
 import { CRTBackground } from './CRTBackground';
-import pkg from '../../package.json';
+import pkg from '../../../package.json';
 
 interface AccessGateProps {
   onLoginStart?: () => void;

@@ -1,9 +1,9 @@
 import { useState, FormEvent, useEffect, useMemo, useRef } from 'react';
 import { updateProfile, User } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
-import { UserProfile, VideoRecord } from '../types';
-import { normalizeHuggingFaceDatasetRepoId, processVideoMetadataFromUrl, parseVideoUrlInfo } from '../lib/utils';
+import { db } from '../../lib/firebase';
+import { UserProfile, VideoRecord } from '../../types';
+import { normalizeHuggingFaceDatasetRepoId, processVideoMetadataFromUrl, parseVideoUrlInfo } from '../../lib/utils';
 import { 
   X, 
   User as UserIcon, 

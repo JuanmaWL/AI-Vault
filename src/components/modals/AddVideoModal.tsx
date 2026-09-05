@@ -1,8 +1,8 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
-import { VideoRecord, Lora, VideoSource } from '../types';
-import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, processVideoMetadataFromUrl, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS, SOFTWARE_ICONS } from '../lib/utils';
+import { VideoRecord, Lora, VideoSource } from '../../types';
+import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, processVideoMetadataFromUrl, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS, SOFTWARE_ICONS } from '../../lib/utils';
 import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder, Type, Wrench } from 'lucide-react';
-import { CategorySelector } from './CategorySelector';
+import { CategorySelector } from '../layout/CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
 interface AddVideoModalProps {

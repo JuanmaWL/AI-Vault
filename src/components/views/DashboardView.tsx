@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { VideoRecord } from '../types';
+import { VideoRecord } from '../../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell

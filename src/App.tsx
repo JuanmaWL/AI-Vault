@@ -3,22 +3,23 @@ import { db, auth } from './lib/firebase';
 import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { VideoRecord, UserProfile, UserHardware, HardwareMilestone } from './types';
-import { VideoCard } from './components/VideoCard';
-import { VideoGridCard } from './components/VideoGridCard';
-import { CompareView } from './components/CompareView';
-import { DashboardView } from './components/DashboardView';
-import { AccessGate } from './components/AccessGate';
-import { DeleteConfirmModal } from './components/DeleteConfirmModal';
-import { VaultLogo } from './components/VaultLogo';
-import { AISparkle } from './components/AISparkle';
+import { VideoCard } from './components/cards/VideoCard';
+import { VideoGridCard } from './components/cards/VideoGridCard';
+import { CompareView } from './components/views/CompareView';
+import { DashboardView } from './components/views/DashboardView';
+import { AccessGate } from './components/layout/AccessGate';
+import { DeleteConfirmModal } from './components/modals/DeleteConfirmModal';
+import { VaultLogo } from './components/layout/VaultLogo';
+import { AISparkle } from './components/layout/AISparkle';
 
 // Carga perezosa (lazy) de los modales secundarios pesados para optimizar el bundle principal
-const AddVideoModal = lazy(() => import('./components/AddVideoModal').then(m => ({ default: m.AddVideoModal })));
-const BatchImportModal = lazy(() => import('./components/BatchImportModal').then(m => ({ default: m.BatchImportModal })));
-const EditProfileModal = lazy(() => import('./components/EditProfileModal').then(m => ({ default: m.EditProfileModal })));
-const HardwareProfileModal = lazy(() => import('./components/HardwareProfileModal').then(m => ({ default: m.HardwareProfileModal })));
-const DualCompareModal = lazy(() => import('./components/DualCompareModal').then(m => ({ default: m.DualCompareModal })));
+const AddVideoModal = lazy(() => import('./components/modals/AddVideoModal').then(m => ({ default: m.AddVideoModal })));
+const BatchImportModal = lazy(() => import('./components/modals/BatchImportModal').then(m => ({ default: m.BatchImportModal })));
+const EditProfileModal = lazy(() => import('./components/modals/EditProfileModal').then(m => ({ default: m.EditProfileModal })));
+const HardwareProfileModal = lazy(() => import('./components/modals/HardwareProfileModal').then(m => ({ default: m.HardwareProfileModal })));
+const DualCompareModal = lazy(() => import('./components/modals/DualCompareModal').then(m => ({ default: m.DualCompareModal })));
 import { calculateOrientation, cleanForFirestore, extractTechnicalDetails, resolveHardwareForDate } from './lib/utils';
+import { MOCK_DATA } from './lib/mockData';
 import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
@@ -73,6 +74,7 @@ function normalizeRecord(raw: any): VideoRecord {
   return {
     id: raw.id,
     schemaVersion: 2,
+    isMock: typeof raw.isMock === 'boolean' ? raw.isMock : (raw.id?.startsWith('local_') || raw.id?.startsWith('mock') ? true : undefined),
     videoUrl,
     title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : undefined,
     prompt: raw.prompt || '',
@@ -122,30 +124,6 @@ function normalizeRecord(raw: any): VideoRecord {
     settingsVersion: typeof raw.settingsVersion === 'number' ? raw.settingsVersion : undefined,
   };
 }
-
-const MOCK_DATA: VideoRecord[] = [
-  {
-    id: 'mock1',
-    schemaVersion: 2,
-    videoUrl: 'https://huggingface.co/datasets/example/videos/resolve/main/cyberpunk_street.mp4',
-    prompt: 'A high quality cinematic shot of a stunning futuristic cyberpunk street, neon lights reflection, masterpiece, detailed.',
-    model: 'Wan2.1 FL2VA (Wan2GP)',
-    source: 'local',
-    tags: ['Wan2GP', '33B', 'FL2VA'],
-    width: 1920,
-    height: 1080,
-    orientation: '16:9',
-    steps: 30,
-    shift: 5.0,
-    seed: 4891024,
-    fps: 24,
-    durationSeconds: 5,
-    loras: [
-      { name: 'NeonGlow', weight: 0.7 }
-    ],
-    createdAt: Date.now()
-  }
-];
 
 export default function App() {
   const [videos, setVideos] = useState<VideoRecord[]>([]);
@@ -558,7 +536,7 @@ export default function App() {
       }
     } else {
       console.log(`[AI Video Vault] Guardando lote de ${records.length} vídeos en modo local...`);
-      const recordsWithIds = records.map(r => ({ ...r, id: `local_${crypto.randomUUID()}` }));
+      const recordsWithIds = records.map(r => ({ ...r, id: `local_${crypto.randomUUID()}`, isMock: true }));
       const newVids = [...recordsWithIds, ...videos];
       setVideos(newVids);
       try {
@@ -598,7 +576,7 @@ export default function App() {
         throw new Error(errMsg);
       }
     } else {
-      const newRecord = { ...record, id: `local_${Date.now()}` };
+      const newRecord: VideoRecord = { ...record, id: `local_${Date.now()}`, isMock: true };
       const updated = [newRecord, ...videos];
       setVideos(updated);
       try {
@@ -615,8 +593,8 @@ export default function App() {
       return true;
     }
     
-    // Registros locales en memoria o de prueba
-    if (video.id?.startsWith('local_') || video.id?.startsWith('mock')) {
+    // Registros locales en memoria o de prueba (según flag isMock o prefijo legacy)
+    if (video.isMock || video.id?.startsWith('local_') || video.id?.startsWith('mock')) {
       return true;
     }
 
@@ -683,7 +661,8 @@ export default function App() {
     }
 
     const cleanRecord = cleanForFirestore(record);
-    if (db && !usingLocal && record.id && !record.id.startsWith('local_')) {
+    const isLocalRecord = record.isMock || (record.id && (record.id.startsWith('local_') || record.id.startsWith('mock')));
+    if (db && !usingLocal && record.id && !isLocalRecord) {
       try {
         await updateDoc(doc(db, COLLECTION_NAME, record.id), cleanRecord);
         console.log("[AI Video Vault] ✓ Vídeo actualizado en Firestore:", record.id);
@@ -916,7 +895,10 @@ export default function App() {
     }
 
     // Separate Firestore IDs vs local IDs
-    const firestoreIds = authorizedIds.filter(id => !id.startsWith('local_') && !id.startsWith('mock'));
+    const firestoreIds = authorizedVideos
+      .filter(v => !v.isMock && !v.id?.startsWith('local_') && !v.id?.startsWith('mock'))
+      .map(v => v.id!)
+      .filter(Boolean);
 
     // Optimistically update state & local storage immediately
     const updated = videos.filter(v => !authorizedIds.includes(v.id!));

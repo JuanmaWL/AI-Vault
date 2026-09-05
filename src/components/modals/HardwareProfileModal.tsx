@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { UserHardware, HardwareMilestone } from '../types';
+import { UserHardware, HardwareMilestone } from '../../types';
 import { Cpu, X, Server, MemoryStick, Calendar, Plus, Trash2, History, AlertCircle, Check, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface HardwareProfileModalProps {
