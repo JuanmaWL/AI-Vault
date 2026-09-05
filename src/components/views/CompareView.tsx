@@ -257,17 +257,6 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo, onOpenDua
           <button onClick={toggleMuteAll} className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors ml-1 sm:ml-2" title={isMuted ? "Activar sonido" : "Silenciar"}>
             {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
           </button>
-
-          {onOpenDualCompare && videos.length >= 2 && (
-            <button
-              onClick={() => onOpenDualCompare(videos[0], videos[1])}
-              className="flex items-center gap-2 bg-gradient-to-r from-teal-500/20 to-blue-500/20 hover:from-teal-500/30 hover:to-blue-500/30 text-teal-300 border border-teal-500/40 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ml-2"
-              title="Comparar 2 vídeos a pantalla completa con selector de catálogo y análisis de diferencias"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-              <span>Comparativa 1 vs 1</span>
-            </button>
-          )}
         </div>
 
         <div className="flex items-center gap-2">

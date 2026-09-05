@@ -1110,78 +1110,86 @@ export default function App() {
           </div>
         </header>
 
-        {/* Sub-navegación para vistas */}
-        <div className="border-b border-neutral-900 bg-neutral-950/70 backdrop-blur-md sticky top-[65px] z-30">
-          <div className="max-w-[1600px] mx-auto px-6">
-            <div className="flex items-center justify-between gap-4 py-3 sm:py-3.5 overflow-x-auto no-scrollbar">
-              {/* Segmented Control de Vistas Principal */}
-              <div className="flex items-center bg-neutral-900/90 border border-neutral-800 p-1.5 rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md">
+        {/* Sub-navegación para vistas (Barra de Navegación Principal) */}
+        <div className="border-b border-neutral-800/80 bg-neutral-950/85 backdrop-blur-xl sticky top-[65px] z-30 shadow-md shadow-black/20">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6">
+            <div className="flex items-center justify-between py-2 sm:py-2.5 gap-4">
+              {/* Segmented Control de Vistas Principal con Jerarquía Notoria (tipo Linear/Notion) */}
+              <nav className="flex items-center bg-neutral-900/95 border border-neutral-800 p-1.5 rounded-2xl shadow-xl shadow-black/40 gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar" aria-label="Vistas principales">
+                {/* 1. Catálogo (Teal) */}
                 <button 
                   onClick={() => setView('detail')} 
-                  className={`relative flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap ${
-                    view === 'detail' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/30'
+                  className={`relative flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'detail' 
+                      ? 'text-teal-200 shadow-md shadow-teal-950/50' 
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
                   }`}
                   title="Vista Detallada del Catálogo"
                 >
                   {view === 'detail' && (
                     <motion.div
                       layoutId="activeViewTab"
-                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/90 rounded-xl shadow-md"
+                      className="absolute inset-0 bg-teal-500/15 border border-teal-500/40 rounded-xl shadow-sm"
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
-                  <LayoutList className="w-4 h-4 relative z-10 shrink-0" />
-                  <span className="relative z-10">Catálogo</span>
+                  <LayoutList className={`w-4 h-4 sm:w-4.5 sm:h-4.5 relative z-10 shrink-0 transition-colors ${view === 'detail' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                  <span className="relative z-10 font-bold">Catálogo</span>
                 </button>
 
+                {/* 2. Comparar (Ámbar) */}
                 <button 
                   onClick={() => setView('compare')} 
-                  className={`relative flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap ${
-                    view === 'compare' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/30'
+                  className={`relative flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'compare' 
+                      ? 'text-amber-200 shadow-md shadow-amber-950/50' 
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
                   }`}
                   title="Comparativa Visual Cuadrícula"
                 >
                   {view === 'compare' && (
                     <motion.div
                       layoutId="activeViewTab"
-                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/90 rounded-xl shadow-md"
+                      className="absolute inset-0 bg-amber-500/15 border border-amber-500/40 rounded-xl shadow-sm"
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
-                  <Columns3 className="w-4 h-4 relative z-10 shrink-0" />
-                  <span className="relative z-10">Comparar</span>
+                  <Columns3 className={`w-4 h-4 sm:w-4.5 sm:h-4.5 relative z-10 shrink-0 transition-colors ${view === 'compare' ? 'text-amber-400' : 'text-neutral-400'}`} />
+                  <span className="relative z-10 font-bold">Comparar</span>
                 </button>
 
+                {/* 3. Métricas (Púrpura) */}
                 <button 
                   onClick={() => setView('dashboard')} 
-                  className={`relative flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap ${
-                    view === 'dashboard' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/30'
+                  className={`relative flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'dashboard' 
+                      ? 'text-purple-200 shadow-md shadow-purple-950/50' 
+                      : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
                   }`}
                   title="Métricas y Rendimiento"
                 >
                   {view === 'dashboard' && (
                     <motion.div
                       layoutId="activeViewTab"
-                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/90 rounded-xl shadow-md"
+                      className="absolute inset-0 bg-purple-500/15 border border-purple-500/40 rounded-xl shadow-sm"
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
-                  <BarChart3 className="w-4 h-4 relative z-10 shrink-0" />
-                  <span className="relative z-10">Métricas</span>
+                  <BarChart3 className={`w-4 h-4 sm:w-4.5 sm:h-4.5 relative z-10 shrink-0 transition-colors ${view === 'dashboard' ? 'text-purple-400' : 'text-neutral-400'}`} />
+                  <span className="relative z-10 font-bold">Métricas</span>
                 </button>
-              </div>
+              </nav>
 
-              {/* Acción rápida separada: Comparativa 1 vs 1 */}
-              {videos.length >= 2 && (
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="hidden md:block h-6 w-px bg-neutral-800" />
+              {/* Botón Insignia Primario: Comparativa 1 vs 1 con Efecto Glow / Neón (Solo visible en Catálogo y Comparar) */}
+              {videos.length >= 2 && view !== 'dashboard' && (
+                <div className="flex items-center shrink-0 p-1.5 -mr-1.5">
                   <button 
                     onClick={() => handleOpenDualCompare(videos[0], videos[1])} 
-                    className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 hover:border-teal-400/50 flex items-center gap-2 shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                    title="Abrir comparativa 1 vs 1 a pantalla completa (permite elegir cualquier vídeo del catálogo)"
+                    className="relative group px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold tracking-wide transition-all duration-300 whitespace-nowrap bg-gradient-to-r from-teal-500/20 via-emerald-500/25 to-teal-500/20 text-teal-200 border border-teal-400/60 flex items-center gap-2.5 cursor-pointer shadow-[0_0_14px_rgba(20,184,166,0.35)] hover:shadow-[0_0_24px_rgba(20,184,166,0.65)] hover:border-teal-300 hover:scale-[1.02] active:scale-[0.98] dual-compare-glow"
+                    title="Abrir comparativa 1 vs 1 a pantalla completa (permite elegir y enfrentar cualquier vídeo del catálogo)"
                   >
-                    <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
-                    <span>Comparativa 1 vs 1</span>
+                    <Sparkles className="w-4 h-4 text-teal-300 group-hover:rotate-12 transition-transform duration-300 shrink-0 drop-shadow-[0_0_8px_rgba(45,212,191,0.8)]" />
+                    <span className="relative z-10 font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">Comparativa 1 vs 1</span>
                   </button>
                 </div>
               )}
