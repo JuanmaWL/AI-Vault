@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { VideoRecord } from '../types';
 import { Copy, Check, Sparkles, Edit3, Trash2, Clock, Cpu, User, Tag, ExternalLink, Calendar, SplitSquareVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
+import { useInViewport } from '../hooks/useInViewport';
 
 interface VideoGridCardProps {
   video: VideoRecord;
@@ -24,6 +25,7 @@ export function VideoGridCard({
 }: VideoGridCardProps) {
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
+  const { targetRef, isInViewport } = useInViewport<HTMLDivElement>();
 
   const handleCopyPrompt = async (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -105,6 +107,7 @@ export function VideoGridCard({
 
   return (
     <div
+      ref={targetRef}
       id={`video-grid-card-${video.id}`}
       className={`group flex flex-col bg-neutral-900/70 border ${
         isSelected ? 'border-teal-500 ring-1 ring-teal-500/50' : 'border-neutral-800'
@@ -168,12 +171,18 @@ export function VideoGridCard({
           )}
         </div>
 
-        <video
-          src={getPlayableVideoUrl(video)}
-          className="w-full h-full object-contain"
-          controls
-          preload="metadata"
-        />
+        {isInViewport ? (
+          <video
+            src={getPlayableVideoUrl(video)}
+            className="w-full h-full object-contain"
+            controls
+            preload="metadata"
+          />
+        ) : (
+          <div className="w-full h-full bg-neutral-950 flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full border-2 border-neutral-800 border-t-teal-500/40 animate-spin opacity-40" />
+          </div>
+        )}
       </div>
 
       {/* Contenido de la tarjeta */}

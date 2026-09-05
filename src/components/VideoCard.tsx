@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { VideoRecord } from '../types';
 import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight } from 'lucide-react';
 import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../lib/utils';
+import { useInViewport } from '../hooks/useInViewport';
 
 interface VideoCardProps {
   video: VideoRecord;
@@ -18,6 +19,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedNegative, setCopiedNegative] = useState(false);
+  const { targetRef, isInViewport } = useInViewport<HTMLDivElement>();
   
   // Persist technical details expanded state in localStorage (defaults to true for maximum visibility)
   const [showTechDetails, setShowTechDetails] = useState<boolean>(() => {
@@ -153,7 +155,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const authorName = video.creatorDisplayName || video.createdBy;
 
   return (
-    <div id={`video-card-${video.id}`} className={`flex flex-col lg:flex-row bg-neutral-900/60 border ${isSelected ? 'border-teal-500' : 'border-neutral-800'} rounded-2xl overflow-hidden hover:border-neutral-700 transition-all shadow-lg relative`}>
+    <div ref={targetRef} id={`video-card-${video.id}`} className={`flex flex-col lg:flex-row bg-neutral-900/60 border ${isSelected ? 'border-teal-500' : 'border-neutral-800'} rounded-2xl overflow-hidden hover:border-neutral-700 transition-all shadow-lg relative`}>
       {/* Zona de previsualización de vídeo amplia */}
       <div className="w-full lg:w-[540px] xl:w-[620px] shrink-0 bg-neutral-950 p-4 sm:p-6 flex flex-col justify-start border-b lg:border-b-0 lg:border-r border-neutral-800">
         
@@ -243,12 +245,18 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             </div>
           )}
 
-          <video 
-            src={getPlayableVideoUrl(video)} 
-            className="w-full h-full object-contain" 
-            controls 
-            preload="metadata"
-          />
+          {isInViewport ? (
+            <video 
+              src={getPlayableVideoUrl(video)} 
+              className="w-full h-full object-contain" 
+              controls 
+              preload="metadata"
+            />
+          ) : (
+            <div className="w-full h-full bg-neutral-950 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full border-2 border-neutral-800 border-t-teal-500/40 animate-spin opacity-40" />
+            </div>
+          )}
         </div>
         
         {/* Metadatos debajo del vídeo en rejilla 2x2 holgada y legible */}

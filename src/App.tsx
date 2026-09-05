@@ -236,6 +236,15 @@ export default function App() {
   const [groupByFolder, setGroupByFolder] = useState<boolean>(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
 
+  // Paginación por lotes en catálogo (PAGE_SIZE = 10)
+  const PAGE_SIZE = 10;
+  const [visibleCount, setVisibleCount] = useState<number>(PAGE_SIZE);
+
+  // Resetear la cantidad visible al modificar cualquier filtro o búsqueda
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
+
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (filterGroup !== 'Todas') count++;
@@ -1513,9 +1522,64 @@ export default function App() {
               onOpenDualCompare={(vA, vB) => setDualComparePair({ videoA: vA, videoB: vB })}
             />
           ) : loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="w-8 h-8 border-2 border-neutral-800 border-t-white rounded-full animate-spin"></div>
-            </div>
+            catalogLayout === 'grid' ? (
+              <div className={`grid gap-5 pb-24 ${
+                gridColumns === 2 
+                  ? 'grid-cols-1 sm:grid-cols-2' 
+                  : gridColumns === 4 
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              }`}>
+                {Array.from({ length: 12 }).map((_, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex flex-col bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden animate-pulse"
+                  >
+                    <div className="w-full bg-neutral-950 aspect-video relative flex items-center justify-center border-b border-neutral-800/80">
+                      <div className="w-8 h-8 rounded-full bg-neutral-800/40" />
+                      <div className="absolute top-2.5 right-2.5 h-4 w-16 bg-neutral-800/60 rounded-md" />
+                    </div>
+                    <div className="p-4 sm:p-5 flex flex-col gap-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="h-4 bg-neutral-800 rounded w-2/3" />
+                        <div className="h-4 bg-neutral-800/60 rounded w-16" />
+                      </div>
+                      <div className="h-3 bg-neutral-800/40 rounded w-full" />
+                      <div className="h-3 bg-neutral-800/30 rounded w-4/5" />
+                      <div className="flex gap-2 pt-1">
+                        <div className="h-5 bg-neutral-800/50 rounded-md w-20" />
+                        <div className="h-5 bg-neutral-800/50 rounded-md w-16" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6 pb-24">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex flex-col lg:flex-row bg-neutral-900/60 border border-neutral-800/80 rounded-2xl overflow-hidden animate-pulse"
+                  >
+                    <div className="w-full lg:w-[540px] xl:w-[620px] shrink-0 bg-neutral-950 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-neutral-800">
+                      <div className="w-full aspect-video bg-neutral-900/60 rounded-xl mb-3 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full bg-neutral-800/40" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <div className="h-7 bg-neutral-900 rounded-lg" />
+                        <div className="h-7 bg-neutral-900 rounded-lg" />
+                      </div>
+                    </div>
+                    <div className="flex-1 p-5 sm:p-6 flex flex-col gap-4">
+                      <div className="h-5 bg-neutral-800 rounded w-1/3" />
+                      <div className="h-4 bg-neutral-800/60 rounded w-full" />
+                      <div className="h-4 bg-neutral-800/40 rounded w-5/6" />
+                      <div className="h-20 bg-neutral-950/60 rounded-xl border border-neutral-800/60" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
           ) : filteredVideos.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-[50vh] text-center">
               <div className="w-16 h-16 bg-neutral-900 rounded-2xl flex items-center justify-center mb-6">
@@ -1525,126 +1589,168 @@ export default function App() {
               <p className="text-neutral-500 max-w-sm">No se encontraron vídeos que coincidan con tu búsqueda. Intenta con otros filtros.</p>
             </div>
           ) : groupedVideos ? (
-            <div className="flex flex-col gap-8 pb-12">
-              {Object.entries(groupedVideos).sort((a, b) => {
+            (() => {
+              let remainingQuota = visibleCount;
+              const sortedGroups = Object.entries(groupedVideos).sort((a, b) => {
                 if (a[0] === 'Sin carpeta') return 1;
                 if (b[0] === 'Sin carpeta') return -1;
                 return a[0].localeCompare(b[0]);
-              }).map(([groupName, groupVideos]) => {
-                const isCollapsed = collapsedGroups[groupName];
-                return (
-                  <div key={groupName} className="flex flex-col gap-4">
-                    <div className="flex items-center justify-between bg-neutral-900/80 backdrop-blur-md p-3.5 px-5 rounded-2xl border border-neutral-800/90 shadow-sm hover:border-neutral-700/80 transition-all">
-                      <button 
-                        onClick={() => toggleGroupCollapse(groupName)} 
-                        className="flex items-center gap-3 text-left cursor-pointer group"
-                      >
-                        <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:bg-teal-500/20 transition-all">
-                          {isCollapsed ? <Folder className="w-4 h-4" /> : <FolderOpen className="w-4 h-4 text-teal-300" />}
-                        </div>
-                        <div className="flex items-center gap-2.5">
-                          <span className="font-bold text-neutral-100 text-sm sm:text-base tracking-tight group-hover:text-teal-300 transition-colors">
-                            {groupName}
-                          </span>
-                          <span className="text-[11px] font-bold font-mono bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded-full">
-                            {groupVideos.length} {groupVideos.length === 1 ? 'vídeo' : 'vídeos'}
-                          </span>
-                        </div>
-                        <ChevronDown className={`w-4 h-4 text-neutral-500 group-hover:text-neutral-300 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`} />
-                      </button>
-                      <button 
-                        onClick={() => {
-                          setFilterGroup(groupName);
-                          setView('compare');
-                        }}
-                        className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-neutral-800/90 hover:bg-teal-500/15 text-neutral-300 hover:text-teal-300 border border-neutral-700/70 hover:border-teal-500/40 transition-all cursor-pointer shadow-sm active:scale-95"
-                        title="Ver comparativa de esta carpeta"
-                      >
-                        <Columns3 className="w-3.5 h-3.5 text-teal-400" />
-                        <span>Comparar carpeta</span>
-                      </button>
-                    </div>
-                    {!isCollapsed && (
-                      <div className="pl-3 sm:pl-4 border-l-2 border-teal-500/20">
-                        {catalogLayout === 'grid' ? (
-                          <div className={`grid gap-5 ${
-                            gridColumns === 2 
-                              ? 'grid-cols-1 sm:grid-cols-2' 
-                              : gridColumns === 4 
-                              ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-                          }`}>
-                            {groupVideos.map((video) => (
-                              <VideoGridCard 
-                                key={video.id || video.videoUrl}
-                                video={video} 
-                                selectionMode={selectionMode}
-                                isSelected={selectedVideoIds.has(video.id!)}
-                                onToggleSelect={() => toggleSelection(video.id!)}
-                                onCompareClick={() => handleOpenDualCompare(video)}
-                                onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                                onEditClick={isVideoOwner(video) && !selectionMode ? () => {
-                                  setEditingVideo(video);
-                                  setIsModalOpen(true);
-                                } : undefined}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="flex flex-col gap-6">
-                            {groupVideos.map((video) => (
-                              <div key={video.id || video.videoUrl}>
-                                <VideoCard 
-                                  video={video} 
-                                  selectionMode={selectionMode}
-                                  isSelected={selectedVideoIds.has(video.id!)}
-                                  onToggleSelect={() => toggleSelection(video.id!)}
-                                  onCompareClick={() => handleOpenDualCompare(video)}
-                                  onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                                  onEditClick={isVideoOwner(video) && !selectionMode ? () => {
-                                    setEditingVideo(video);
-                                    setIsModalOpen(true);
-                                  } : undefined}
-                                />
+              });
+
+              return (
+                <div className="flex flex-col gap-8 pb-12">
+                  {sortedGroups.map(([groupName, groupVideos]) => {
+                    const isCollapsed = collapsedGroups[groupName];
+                    const displayLimit = Math.max(0, remainingQuota);
+                    const visibleGroupVideos = isCollapsed ? [] : groupVideos.slice(0, displayLimit);
+                    if (!isCollapsed) {
+                      remainingQuota -= visibleGroupVideos.length;
+                    }
+
+                    const hasMoreInGroup = !isCollapsed && groupVideos.length > visibleGroupVideos.length;
+
+                    if (!isCollapsed && displayLimit <= 0 && visibleCount < filteredVideos.length) {
+                      return (
+                        <div key={groupName} className="flex flex-col gap-4 opacity-75">
+                          <div className="flex items-center justify-between bg-neutral-900/80 backdrop-blur-md p-3.5 px-5 rounded-2xl border border-neutral-800/90 shadow-sm">
+                            <button 
+                              onClick={() => toggleGroupCollapse(groupName)} 
+                              className="flex items-center gap-3 text-left cursor-pointer group"
+                            >
+                              <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                                <Folder className="w-4 h-4" />
                               </div>
-                            ))}
+                              <div className="flex items-center gap-2.5">
+                                <span className="font-bold text-neutral-100 text-sm sm:text-base">
+                                  {groupName}
+                                </span>
+                                <span className="text-[11px] font-bold font-mono bg-neutral-800 text-neutral-400 px-2 py-0.5 rounded-full">
+                                  {groupVideos.length} vídeos (pendientes de cargar)
+                                </span>
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={groupName} className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between bg-neutral-900/80 backdrop-blur-md p-3.5 px-5 rounded-2xl border border-neutral-800/90 shadow-sm hover:border-neutral-700/80 transition-all">
+                          <button 
+                            onClick={() => toggleGroupCollapse(groupName)} 
+                            className="flex items-center gap-3 text-left cursor-pointer group"
+                          >
+                            <div className="w-8 h-8 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400 group-hover:bg-teal-500/20 transition-all">
+                              {isCollapsed ? <Folder className="w-4 h-4" /> : <FolderOpen className="w-4 h-4 text-teal-300" />}
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-bold text-neutral-100 text-sm sm:text-base tracking-tight group-hover:text-teal-300 transition-colors">
+                                {groupName}
+                              </span>
+                              <span className="text-[11px] font-bold font-mono bg-teal-500/10 text-teal-300 border border-teal-500/20 px-2 py-0.5 rounded-full">
+                                {groupVideos.length} {groupVideos.length === 1 ? 'vídeo' : 'vídeos'}
+                              </span>
+                            </div>
+                            <ChevronDown className={`w-4 h-4 text-neutral-500 group-hover:text-neutral-300 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : 'rotate-0'}`} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              setFilterGroup(groupName);
+                              setView('compare');
+                            }}
+                            className="flex items-center gap-1.5 text-xs font-semibold px-3.5 py-1.5 rounded-xl bg-neutral-800/90 hover:bg-teal-500/15 text-neutral-300 hover:text-teal-300 border border-neutral-700/70 hover:border-teal-500/40 transition-all cursor-pointer shadow-sm active:scale-95"
+                            title="Ver comparativa de esta carpeta"
+                          >
+                            <Columns3 className="w-3.5 h-3.5 text-teal-400" />
+                            <span>Comparar carpeta</span>
+                          </button>
+                        </div>
+                        {!isCollapsed && (
+                          <div className="pl-3 sm:pl-4 border-l-2 border-teal-500/20">
+                            {catalogLayout === 'grid' ? (
+                              <div className={`grid gap-5 ${
+                                gridColumns === 2 
+                                  ? 'grid-cols-1 sm:grid-cols-2' 
+                                  : gridColumns === 4 
+                                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+                              }`}>
+                                {visibleGroupVideos.map((video) => (
+                                  <VideoGridCard 
+                                    key={video.id || video.videoUrl}
+                                    video={video} 
+                                    selectionMode={selectionMode}
+                                    isSelected={selectedVideoIds.has(video.id!)}
+                                    onToggleSelect={() => toggleSelection(video.id!)}
+                                    onCompareClick={() => handleOpenDualCompare(video)}
+                                    onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                                    onEditClick={isVideoOwner(video) && !selectionMode ? () => {
+                                      setEditingVideo(video);
+                                      setIsModalOpen(true);
+                                    } : undefined}
+                                  />
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-6">
+                                {visibleGroupVideos.map((video) => (
+                                  <div key={video.id || video.videoUrl}>
+                                    <VideoCard 
+                                      video={video} 
+                                      selectionMode={selectionMode}
+                                      isSelected={selectedVideoIds.has(video.id!)}
+                                      onToggleSelect={() => toggleSelection(video.id!)}
+                                      onCompareClick={() => handleOpenDualCompare(video)}
+                                      onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                                      onEditClick={isVideoOwner(video) && !selectionMode ? () => {
+                                        setEditingVideo(video);
+                                        setIsModalOpen(true);
+                                      } : undefined}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {hasMoreInGroup && (
+                              <div className="mt-3 text-xs text-neutral-500 italic">
+                                Mostrando {visibleGroupVideos.length} de {groupVideos.length} vídeos de esta carpeta (usa &quot;Cargar más vídeos&quot; al final para ver el resto)
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                    );
+                  })}
+
+                  {visibleCount < filteredVideos.length && (
+                    <div className="flex flex-col items-center justify-center gap-3 pt-6 pb-12 border-t border-neutral-800/80">
+                      <p className="text-xs text-neutral-400 font-medium">
+                        Mostrando <span className="font-bold text-teal-400">{Math.min(visibleCount, filteredVideos.length)}</span> de <span className="font-bold text-white">{filteredVideos.length}</span> vídeos
+                      </p>
+                      <button
+                        onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-teal-300 hover:text-teal-200 border border-teal-500/40 hover:border-teal-500 font-semibold text-sm transition-all shadow-lg active:scale-95 cursor-pointer"
+                      >
+                        <span>Cargar más vídeos (+{Math.min(PAGE_SIZE, filteredVideos.length - visibleCount)})</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()
           ) : catalogLayout === 'grid' ? (
-            <div className={`grid gap-5 pb-24 ${
-              gridColumns === 2 
-                ? 'grid-cols-1 sm:grid-cols-2' 
-                : gridColumns === 4 
-                ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
-                : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-            }`}>
-              {filteredVideos.map((video) => (
-                <VideoGridCard 
-                  key={video.id || video.videoUrl}
-                  video={video} 
-                  selectionMode={selectionMode}
-                  isSelected={selectedVideoIds.has(video.id!)}
-                  onToggleSelect={() => toggleSelection(video.id!)}
-                  onCompareClick={() => handleOpenDualCompare(video)}
-                  onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                  onEditClick={isVideoOwner(video) && !selectionMode ? () => {
-                    setEditingVideo(video);
-                    setIsModalOpen(true);
-                  } : undefined}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-6 pb-24">
-              {filteredVideos.map((video) => (
-                <div key={video.id || video.videoUrl}>
-                  <VideoCard 
+            <div className="flex flex-col gap-8 pb-24">
+              <div className={`grid gap-5 ${
+                gridColumns === 2 
+                  ? 'grid-cols-1 sm:grid-cols-2' 
+                  : gridColumns === 4 
+                  ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
+                  : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
+              }`}>
+                {filteredVideos.slice(0, visibleCount).map((video) => (
+                  <VideoGridCard 
+                    key={video.id || video.videoUrl}
                     video={video} 
                     selectionMode={selectionMode}
                     isSelected={selectedVideoIds.has(video.id!)}
@@ -1656,8 +1762,57 @@ export default function App() {
                       setIsModalOpen(true);
                     } : undefined}
                   />
+                ))}
+              </div>
+
+              {visibleCount < filteredVideos.length && (
+                <div className="flex flex-col items-center justify-center gap-3 pt-6 pb-8 border-t border-neutral-800/80">
+                  <p className="text-xs text-neutral-400 font-medium">
+                    Mostrando <span className="font-bold text-teal-400">{Math.min(visibleCount, filteredVideos.length)}</span> de <span className="font-bold text-white">{filteredVideos.length}</span> vídeos
+                  </p>
+                  <button
+                    onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-teal-300 hover:text-teal-200 border border-teal-500/40 hover:border-teal-500 font-semibold text-sm transition-all shadow-lg active:scale-95 cursor-pointer"
+                  >
+                    <span>Cargar más vídeos (+{Math.min(PAGE_SIZE, filteredVideos.length - visibleCount)})</span>
+                  </button>
                 </div>
-              ))}
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-6 pb-24">
+              <div className="flex flex-col gap-6">
+                {filteredVideos.slice(0, visibleCount).map((video) => (
+                  <div key={video.id || video.videoUrl}>
+                    <VideoCard 
+                      video={video} 
+                      selectionMode={selectionMode}
+                      isSelected={selectedVideoIds.has(video.id!)}
+                      onToggleSelect={() => toggleSelection(video.id!)}
+                      onCompareClick={() => handleOpenDualCompare(video)}
+                      onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                      onEditClick={isVideoOwner(video) && !selectionMode ? () => {
+                        setEditingVideo(video);
+                        setIsModalOpen(true);
+                      } : undefined}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {visibleCount < filteredVideos.length && (
+                <div className="flex flex-col items-center justify-center gap-3 pt-6 pb-8 border-t border-neutral-800/80">
+                  <p className="text-xs text-neutral-400 font-medium">
+                    Mostrando <span className="font-bold text-teal-400">{Math.min(visibleCount, filteredVideos.length)}</span> de <span className="font-bold text-white">{filteredVideos.length}</span> vídeos
+                  </p>
+                  <button
+                    onClick={() => setVisibleCount(prev => prev + PAGE_SIZE)}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-neutral-900 hover:bg-neutral-800 text-teal-300 hover:text-teal-200 border border-teal-500/40 hover:border-teal-500 font-semibold text-sm transition-all shadow-lg active:scale-95 cursor-pointer"
+                  >
+                    <span>Cargar más vídeos (+{Math.min(PAGE_SIZE, filteredVideos.length - visibleCount)})</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </main>
