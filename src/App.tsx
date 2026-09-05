@@ -1111,76 +1111,76 @@ export default function App() {
         </header>
 
         {/* Sub-navegación para vistas */}
-        <div className="border-b border-neutral-900 bg-neutral-950/50">
+        <div className="border-b border-neutral-900 bg-neutral-950/70 backdrop-blur-md sticky top-[65px] z-30">
           <div className="max-w-[1600px] mx-auto px-6">
-            <div className="flex items-center justify-between gap-4 py-2.5 overflow-x-auto no-scrollbar">
-              {/* Segmented Control de Vistas */}
-              <div className="flex items-center bg-neutral-900/90 border border-neutral-800 p-1 rounded-full shadow-inner">
+            <div className="flex items-center justify-between gap-4 py-3 sm:py-3.5 overflow-x-auto no-scrollbar">
+              {/* Segmented Control de Vistas Principal */}
+              <div className="flex items-center bg-neutral-900/90 border border-neutral-800 p-1.5 rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md">
                 <button 
                   onClick={() => setView('detail')} 
-                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap ${
-                    view === 'detail' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200'
+                  className={`relative flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'detail' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/30'
                   }`}
                   title="Vista Detallada del Catálogo"
                 >
                   {view === 'detail' && (
                     <motion.div
                       layoutId="activeViewTab"
-                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/80 rounded-full shadow-sm"
+                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/90 rounded-xl shadow-md"
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
                   <LayoutList className="w-4 h-4 relative z-10 shrink-0" />
-                  <span className="relative z-10 hidden sm:inline">Catálogo</span>
+                  <span className="relative z-10">Catálogo</span>
                 </button>
 
                 <button 
                   onClick={() => setView('compare')} 
-                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap ${
-                    view === 'compare' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200'
+                  className={`relative flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'compare' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/30'
                   }`}
                   title="Comparativa Visual Cuadrícula"
                 >
                   {view === 'compare' && (
                     <motion.div
                       layoutId="activeViewTab"
-                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/80 rounded-full shadow-sm"
+                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/90 rounded-xl shadow-md"
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
                   <Columns3 className="w-4 h-4 relative z-10 shrink-0" />
-                  <span className="relative z-10 hidden sm:inline">Comparar</span>
+                  <span className="relative z-10">Comparar</span>
                 </button>
 
                 <button 
                   onClick={() => setView('dashboard')} 
-                  className={`relative flex items-center gap-2 px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200 cursor-pointer whitespace-nowrap ${
-                    view === 'dashboard' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200'
+                  className={`relative flex items-center gap-2 px-3.5 sm:px-5 py-2 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-colors duration-200 cursor-pointer whitespace-nowrap ${
+                    view === 'dashboard' ? 'text-teal-300' : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/30'
                   }`}
                   title="Métricas y Rendimiento"
                 >
                   {view === 'dashboard' && (
                     <motion.div
                       layoutId="activeViewTab"
-                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/80 rounded-full shadow-sm"
+                      className="absolute inset-0 bg-neutral-800 border border-neutral-700/90 rounded-xl shadow-md"
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
                   <BarChart3 className="w-4 h-4 relative z-10 shrink-0" />
-                  <span className="relative z-10 hidden sm:inline">Métricas</span>
+                  <span className="relative z-10">Métricas</span>
                 </button>
               </div>
 
               {/* Acción rápida separada: Comparativa 1 vs 1 */}
               {videos.length >= 2 && (
                 <div className="flex items-center gap-3 shrink-0">
-                  <div className="hidden md:block h-5 w-px bg-neutral-850" />
+                  <div className="hidden md:block h-6 w-px bg-neutral-800" />
                   <button 
                     onClick={() => handleOpenDualCompare(videos[0], videos[1])} 
-                    className="px-3.5 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 hover:border-teal-400/50 flex items-center gap-1.5 shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                    className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 hover:border-teal-400/50 flex items-center gap-2 shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                     title="Abrir comparativa 1 vs 1 a pantalla completa (permite elegir cualquier vídeo del catálogo)"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                    <Sparkles className="w-4 h-4 text-teal-400 shrink-0" />
                     <span>Comparativa 1 vs 1</span>
                   </button>
                 </div>
@@ -1197,29 +1197,31 @@ export default function App() {
             {/* Barra superior de controles */}
             <div className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-3">
-                {/* Botón para desplegar filtros */}
-                <button
-                  onClick={() => setShowFilters(prev => !prev)}
-                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
-                    showFilters || activeFiltersCount > 0
-                      ? 'bg-neutral-800 text-teal-300 border-neutral-700 shadow-sm'
-                      : 'bg-neutral-950/70 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
-                  }`}
-                  title={showFilters ? 'Ocultar panel de filtros' : 'Desplegar panel de filtros'}
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                  <span>Filtros</span>
-                  {activeFiltersCount > 0 && (
-                    <span className="px-1.5 py-0.2 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full ml-0.5">
-                      {activeFiltersCount}
-                    </span>
-                  )}
-                  {showFilters ? (
-                    <ChevronUp className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
-                  ) : (
-                    <ChevronDown className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
-                  )}
-                </button>
+                {/* Botón para desplegar filtros (Oculto en vista Métricas/Dashboard porque tiene sus propios 5 filtros dedicados) */}
+                {view !== 'dashboard' && (
+                  <button
+                    onClick={() => setShowFilters(prev => !prev)}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
+                      showFilters || activeFiltersCount > 0
+                        ? 'bg-neutral-800 text-teal-300 border-neutral-700 shadow-sm'
+                        : 'bg-neutral-950/70 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
+                    }`}
+                    title={showFilters ? 'Ocultar panel de filtros' : 'Desplegar panel de filtros'}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                    <span>Filtros</span>
+                    {activeFiltersCount > 0 && (
+                      <span className="px-1.5 py-0.2 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full ml-0.5">
+                        {activeFiltersCount}
+                      </span>
+                    )}
+                    {showFilters ? (
+                      <ChevronUp className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
+                    ) : (
+                      <ChevronDown className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
+                    )}
+                  </button>
+                )}
 
                 {/* Contador de resultados */}
                 <span className="text-xs sm:text-sm text-neutral-400">
@@ -1229,15 +1231,18 @@ export default function App() {
 
               {/* Controles de la derecha: Agrupar por carpeta y Gestión por lote */}
               <div className="flex items-center gap-3 sm:gap-4">
-                <label className="flex items-center gap-2 text-xs sm:text-sm text-neutral-300 hover:text-white cursor-pointer select-none">
-                  <input 
-                    type="checkbox" 
-                    checked={groupByFolder} 
-                    onChange={e => setGroupByFolder(e.target.checked)}
-                    className="rounded border-neutral-700 bg-neutral-950 text-teal-500 focus:ring-teal-500/20 w-3.5 h-3.5 cursor-pointer"
-                  />
-                  <span>Agrupar por carpeta</span>
-                </label>
+                {/* Agrupar por carpeta (Solo relevante para Catálogo y Comparativa Cuadrícula) */}
+                {view !== 'dashboard' && (
+                  <label className="flex items-center gap-2 text-xs sm:text-sm text-neutral-300 hover:text-white cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={groupByFolder} 
+                      onChange={e => setGroupByFolder(e.target.checked)}
+                      className="rounded border-neutral-700 bg-neutral-950 text-teal-500 focus:ring-teal-500/20 w-3.5 h-3.5 cursor-pointer"
+                    />
+                    <span>Agrupar por carpeta</span>
+                  </label>
+                )}
 
                 {/* Selector de modo de vista: Lista vs Cuadrícula */}
                 {view === 'detail' && (
@@ -1327,7 +1332,7 @@ export default function App() {
 
             {/* Panel de Filtros Desplegable */}
             <AnimatePresence>
-              {showFilters && (
+              {showFilters && view !== 'dashboard' && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
