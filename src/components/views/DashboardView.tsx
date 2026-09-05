@@ -7,7 +7,7 @@ import {
 import { 
   Cpu, Clock, Sliders, Layers, Sparkles, Filter, Info, AlertCircle, 
   Zap, RotateCcw, Box, Monitor, Gauge, ArrowRight, CheckCircle2, TrendingDown, TrendingUp,
-  Folder, Wrench, Film
+  Folder, Wrench, Film, AppWindow, Compass, X
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -37,6 +37,8 @@ export function DashboardView({ videos }: DashboardViewProps) {
   const [selectedModelSize, setSelectedModelSize] = useState<string>('all');
   const [selectedResolution, setSelectedResolution] = useState<string>('all');
   const [selectedLoraFilter, setSelectedLoraFilter] = useState<'all' | 'with_lora' | 'without_lora'>('all');
+  const [selectedSoftwareSource, setSelectedSoftwareSource] = useState<string>('all');
+  const [selectedOrientation, setSelectedOrientation] = useState<string>('all');
 
   // Phase 2: Performance Metric Mode (Total Render Time vs Normalized s/step)
   const [metricMode, setMetricMode] = useState<MetricMode>('renderSeconds');
@@ -89,6 +91,30 @@ export function DashboardView({ videos }: DashboardViewProps) {
       }
     });
     return Object.entries(resCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+  }, [videos]);
+
+  // Discover all Software Sources available across all videos
+  const availableSoftwareSources = useMemo(() => {
+    const sourceCounts: Record<string, number> = {};
+    videos.forEach(v => {
+      const src = v.softwareSource || 'other';
+      sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+    });
+    return Object.entries(sourceCounts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+  }, [videos]);
+
+  // Discover all Orientations available across all videos
+  const availableOrientations = useMemo(() => {
+    const orientationCounts: Record<string, number> = {};
+    videos.forEach(v => {
+      const orient = v.orientation || 'other';
+      orientationCounts[orient] = (orientationCounts[orient] || 0) + 1;
+    });
+    return Object.entries(orientationCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
   }, [videos]);
@@ -260,6 +286,16 @@ export function DashboardView({ videos }: DashboardViewProps) {
         const res = `${v.width}x${v.height}`;
         if (res !== selectedResolution) return false;
       }
+      // Software Source filter
+      if (selectedSoftwareSource !== 'all') {
+        const src = v.softwareSource || 'other';
+        if (src !== selectedSoftwareSource) return false;
+      }
+      // Orientation filter
+      if (selectedOrientation !== 'all') {
+        const orient = v.orientation || 'other';
+        if (orient !== selectedOrientation) return false;
+      }
       // LoRA filter
       if (selectedLoraFilter === 'with_lora') {
         if (!v.loras || v.loras.length === 0) return false;
@@ -268,9 +304,9 @@ export function DashboardView({ videos }: DashboardViewProps) {
       }
       return true;
     });
-  }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedLoraFilter]);
+  }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedSoftwareSource, selectedOrientation, selectedLoraFilter]);
 
-  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedLoraFilter !== 'all';
+  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedSoftwareSource !== 'all' || selectedOrientation !== 'all' || selectedLoraFilter !== 'all';
 
   // Software pipeline and catalog distribution analysis for current filtered view
   const softwareStats = useMemo(() => {
@@ -318,6 +354,8 @@ export function DashboardView({ videos }: DashboardViewProps) {
     setSelectedModel('all');
     setSelectedModelSize('all');
     setSelectedResolution('all');
+    setSelectedSoftwareSource('all');
+    setSelectedOrientation('all');
     setSelectedLoraFilter('all');
   };
 
@@ -571,12 +609,12 @@ export function DashboardView({ videos }: DashboardViewProps) {
     <div className="flex flex-col gap-6 pb-16">
       
       {/* Dashboard Master Toolbar: Cross-Filters + Metric Mode Selector */}
-      <div className="p-4 bg-neutral-900/80 border border-neutral-800 rounded-2xl flex flex-col gap-4 shadow-sm">
+      <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl flex flex-col shadow-lg overflow-hidden divide-y divide-neutral-800/80">
         
-        {/* Header with Title & Metric Mode Toggle */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-neutral-800/80 pb-3.5">
+        {/* Top Header: Title & Metric Mode Toggle */}
+        <div className="p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-neutral-900/50">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400">
+            <div className="p-2.5 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 shrink-0">
               <Cpu className="w-5 h-5" />
             </div>
             <div>
@@ -584,13 +622,13 @@ export function DashboardView({ videos }: DashboardViewProps) {
                 Panel de Métricas y Benchmark de Rendimiento
               </h2>
               <p className="text-xs text-neutral-400">
-                Aísla combinaciones exactas de hardware, modelo y resolución para comparaciones justas
+                Aísla combinaciones exactas de hardware, modelo, software y resolución para comparaciones justas
               </p>
             </div>
           </div>
 
           {/* Phase 2: Metric Mode Switcher */}
-          <div className="flex items-center gap-2 bg-neutral-950 border border-neutral-800 p-1 rounded-xl shrink-0 self-stretch sm:self-auto justify-center">
+          <div className="flex items-center gap-1.5 bg-neutral-950 border border-neutral-800/90 p-1.5 rounded-xl shrink-0 self-stretch sm:self-auto justify-center shadow-inner">
             <span className="text-[11px] font-semibold text-neutral-400 pl-2 pr-1 hidden sm:inline">Métrica:</span>
             <button
               type="button"
@@ -620,134 +658,322 @@ export function DashboardView({ videos }: DashboardViewProps) {
           </div>
         </div>
 
-        {/* Phase 1: Cross-Filters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          
-          {/* GPU Filter */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="dash-gpu" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
-              <Cpu className="w-3 h-3 text-teal-400" />
-              GPU:
-            </label>
-            <select
-              id="dash-gpu"
-              value={selectedGpu}
-              onChange={(e) => setSelectedGpu(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs text-neutral-200 focus:outline-none transition-colors cursor-pointer"
-            >
-              <option value="all">Todas las GPUs ({videos.length})</option>
-              {availableGpus.map(g => (
-                <option key={g.name} value={g.name}>{g.name} ({g.count})</option>
-              ))}
-            </select>
+        {/* Filters Section Container */}
+        <div className="p-4 sm:p-5 flex flex-col gap-4 bg-neutral-950/40">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-300 flex items-center gap-2">
+              <Filter className="w-3.5 h-3.5 text-teal-400" />
+              Filtros Cruzados del Análisis
+            </span>
+            <span className="text-[11px] text-neutral-400 font-mono">
+              Mostrando <strong className="text-neutral-200">{dashboardVideos.length}</strong> de {videos.length} vídeos
+            </span>
           </div>
 
-          {/* Model Filter */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="dash-model" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
-              <Box className="w-3 h-3 text-teal-400" />
-              Modelo / Variante:
-            </label>
-            <select
-              id="dash-model"
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs text-neutral-200 focus:outline-none transition-colors cursor-pointer"
-            >
-              <option value="all">Todos los modelos ({videos.length})</option>
-              {availableModels.map(m => (
-                <option key={m.name} value={m.name}>{m.name} ({m.count})</option>
-              ))}
-            </select>
-          </div>
+          {/* Cross-Filters Grid: 7 structured filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+            
+            {/* 1. GPU Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-gpu" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Cpu className={`w-3 h-3 ${selectedGpu !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                GPU
+              </label>
+              <select
+                id="dash-gpu"
+                value={selectedGpu}
+                onChange={(e) => setSelectedGpu(e.target.value)}
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedGpu !== 'all'
+                    ? 'bg-teal-950/30 border-teal-500/50 text-teal-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
+              >
+                <option value="all">Todas las GPUs ({videos.length})</option>
+                {availableGpus.map(g => (
+                  <option key={g.name} value={g.name}>{g.name} ({g.count})</option>
+                ))}
+              </select>
+            </div>
 
-          {/* Model Size Filter */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="dash-size" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
-              <Layers className="w-3 h-3 text-teal-400" />
-              Tamaño del Modelo:
-            </label>
-            <select
-              id="dash-size"
-              value={selectedModelSize}
-              onChange={(e) => setSelectedModelSize(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs text-neutral-200 focus:outline-none transition-colors cursor-pointer"
-            >
-              <option value="all">Todos los tamaños ({videos.length})</option>
-              {availableModelSizes.map(s => (
-                <option key={s.name} value={s.name}>{s.name} ({s.count})</option>
-              ))}
-            </select>
-          </div>
+            {/* 2. Model Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-model" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Box className={`w-3 h-3 ${selectedModel !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                Modelo
+              </label>
+              <select
+                id="dash-model"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedModel !== 'all'
+                    ? 'bg-teal-950/30 border-teal-500/50 text-teal-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
+              >
+                <option value="all">Todos los modelos ({videos.length})</option>
+                {availableModels.map(m => (
+                  <option key={m.name} value={m.name}>{m.name} ({m.count})</option>
+                ))}
+              </select>
+            </div>
 
-          {/* Resolution Filter */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="dash-res" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
-              <Monitor className="w-3 h-3 text-teal-400" />
-              Resolución:
-            </label>
-            <select
-              id="dash-res"
-              value={selectedResolution}
-              onChange={(e) => setSelectedResolution(e.target.value)}
-              className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs text-neutral-200 focus:outline-none transition-colors cursor-pointer"
-            >
-              <option value="all">Todas las resoluciones ({videos.length})</option>
-              {availableResolutions.map(r => (
-                <option key={r.name} value={r.name}>{r.name} ({r.count})</option>
-              ))}
-            </select>
-          </div>
+            {/* 3. Model Size Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-size" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Layers className={`w-3 h-3 ${selectedModelSize !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                Tamaño Modelo
+              </label>
+              <select
+                id="dash-size"
+                value={selectedModelSize}
+                onChange={(e) => setSelectedModelSize(e.target.value)}
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedModelSize !== 'all'
+                    ? 'bg-teal-950/30 border-teal-500/50 text-teal-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
+              >
+                <option value="all">Todos los tamaños ({videos.length})</option>
+                {availableModelSizes.map(s => (
+                  <option key={s.name} value={s.name}>{s.name} ({s.count})</option>
+                ))}
+              </select>
+            </div>
 
-          {/* LoRA Filter */}
-          <div className="flex flex-col gap-1">
-            <label htmlFor="dash-lora" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
-              <Sparkles className="w-3 h-3 text-teal-400" />
-              Presencia de LoRA:
-            </label>
-            <div className="flex items-center gap-2">
+            {/* 4. Resolution Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-res" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Monitor className={`w-3 h-3 ${selectedResolution !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                Resolución
+              </label>
+              <select
+                id="dash-res"
+                value={selectedResolution}
+                onChange={(e) => setSelectedResolution(e.target.value)}
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedResolution !== 'all'
+                    ? 'bg-teal-950/30 border-teal-500/50 text-teal-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
+              >
+                <option value="all">Todas las resoluciones ({videos.length})</option>
+                {availableResolutions.map(r => (
+                  <option key={r.name} value={r.name}>{r.name} ({r.count})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 5. Software Source Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-software" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <AppWindow className={`w-3 h-3 ${selectedSoftwareSource !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                Software
+              </label>
+              <select
+                id="dash-software"
+                value={selectedSoftwareSource}
+                onChange={(e) => setSelectedSoftwareSource(e.target.value)}
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedSoftwareSource !== 'all'
+                    ? 'bg-teal-950/30 border-teal-500/50 text-teal-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
+              >
+                <option value="all">Todo el software ({videos.length})</option>
+                {availableSoftwareSources.map(s => {
+                  const labelMap: Record<string, string> = {
+                    wan2gp: 'Wan2GP',
+                    maestro: 'Maestro',
+                    comfyui: 'ComfyUI',
+                    other: 'Otros / Cloud',
+                  };
+                  return (
+                    <option key={s.name} value={s.name}>
+                      {labelMap[s.name] || s.name} ({s.count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* 6. Orientation Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-orient" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Compass className={`w-3 h-3 ${selectedOrientation !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                Orientación
+              </label>
+              <select
+                id="dash-orient"
+                value={selectedOrientation}
+                onChange={(e) => setSelectedOrientation(e.target.value)}
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedOrientation !== 'all'
+                    ? 'bg-teal-950/30 border-teal-500/50 text-teal-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
+              >
+                <option value="all">Todas ({videos.length})</option>
+                {availableOrientations.map(o => {
+                  const labelMap: Record<string, string> = {
+                    '16:9': '16:9 (Horizontal)',
+                    '9:16': '9:16 (Vertical)',
+                    '1:1': '1:1 (Cuadrado)',
+                    'other': 'Otro formato',
+                  };
+                  return (
+                    <option key={o.name} value={o.name}>
+                      {labelMap[o.name] || o.name} ({o.count})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {/* 7. LoRA Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-lora" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Sparkles className={`w-3 h-3 ${selectedLoraFilter !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                LoRA
+              </label>
               <select
                 id="dash-lora"
                 value={selectedLoraFilter}
                 onChange={(e) => setSelectedLoraFilter(e.target.value as any)}
-                className="w-full bg-neutral-950 border border-neutral-800 hover:border-neutral-700 focus:border-teal-500 rounded-xl px-3 py-1.5 text-xs text-neutral-200 focus:outline-none transition-colors cursor-pointer"
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedLoraFilter !== 'all'
+                    ? 'bg-teal-950/30 border-teal-500/50 text-teal-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
               >
-                <option value="all">Todos (con o sin LoRA)</option>
+                <option value="all">Todos (con/sin LoRA)</option>
                 <option value="without_lora">Solo limpios (Sin LoRA)</option>
                 <option value="with_lora">Solo con LoRA(s)</option>
               </select>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  title="Restablecer todos los filtros de análisis"
-                  className="shrink-0 p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-xl border border-neutral-700 transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-              )}
             </div>
+
           </div>
 
+          {/* Active Filter Chips & Reset Row */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center justify-between gap-2.5 pt-3 border-t border-neutral-800/80">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-neutral-400 mr-1 flex items-center gap-1">
+                  <Filter className="w-3 h-3 text-teal-400" />
+                  Activos:
+                </span>
+                
+                {selectedGpu !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
+                    <Cpu className="w-3 h-3 text-teal-400" />
+                    GPU: {selectedGpu}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGpu('all')}
+                      className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedModel !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
+                    <Box className="w-3 h-3 text-teal-400" />
+                    Modelo: {selectedModel}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModel('all')}
+                      className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedModelSize !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
+                    <Layers className="w-3 h-3 text-teal-400" />
+                    Tamaño: {selectedModelSize}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModelSize('all')}
+                      className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedResolution !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
+                    <Monitor className="w-3 h-3 text-teal-400" />
+                    Res: {selectedResolution}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedResolution('all')}
+                      className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedSoftwareSource !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
+                    <AppWindow className="w-3 h-3 text-teal-400" />
+                    Software: {selectedSoftwareSource === 'wan2gp' ? 'Wan2GP' : selectedSoftwareSource === 'maestro' ? 'Maestro' : selectedSoftwareSource === 'comfyui' ? 'ComfyUI' : 'Otros'}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSoftwareSource('all')}
+                      className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedOrientation !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
+                    <Compass className="w-3 h-3 text-teal-400" />
+                    Orientación: {selectedOrientation}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedOrientation('all')}
+                      className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedLoraFilter !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
+                    <Sparkles className="w-3 h-3 text-teal-400" />
+                    {selectedLoraFilter === 'with_lora' ? 'Solo con LoRA' : 'Sin LoRA'}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedLoraFilter('all')}
+                      className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-800/90 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-700/80 hover:border-neutral-600 text-xs font-semibold transition-all cursor-pointer shrink-0"
+              >
+                <RotateCcw className="w-3 h-3 text-teal-400" />
+                Limpiar filtros
+              </button>
+            </div>
+          )}
         </div>
-
-        {/* Filter feedback active badges */}
-        {hasActiveFilters && (
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-800/60 text-xs">
-            <span className="text-teal-400 font-medium flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5" />
-              Muestra filtrada activa: <strong>{dashboardVideos.length}</strong> de {videos.length} vídeos analizados
-            </span>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="text-neutral-400 hover:text-teal-300 underline text-[11px] cursor-pointer"
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        )}
 
       </div>
 
