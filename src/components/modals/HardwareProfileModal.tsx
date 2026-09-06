@@ -71,9 +71,6 @@ export function HardwareProfileModal({
       if (!newRam || Number(newRam) <= 0) {
         return 'Indica los GB de la nueva memoria RAM.';
       }
-      if (Number(newRam) === Number(ram)) {
-        return 'La nueva RAM no puede ser igual al valor actual configurado.';
-      }
     }
 
     if (changeType === 'gpu' || changeType === 'both') {
@@ -82,9 +79,6 @@ export function HardwareProfileModal({
       }
       if (!newVram || Number(newVram) <= 0) {
         return 'Indica los GB de VRAM de la nueva GPU.';
-      }
-      if (newGpu.trim().toLowerCase() === gpu.trim().toLowerCase() && Number(newVram) === Number(vram)) {
-        return 'La nueva GPU y VRAM no pueden ser idénticas al valor actual.';
       }
     }
 
@@ -117,7 +111,27 @@ export function HardwareProfileModal({
       label
     };
 
-    setHistory(prev => [...prev, milestone]);
+    setHistory(prev => {
+      const updated = [...prev, milestone];
+      // Si este nuevo hito es el más reciente de todos (o posterior a la fecha actual),
+      // actualizamos automáticamente la "Configuración Actual" para evitar discrepancias
+      const sorted = [...updated].sort((a, b) => b.sinceDate.localeCompare(a.sinceDate));
+      if (sorted[0]?.sinceDate === upgradeDate) {
+        setGpu(targetGpu);
+        setVram(targetVram);
+        setRam(targetRam);
+      }
+      return updated;
+    });
+
+    // Si aún no se ha definido una configuración de origen y este es el primer hito,
+    // pre-llenamos la configuración de origen con lo que había antes en el formulario
+    if (!initialGpu && !initialRam && history.length === 0) {
+      if (gpu) setInitialGpu(gpu);
+      if (vram) setInitialVram(vram);
+      if (ram) setInitialRam(ram);
+    }
+
     setUpgradeDate('');
     setNewRam('');
     setNewGpu('');
@@ -198,8 +212,14 @@ export function HardwareProfileModal({
                 <Cpu className="w-4 h-4" />
                 Configuración Actual
               </h3>
-              <span className="text-[11px] text-neutral-500">Equipo en uso hoy</span>
+              <span className="text-[11px] text-teal-300/80 font-mono bg-teal-950/50 px-2 py-0.5 rounded border border-teal-800/40">
+                Aplica a nuevos vídeos hoy
+              </span>
             </div>
+
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              El hardware que tienes montado físicamente en tu ordenador ahora mismo. Es el que se muestra en el pie de página y el que se estampa por defecto al añadir vídeos actuales.
+            </p>
 
             <div>
               <label className="block text-xs font-medium text-neutral-400 mb-1.5 uppercase tracking-wider">Modelo de GPU</label>
@@ -475,16 +495,18 @@ export function HardwareProfileModal({
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-1.5">
                           <History className="w-3.5 h-3.5 text-teal-400" />
-                          Configuración de Origen (Opcional)
+                          Configuración Antigua / Inicial
                         </span>
-                        <span className="text-[10px] text-neutral-500">Antes del 1er hito ({sortedHistory[sortedHistory.length - 1]?.sinceDate})</span>
+                        <span className="text-[10px] text-teal-400/80 font-mono bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800">
+                          Vídeos anteriores a {sortedHistory[sortedHistory.length - 1]?.sinceDate}
+                        </span>
                       </div>
                       <p className="text-[11px] text-neutral-400 leading-normal">
-                        Hardware que utilizabas para generar vídeos <strong className="text-neutral-300">antes de tu primer hito registrado</strong>. Si se deja vacío, el sistema estimará automáticamente los valores para mantener compatibilidad.
+                        Especifica el hardware que tenías montado <strong className="text-neutral-300">antes de tu primer cambio registrado</strong>. Así, cuando importes o consultes vídeos renderizados en esas fechas pasadas, se catalogarán con su hardware real exacto.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                         <div>
-                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">GPU Origen</label>
+                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">GPU Antigua</label>
                           <input
                             type="text"
                             placeholder="Ej: RTX 4080"
@@ -494,7 +516,7 @@ export function HardwareProfileModal({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">VRAM (GB)</label>
+                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">VRAM Antigua (GB)</label>
                           <input
                             type="number"
                             min="4"
@@ -506,7 +528,7 @@ export function HardwareProfileModal({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">RAM (GB)</label>
+                          <label className="block text-[10px] text-neutral-400 uppercase font-medium mb-1">RAM Antigua (GB)</label>
                           <input
                             type="number"
                             min="8"
