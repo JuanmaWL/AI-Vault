@@ -1216,13 +1216,13 @@ export default function App() {
         {/* Main Content */}
         <main className="max-w-[1600px] mx-auto px-6 py-8">
           
-          {/* Barra de Controles y Filtros */}
-          <div className="mb-6 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 overflow-hidden shadow-sm backdrop-blur-sm">
-            {/* Barra superior de controles */}
-            <div className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
-              <div className="flex items-center gap-3">
-                {/* Botón para desplegar filtros (Oculto en vista Métricas/Dashboard porque tiene sus propios 5 filtros dedicados) */}
-                {view !== 'dashboard' && (
+          {/* Barra de Controles y Filtros (Oculta en Métricas ya que Métricas tiene su propia botonera y 7 filtros cruzados integrados) */}
+          {view !== 'dashboard' && (
+            <div className="mb-6 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 overflow-hidden shadow-sm backdrop-blur-sm">
+              {/* Barra superior de controles */}
+              <div className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-3">
+                  {/* Botón para desplegar filtros */}
                   <button
                     onClick={() => setShowFilters(prev => !prev)}
                     className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
@@ -1245,18 +1245,16 @@ export default function App() {
                       <ChevronDown className="w-3.5 h-3.5 text-neutral-400 ml-0.5" />
                     )}
                   </button>
-                )}
 
-                {/* Contador de resultados */}
-                <span className="text-xs sm:text-sm text-neutral-400">
-                  Mostrando <strong className="text-neutral-200">{filteredVideos.length}</strong> de {videos.length} vídeos
-                </span>
-              </div>
+                  {/* Contador de resultados */}
+                  <span className="text-xs sm:text-sm text-neutral-400">
+                    Mostrando <strong className="text-neutral-200">{filteredVideos.length}</strong> de {videos.length} vídeos
+                  </span>
+                </div>
 
-              {/* Controles de la derecha: Agrupar por carpeta y Gestión por lote */}
-              <div className="flex items-center gap-3 sm:gap-4">
-                {/* Agrupar por carpeta (Solo relevante para Catálogo y Comparativa Cuadrícula) */}
-                {view !== 'dashboard' && (
+                {/* Controles de la derecha: Agrupar por carpeta y Gestión por lote */}
+                <div className="flex items-center gap-3 sm:gap-4">
+                  {/* Agrupar por carpeta (Solo relevante para Catálogo y Comparativa Cuadrícula) */}
                   <label className="flex items-center gap-2 text-xs sm:text-sm text-neutral-300 hover:text-white cursor-pointer select-none">
                     <input 
                       type="checkbox" 
@@ -1266,106 +1264,105 @@ export default function App() {
                     />
                     <span>Agrupar por carpeta</span>
                   </label>
-                )}
 
-                {/* Selector de modo de vista: Lista vs Cuadrícula */}
-                {view === 'detail' && (
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5" title="Cambiar disposición del catálogo">
-                      <button
-                        onClick={() => handleSetCatalogLayout('list')}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                          catalogLayout === 'list'
-                            ? 'bg-neutral-800 text-teal-300 shadow-sm'
-                            : 'text-neutral-500 hover:text-neutral-300'
-                        }`}
-                        title="Vista Lista / Detalle"
-                      >
-                        <LayoutList className="w-3.5 h-3.5" />
-                        <span className="hidden md:inline text-[11px]">Lista</span>
-                      </button>
-                      <button
-                        onClick={() => handleSetCatalogLayout('grid')}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                          catalogLayout === 'grid'
-                            ? 'bg-neutral-800 text-teal-300 shadow-sm'
-                            : 'text-neutral-500 hover:text-neutral-300'
-                        }`}
-                        title="Vista Cuadrícula / Mosaico"
-                      >
-                        <LayoutGrid className="w-3.5 h-3.5" />
-                        <span className="hidden md:inline text-[11px]">Mosaico</span>
-                      </button>
-                    </div>
-
-                    {/* Selector de columnas en Mosaico */}
-                    {catalogLayout === 'grid' && (
-                      <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5 text-xs" title="Vídeos por fila">
-                        {([2, 3, 4] as const).map((cols) => (
-                          <button
-                            key={cols}
-                            onClick={() => handleSetGridColumns(cols)}
-                            aria-label={`${cols} columnas por fila`}
-                            className={`px-2 py-1 rounded-md text-[11px] font-mono font-bold transition-all cursor-pointer ${
-                              gridColumns === cols
-                                ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
-                                : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
-                            }`}
-                            title={`${cols} columnas por fila`}
-                          >
-                            {cols}
-                          </button>
-                        ))}
+                  {/* Selector de modo de vista: Lista vs Cuadrícula */}
+                  {view === 'detail' && (
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5" title="Cambiar disposición del catálogo">
+                        <button
+                          onClick={() => handleSetCatalogLayout('list')}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                            catalogLayout === 'list'
+                              ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                              : 'text-neutral-500 hover:text-neutral-300'
+                          }`}
+                          title="Vista Lista / Detalle"
+                        >
+                          <LayoutList className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline text-[11px]">Lista</span>
+                        </button>
+                        <button
+                          onClick={() => handleSetCatalogLayout('grid')}
+                          className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                            catalogLayout === 'grid'
+                              ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                              : 'text-neutral-500 hover:text-neutral-300'
+                          }`}
+                          title="Vista Cuadrícula / Mosaico"
+                        >
+                          <LayoutGrid className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline text-[11px]">Mosaico</span>
+                        </button>
                       </div>
-                    )}
-                  </div>
-                )}
 
-                {/* Botón de Gestión por Lote (Solo Admin) */}
-                {isAdmin && view === 'detail' && (
-                  <>
-                    <div className="h-4 w-px bg-neutral-800 hidden sm:block" />
-                    <button
-                      onClick={() => {
-                        if (selectionMode) {
-                          setSelectionMode(false);
-                          setSelectedVideoIds(new Set());
-                        } else {
-                          setSelectionMode(true);
-                        }
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
-                        selectionMode 
-                          ? 'bg-teal-950/80 text-teal-300 border-teal-500/60 shadow-sm' 
-                          : 'bg-neutral-950/70 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200'
-                      }`}
-                      title={selectionMode ? 'Salir del modo selección' : 'Activar selección para borrar o comparar en lote'}
-                    >
-                      <CheckSquare className="w-3.5 h-3.5 text-teal-400 shrink-0" />
-                      <span className="hidden sm:inline">{selectionMode ? 'Seleccionando' : 'Gestión por lote'}</span>
-                      <span className="sm:hidden">{selectionMode ? 'Salir' : 'Seleccionar'}</span>
-                      {selectedVideoIds.size > 0 && (
-                        <span className="px-1.5 py-0.2 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
-                          {selectedVideoIds.size}
-                        </span>
+                      {/* Selector de columnas en Mosaico */}
+                      {catalogLayout === 'grid' && (
+                        <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded-lg p-0.5 text-xs" title="Vídeos por fila">
+                          {([2, 3, 4] as const).map((cols) => (
+                            <button
+                              key={cols}
+                              onClick={() => handleSetGridColumns(cols)}
+                              aria-label={`${cols} columnas por fila`}
+                              className={`px-2 py-1 rounded-md text-[11px] font-mono font-bold transition-all cursor-pointer ${
+                                gridColumns === cols
+                                  ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
+                                  : 'text-neutral-500 hover:text-neutral-300 border border-transparent'
+                              }`}
+                              title={`${cols} columnas por fila`}
+                            >
+                              {cols}
+                            </button>
+                          ))}
+                        </div>
                       )}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
+                    </div>
+                  )}
 
-            {/* Panel de Filtros Desplegable */}
-            <AnimatePresence>
-              {showFilters && view !== 'dashboard' && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 1 }}
-                  transition={{ duration: 0.2, ease: 'easeInOut' }}
-                  className="border-t border-neutral-800/80 bg-neutral-950/70"
-                >
-                  <div className="p-4 sm:p-5 flex flex-col gap-4">
+                  {/* Botón de Gestión por Lote (Solo Admin) */}
+                  {isAdmin && view === 'detail' && (
+                    <>
+                      <div className="h-4 w-px bg-neutral-800 hidden sm:block" />
+                      <button
+                        onClick={() => {
+                          if (selectionMode) {
+                            setSelectionMode(false);
+                            setSelectedVideoIds(new Set());
+                          } else {
+                            setSelectionMode(true);
+                          }
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
+                          selectionMode 
+                            ? 'bg-teal-950/80 text-teal-300 border-teal-500/60 shadow-sm' 
+                            : 'bg-neutral-950/70 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200'
+                        }`}
+                        title={selectionMode ? 'Salir del modo selección' : 'Activar selección para borrar o comparar en lote'}
+                      >
+                        <CheckSquare className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                        <span className="hidden sm:inline">{selectionMode ? 'Seleccionando' : 'Gestión por lote'}</span>
+                        <span className="sm:hidden">{selectionMode ? 'Salir' : 'Seleccionar'}</span>
+                        {selectedVideoIds.size > 0 && (
+                          <span className="px-1.5 py-0.2 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full">
+                            {selectedVideoIds.size}
+                          </span>
+                        )}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Panel de Filtros Desplegable */}
+              <AnimatePresence>
+                {showFilters && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 1 }}
+                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                    className="border-t border-neutral-800/80 bg-neutral-950/70"
+                  >
+                    <div className="p-4 sm:p-5 flex flex-col gap-4">
                     
                     {/* BLOQUE 1: Filtros Principales / Habituales */}
                     <div className="space-y-2">
@@ -1549,6 +1546,7 @@ export default function App() {
               )}
             </AnimatePresence>
           </div>
+        )}
 
           {view === 'dashboard' ? (
             <DashboardView videos={filteredVideos} />

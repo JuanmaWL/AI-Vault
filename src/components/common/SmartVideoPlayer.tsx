@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, memo } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Film, AlertCircle, RefreshCw } from 'lucide-react';
 
-interface SmartVideoPlayerProps {
+export interface SmartVideoPlayerProps {
   src: string;
   className?: string;
   controls?: boolean;
@@ -13,9 +13,12 @@ interface SmartVideoPlayerProps {
   poster?: string;
   title?: string;
   aspectRatio?: string; // default aspect-video
+  videoRef?: (el: HTMLVideoElement | null) => void;
+  onLoadedData?: () => void;
+  onCanPlay?: () => void;
 }
 
-export const SmartVideoPlayer = memo(function SmartVideoPlayer({
+export const SmartVideoPlayer = forwardRef<HTMLVideoElement, SmartVideoPlayerProps>(function SmartVideoPlayer({
   src,
   className = 'w-full h-full object-contain',
   controls = true,
@@ -27,11 +30,24 @@ export const SmartVideoPlayer = memo(function SmartVideoPlayer({
   poster,
   title,
   aspectRatio = 'aspect-video',
-}: SmartVideoPlayerProps) {
+  videoRef: externalVideoRefCallback,
+  onLoadedData,
+  onCanPlay,
+}, ref) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const internalVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useImperativeHandle(ref, () => internalVideoRef.current as HTMLVideoElement);
+
+  // Set internal and external ref callback
+  const handleSetRef = (el: HTMLVideoElement | null) => {
+    internalVideoRef.current = el;
+    if (externalVideoRefCallback) {
+      externalVideoRefCallback(el);
+    }
+  };
 
   // Reset state when src changes
   useEffect(() => {
@@ -42,6 +58,13 @@ export const SmartVideoPlayer = memo(function SmartVideoPlayer({
   const handleLoadedData = () => {
     setIsLoaded(true);
     setHasError(false);
+    if (onLoadedData) onLoadedData();
+  };
+
+  const handleCanPlay = () => {
+    setIsLoaded(true);
+    setHasError(false);
+    if (onCanPlay) onCanPlay();
   };
 
   const handleError = () => {
@@ -94,7 +117,7 @@ export const SmartVideoPlayer = memo(function SmartVideoPlayer({
       {/* HTML5 Native Video element with smooth fade-in */}
       <video
         key={`${src}-${reloadKey}`}
-        ref={videoRef}
+        ref={handleSetRef}
         src={src}
         controls={controls}
         preload={preload}
@@ -105,7 +128,7 @@ export const SmartVideoPlayer = memo(function SmartVideoPlayer({
         poster={poster}
         title={title}
         onLoadedData={handleLoadedData}
-        onCanPlay={handleLoadedData}
+        onCanPlay={handleCanPlay}
         onError={handleError}
         className={`${className} transition-opacity duration-300 ${
           isLoaded ? 'opacity-100' : 'opacity-0'

@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { VideoRecord } from '../../types';
-import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2, Sparkles, SplitSquareVertical } from 'lucide-react';
-import { formatBytes, getPlayableVideoUrl } from '../../lib/utils';
+import { Play, Pause, Volume2, VolumeX, ExternalLink, ChevronDown, ChevronUp, RotateCcw, AlertTriangle, Loader2, Sparkles, SplitSquareVertical, Cpu, Clock, Layers, Gauge, Film } from 'lucide-react';
+import { formatBytes, getPlayableVideoUrl, extractTechnicalDetails, SOFTWARE_ICONS } from '../../lib/utils';
+import { useInViewport } from '../../hooks/useInViewport';
+import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
 
 interface CompareViewProps {
   videos: VideoRecord[];
@@ -327,12 +329,52 @@ function CompareCard({
   onNavigateToVideo: () => void;
   onOpenDualCompare?: (video: VideoRecord) => void;
 }) {
-  const [hasError, setHasError] = useState(false);
-  
+  const { targetRef, isInViewport } = useInViewport<HTMLDivElement>({ rootMargin: '300px' });
   const directUrl = getPlayableVideoUrl(video);
 
+  // Resolve technical details dynamically (from fields or rawMetadata fallback)
+  const resolvedTech = useMemo(() => {
+    let textEnc = video.textEncoder && video.textEncoder !== 'Not Found' ? video.textEncoder : undefined;
+    let vae = video.videoVae && video.videoVae !== 'Not Found' ? video.videoVae : undefined;
+    let variant = video.modelVariant;
+    let sizeB = video.modelSizeB;
+    let softwareSource = video.softwareSource;
+    let localTool = video.localTool;
+
+    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool) && video.rawMetadata) {
+      try {
+        const parsed = typeof video.rawMetadata === 'string' ? JSON.parse(video.rawMetadata) : video.rawMetadata;
+        const extracted = extractTechnicalDetails(
+          parsed,
+          typeof video.rawMetadata === 'string' ? video.rawMetadata : JSON.stringify(video.rawMetadata),
+          parsed.model_type || parsed.type || ''
+        );
+        if (!textEnc && extracted.textEncoder !== 'Not Found') textEnc = extracted.textEncoder;
+        if (!vae && extracted.videoVae !== 'Not Found') vae = extracted.videoVae;
+        if (!variant && extracted.modelVariant) variant = extracted.modelVariant;
+        if (sizeB === undefined && extracted.modelSizeB !== undefined) sizeB = extracted.modelSizeB;
+        if (extracted.softwareSource) {
+          softwareSource = extracted.softwareSource;
+          localTool = extracted.localTool;
+        }
+      } catch {}
+    }
+
+    const effectiveSoftware = softwareSource || (localTool?.toLowerCase().includes('maestro') ? 'maestro' : (localTool?.toLowerCase().includes('comfy') ? 'comfyui' : 'wan2gp'));
+    const displayToolName = effectiveSoftware === 'maestro' ? 'Maestro' : (effectiveSoftware === 'comfyui' ? 'ComfyUI' : (localTool || 'Wan2GP'));
+
+    return {
+      textEncoder: textEnc,
+      videoVae: vae,
+      modelVariant: variant,
+      modelSizeB: sizeB,
+      softwareSource: effectiveSoftware,
+      displayToolName,
+    };
+  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.rawMetadata]);
+
   return (
-    <div className="relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden transition-all h-full group/card hover:border-neutral-700">
+    <div ref={targetRef} className="relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden transition-all h-full group/card hover:border-neutral-700 shadow-md">
       {/* Botón flotante para 1 vs 1 */}
       {onOpenDualCompare && (
         <div className="absolute top-2 right-2 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity">
@@ -347,58 +389,146 @@ function CompareCard({
         </div>
       )}
 
-      {/* Video Container */}
-      <div className="relative w-full aspect-[4/3] bg-black flex items-center justify-center border-b border-neutral-800">
-        {hasError ? (
-          <div className="flex flex-col items-center justify-center p-4 text-center">
-            <span className="text-xs text-rose-400 mb-3 font-medium">No se pudo cargar directamente</span>
-            <a 
-              href={video.videoUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" /> Abrir original
-            </a>
+      {/* Video Container con SmartVideoPlayer unificado + Carga Escalonada en Viewport */}
+      <div className="relative w-full aspect-[4/3] bg-neutral-950 flex items-center justify-center border-b border-neutral-800 overflow-hidden">
+        {isInViewport ? (
+          <div className="relative w-full h-full flex items-center justify-center">
+            {/* SmartVideoPlayer con videoRef conectado a la sincronización global */}
+            <SmartVideoPlayer
+              videoRef={videoRef}
+              src={directUrl}
+              className="w-full h-full object-contain"
+              controls
+              muted={isGlobalMuted}
+              preload="metadata"
+              aspectRatio="aspect-[4/3]"
+            />
           </div>
         ) : (
-          <video
-            ref={videoRef}
-            src={directUrl}
-            className="w-full h-full object-contain"
-            controls
-            muted={isGlobalMuted}
-            preload="metadata"
-            onError={() => setHasError(true)}
-          />
+          <div className="w-full h-full flex flex-col items-center justify-center bg-neutral-950 text-neutral-600 gap-2.5">
+            <div className="relative flex items-center justify-center">
+              <div className="w-10 h-10 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center text-neutral-600 shadow-inner">
+                <Film className="w-4 h-4 text-neutral-500 animate-pulse" />
+              </div>
+              <div className="absolute inset-0 w-10 h-10 rounded-full border-2 border-transparent border-t-teal-500 animate-spin" />
+            </div>
+            <span className="text-[10px] font-mono text-neutral-500 uppercase tracking-wider font-semibold">En cola de carga</span>
+          </div>
         )}
       </div>
 
       {/* Metadata */}
-      <div className="p-3 bg-neutral-900 flex-1 flex flex-col gap-1.5 group">
-        <div className="flex items-center justify-between">
-          <div 
-            className="text-sm font-semibold text-neutral-200 truncate cursor-pointer hover:text-teal-400 transition-colors" 
-            title={video.model} 
-            onClick={onNavigateToVideo}
-          >
-            {video.model}
+      <div className="p-3 bg-neutral-900 flex-1 flex flex-col gap-2 group">
+        {/* Cabecera: Título legible arriba y enlace */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col min-w-0 flex-1">
+            <div 
+              className="text-sm font-semibold text-neutral-100 truncate cursor-pointer hover:text-teal-400 transition-colors" 
+              title={video.title || video.model} 
+              onClick={onNavigateToVideo}
+            >
+              {video.title || video.model}
+            </div>
+            {video.title && video.model && (
+              <span className="text-[11px] text-neutral-400 font-mono truncate" title={video.model}>
+                {video.model}
+              </span>
+            )}
           </div>
           <button 
             onClick={onNavigateToVideo} 
-            className="text-neutral-500 hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-all p-1" 
+            className="text-neutral-500 hover:text-teal-400 opacity-0 group-hover:opacity-100 transition-all p-1 shrink-0 mt-0.5" 
             title="Abrir en vista detallada"
           >
             <ExternalLink className="w-4 h-4" />
           </button>
         </div>
 
+        {/* Badges de Tamaño, Variante y Software (Idénticos al Catálogo) */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {resolvedTech.modelSizeB !== undefined && (
+            <span className="px-1.5 py-0.5 rounded bg-teal-500/10 border border-teal-500/25 text-teal-400 text-[10px] font-bold font-mono">
+              {resolvedTech.modelSizeB}B
+            </span>
+          )}
+          {resolvedTech.modelVariant && (
+            <span className="px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-neutral-300 text-[10px] font-medium uppercase font-mono">
+              {resolvedTech.modelVariant}
+            </span>
+          )}
+
+          {/* Software Badge con colores e iconos idénticos al Catálogo */}
+          {resolvedTech.softwareSource === 'maestro' ? (
+            <span 
+              className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/35 text-amber-300 flex items-center gap-1.5 shadow-sm"
+              title="Generado con Maestro (Local AI Pipeline)"
+            >
+              <img 
+                src={SOFTWARE_ICONS.maestro} 
+                alt="Maestro" 
+                className="w-3 h-3 object-contain shrink-0" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
+              <span>{resolvedTech.displayToolName || 'Maestro'}</span>
+            </span>
+          ) : resolvedTech.softwareSource === 'comfyui' ? (
+            <span 
+              className="text-[10px] font-semibold px-2 py-0.5 rounded bg-purple-500/15 border border-purple-500/40 text-purple-300 flex items-center gap-1 shadow-sm"
+              title="Generado con ComfyUI"
+            >
+              <Cpu className="w-3 h-3 text-purple-400" />
+              <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
+            </span>
+          ) : (
+            <span 
+              className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center gap-1.5 shadow-sm"
+              title={`Herramienta de generación: ${resolvedTech.displayToolName || 'Wan2GP'}`}
+            >
+              <img 
+                src={SOFTWARE_ICONS.wan2gp} 
+                alt="Wan2GP" 
+                className="w-3 h-3 object-contain shrink-0" 
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.currentTarget as HTMLElement).style.display = 'none';
+                }}
+              />
+              <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
+            </span>
+          )}
+        </div>
+
         {infoLevel === 'minimal' ? (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-mono text-neutral-500 mt-auto">
-            <span>{video.steps}st</span>
-            {video.shift !== undefined && <span>· s{video.shift}</span>}
+          /* Nivel BÁSICO mejorado: compacto pero con datos técnicos clave */
+          <div className="flex flex-col gap-1.5 text-[11px] font-mono text-neutral-400 border-t border-neutral-800/60 pt-2 mt-auto">
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500">Muestreo:</span>
+              <span className="text-neutral-200 font-semibold">{video.steps} pasos {video.shift !== undefined && `· s${video.shift}`}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-neutral-500">Resolución:</span>
+              <span className="text-neutral-300">{video.width}×{video.height}</span>
+            </div>
+            {video.renderSeconds !== undefined && (
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">Render:</span>
+                <span className="text-teal-400 font-semibold">{Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span>
+              </div>
+            )}
+            {video.hardware?.gpu && (
+              <div className="flex items-center justify-between">
+                <span className="text-neutral-500">GPU:</span>
+                <span className="text-indigo-400 truncate max-w-[130px] text-right" title={`${video.hardware.gpu} (${video.hardware.vram}GB)`}>
+                  {video.hardware.gpu}
+                </span>
+              </div>
+            )}
           </div>
         ) : (
+          /* Nivel TÉCNICO exhaustivo */
           <div className="flex flex-col gap-1.5 mt-1 border-t border-neutral-800/50 pt-2.5">
             <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
               <span className="text-neutral-500">Pasos / Shift</span>
@@ -411,7 +541,7 @@ function CompareCard({
             {video.renderSeconds !== undefined && (
               <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
                 <span className="text-neutral-500">Tiempo Render</span>
-                <span className="text-teal-400">{Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span>
+                <span className="text-teal-400 font-semibold">{Math.floor(video.renderSeconds / 60)}m {Math.round(video.renderSeconds % 60)}s</span>
               </div>
             )}
             {video.hardware && (
@@ -430,19 +560,19 @@ function CompareCard({
                 </span>
               </div>
             )}
-            {video.textEncoder && (
+            {resolvedTech.textEncoder && (
               <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
                 <span className="text-neutral-500">Encoder</span>
-                <span className="text-blue-300 truncate text-right ml-2" title={video.textEncoder}>
-                  {video.textEncoder}
+                <span className="text-blue-300 truncate text-right ml-2" title={resolvedTech.textEncoder}>
+                  {resolvedTech.textEncoder}
                 </span>
               </div>
             )}
-            {video.videoVae && (
+            {resolvedTech.videoVae && (
               <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
                 <span className="text-neutral-500">VAE</span>
-                <span className="text-purple-300 truncate text-right ml-2" title={video.videoVae}>
-                  {video.videoVae}
+                <span className="text-purple-300 truncate text-right ml-2" title={resolvedTech.videoVae}>
+                  {resolvedTech.videoVae}
                 </span>
               </div>
             )}

@@ -642,19 +642,37 @@ export function DashboardView({ videos }: DashboardViewProps) {
               <Clock className="w-3.5 h-3.5" />
               Tiempo Total (s)
             </button>
-            <button
-              type="button"
-              onClick={() => setMetricMode('secPerStep')}
-              title="Normaliza el tiempo dividiendo entre los pasos de sampling (s/step). Permite comparar la velocidad pura de la GPU independientemente del número de pasos."
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                metricMode === 'secPerStep'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
-                  : 'text-neutral-400 hover:text-neutral-200 border border-transparent'
-              }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              Velocidad Normalizada (s/step)
-            </button>
+            <div className="relative group/norm-metric flex items-center">
+              <button
+                type="button"
+                onClick={() => setMetricMode('secPerStep')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  metricMode === 'secPerStep'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                    : 'text-neutral-400 hover:text-neutral-200 border border-transparent'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Velocidad Normalizada (s/step)</span>
+                <span className="p-0.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-amber-300 transition-colors">
+                  <Info className="w-3.5 h-3.5" />
+                </span>
+              </button>
+
+              {/* Tooltip informativo flotante */}
+              <div className="absolute right-0 top-full mt-2 w-72 p-3 bg-neutral-900 border border-neutral-750 text-neutral-200 text-xs rounded-xl shadow-2xl opacity-0 pointer-events-none group-hover/norm-metric:opacity-100 group-hover/norm-metric:pointer-events-auto transition-all z-30 flex flex-col gap-1.5 backdrop-blur-md">
+                <div className="flex items-center gap-1.5 text-amber-400 font-semibold text-[11px] uppercase tracking-wider">
+                  <Zap className="w-3.5 h-3.5" />
+                  ¿Qué es la Velocidad Normalizada?
+                </div>
+                <p className="text-[11px] text-neutral-300 leading-relaxed">
+                  Calcula el tiempo promedio por cada paso de sampling (<code className="text-amber-300 bg-neutral-950 px-1 py-0.5 rounded font-mono">Tiempo Total ÷ Pasos</code>).
+                </p>
+                <p className="text-[10px] text-neutral-400 leading-normal border-t border-neutral-800 pt-1.5">
+                  Permite comparar la velocidad y potencia bruta de la GPU aislando si una generación se hizo a 15, 25 o 50 pasos. Menor valor = Mayor rapidez.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -664,9 +682,6 @@ export function DashboardView({ videos }: DashboardViewProps) {
             <span className="text-xs font-semibold text-neutral-300 flex items-center gap-2">
               <Filter className="w-3.5 h-3.5 text-teal-400" />
               Filtros Cruzados del Análisis
-            </span>
-            <span className="text-[11px] text-neutral-400 font-mono">
-              Mostrando <strong className="text-neutral-200">{dashboardVideos.length}</strong> de {videos.length} vídeos
             </span>
           </div>
 
