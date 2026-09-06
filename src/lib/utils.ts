@@ -1486,3 +1486,93 @@ export function cleanForFirestore(obj: any): any {
   }
   return obj;
 }
+
+export interface VideoEfficiencyMetrics {
+  megapixels: number;
+  secPerStep: number;
+  secPerStepPerMegapixel: number;
+  megapixelsPerSecond: number;
+  ratingLabel: 'Ultrarrápido' | 'Óptimo' | 'Equilibrado' | 'Exigente' | 'Intensivo';
+  ratingColor: string;
+  ratingBg: string;
+  ratingBorder: string;
+  score: number;
+}
+
+/**
+ * Calculates technical efficiency indicators:
+ * s/step relative to pixel resolution in Megapixels and computes efficiency score.
+ */
+export function calculateEfficiencyMetrics(
+  renderSeconds?: number,
+  steps?: number,
+  width?: number,
+  height?: number
+): VideoEfficiencyMetrics | null {
+  if (
+    typeof renderSeconds !== 'number' ||
+    renderSeconds <= 0 ||
+    typeof steps !== 'number' ||
+    steps <= 0 ||
+    !width ||
+    !height ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    return null;
+  }
+
+  const megapixels = (width * height) / 1_000_000;
+  const secPerStep = renderSeconds / steps;
+  // Seconds per step per megapixel (normalized computation cost per sampling step at 1MP resolution)
+  const secPerStepPerMegapixel = secPerStep / megapixels;
+  // Megapixels rendered per second across all steps
+  const megapixelsPerSecond = (megapixels * steps) / renderSeconds;
+
+  // Normalized score (0 to 100)
+  const score = Math.max(5, Math.min(100, Math.round(100 / (1 + (secPerStepPerMegapixel / 3.5)))));
+
+  let ratingLabel: VideoEfficiencyMetrics['ratingLabel'] = 'Equilibrado';
+  let ratingColor = 'text-blue-300';
+  let ratingBg = 'bg-blue-950/40';
+  let ratingBorder = 'border-blue-800/60';
+
+  if (secPerStepPerMegapixel < 1.6) {
+    ratingLabel = 'Ultrarrápido';
+    ratingColor = 'text-emerald-300';
+    ratingBg = 'bg-emerald-950/40';
+    ratingBorder = 'border-emerald-700/60';
+  } else if (secPerStepPerMegapixel < 3.2) {
+    ratingLabel = 'Óptimo';
+    ratingColor = 'text-teal-300';
+    ratingBg = 'bg-teal-950/40';
+    ratingBorder = 'border-teal-700/60';
+  } else if (secPerStepPerMegapixel < 5.8) {
+    ratingLabel = 'Equilibrado';
+    ratingColor = 'text-indigo-300';
+    ratingBg = 'bg-indigo-950/40';
+    ratingBorder = 'border-indigo-800/60';
+  } else if (secPerStepPerMegapixel < 9.5) {
+    ratingLabel = 'Exigente';
+    ratingColor = 'text-amber-300';
+    ratingBg = 'bg-amber-950/40';
+    ratingBorder = 'border-amber-800/60';
+  } else {
+    ratingLabel = 'Intensivo';
+    ratingColor = 'text-rose-300';
+    ratingBg = 'bg-rose-950/40';
+    ratingBorder = 'border-rose-800/60';
+  }
+
+  return {
+    megapixels: Math.round(megapixels * 100) / 100,
+    secPerStep: Math.round(secPerStep * 100) / 100,
+    secPerStepPerMegapixel: Math.round(secPerStepPerMegapixel * 100) / 100,
+    megapixelsPerSecond: Math.round(megapixelsPerSecond * 1000) / 1000,
+    score,
+    ratingLabel,
+    ratingColor,
+    ratingBg,
+    ratingBorder,
+  };
+}

@@ -2,13 +2,14 @@ import React, { useState, useMemo } from 'react';
 import { VideoRecord } from '../../types';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer,
-  PieChart, Pie, Cell
+  PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis
 } from 'recharts';
 import { 
   Cpu, Clock, Sliders, Layers, Sparkles, Filter, Info, AlertCircle, 
   Zap, RotateCcw, Box, Monitor, Gauge, ArrowRight, CheckCircle2, TrendingDown, TrendingUp,
-  Folder, Wrench, Film, AppWindow, Compass, X
+  Folder, Wrench, Film, AppWindow, Compass, X, Activity, Award, Target
 } from 'lucide-react';
+import { calculateEfficiencyMetrics } from '../../lib/utils';
 
 interface DashboardViewProps {
   videos: VideoRecord[];
@@ -42,6 +43,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
 
   // Phase 2: Performance Metric Mode (Total Render Time vs Normalized s/step)
   const [metricMode, setMetricMode] = useState<MetricMode>('renderSeconds');
+  const [scatterGroupBy, setScatterGroupBy] = useState<'gpu' | 'model'>('gpu');
 
   // Discover all GPUs available across all videos
   const availableGpus = useMemo(() => {
@@ -533,6 +535,241 @@ export function DashboardView({ videos }: DashboardViewProps) {
       avgShiftData 
     };
   }, [dashboardVideos, metricMode]);
+
+  // Phase 2 (3.2): Scatter Plot Data (Pasos vs Tiempo de Render con agrupaciones por GPU/Modelo)
+  const scatterData = useMemo(() => {
+    const groups: Record<string, Array<{
+      x: number;
+      y: number;
+      title: string;
+      model: string;
+      gpu: string;
+      resolution: string;
+      secPerStep: number;
+      secPerStepPerMegapixel?: number;
+      efficiencyLabel?: string;
+      efficiencyScore?: number;
+    }>> = {};
+
+    dashboardVideos.forEach(v => {
+      if (typeof v.steps === 'number' && v.steps > 0 && typeof v.renderSeconds === 'number' && v.renderSeconds > 0) {
+        const gpuName = v.hardware?.gpu?.trim() || 'Sin GPU especificada';
+        const fullModel = getFullModelName(v);
+        const groupKey = scatterGroupBy === 'gpu' ? gpuName : fullModel;
+
+        const eff = calculateEfficiencyMetrics(v.renderSeconds, v.steps, v.width, v.height);
+        const secPerStep = v.renderSeconds / v.steps;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = [];
+        }
+
+        groups[groupKey].push({
+          x: v.steps,
+          y: Math.round(v.renderSeconds * 10) / 10,
+          title: v.title || 'Sin título',
+          model: fullModel,
+          gpu: gpuName,
+          resolution: v.width && v.height ? `${v.width}x${v.height}` : 'N/A',
+          secPerStep: Math.round(secPerStep * 100) / 100,
+          secPerStepPerMegapixel: eff?.secPerStepPerMegapixel,
+          efficiencyLabel: eff?.ratingLabel,
+          efficiencyScore: eff?.score,
+        });
+      }
+    });
+
+    const series = Object.entries(groups).map(([name, points], idx) => {
+      const avgSecPerStep = points.reduce((sum, p) => sum + p.secPerStep, 0) / points.length;
+      return {
+        name,
+        color: GPU_COLORS[idx % GPU_COLORS.length],
+        points,
+        avgSecPerStep: Math.round(avgSecPerStep * 100) / 100,
+        count: points.length,
+      };
+    }).sort((a, b) => a.avgSecPerStep - b.avgSecPerStep);
+
+    return series;
+  }, [dashboardVideos, scatterGroupBy]);
+
+  // Phase 2 (3.1): Radar / Benchmark de Eficiencia Técnica (s/step relativo a megapíxeles y VRAM)
+  const efficiencyBenchmark = useMemo(() => {
+    interface ConfigBucket {
+      model: string;
+      resolution: string;
+      gpu: string;
+      vram?: number;
+      totalSecPerStep: number;
+      totalSecPerStepPerMp: number;
+      totalMpPerSec: number;
+      megapixels: number;
+      scores: number[];
+      count: number;
+      ratings: Record<string, number>;
+    }
+
+    const map: Record<string, ConfigBucket> = {};
+
+    dashboardVideos.forEach(v => {
+      if (typeof v.renderSeconds !== 'number' || v.renderSeconds <= 0 || !v.steps || !v.width || !v.height) return;
+      const eff = calculateEfficiencyMetrics(v.renderSeconds, v.steps, v.width, v.height);
+      if (!eff) return;
+
+      const fullModel = getFullModelName(v);
+      const res = `${v.width}x${v.height}`;
+      const gpu = v.hardware?.gpu?.trim() || 'Sin GPU';
+      const key = `${fullModel}__${res}__${gpu}`;
+
+      if (!map[key]) {
+        map[key] = {
+          model: fullModel,
+          resolution: res,
+          gpu,
+          vram: v.hardware?.vram,
+          totalSecPerStep: 0,
+          totalSecPerStepPerMp: 0,
+          totalMpPerSec: 0,
+          megapixels: eff.megapixels,
+          scores: [],
+          count: 0,
+          ratings: {},
+        };
+      }
+
+      map[key].totalSecPerStep += eff.secPerStep;
+      map[key].totalSecPerStepPerMp += eff.secPerStepPerMegapixel;
+      map[key].totalMpPerSec += eff.megapixelsPerSecond;
+      map[key].scores.push(eff.score);
+      map[key].count += 1;
+      map[key].ratings[eff.ratingLabel] = (map[key].ratings[eff.ratingLabel] || 0) + 1;
+    });
+
+    const list = Object.values(map).map(b => {
+      const avgSecPerStep = Math.round((b.totalSecPerStep / b.count) * 100) / 100;
+      const avgSecPerStepPerMp = Math.round((b.totalSecPerStepPerMp / b.count) * 100) / 100;
+      const avgMpPerSec = Math.round((b.totalMpPerSec / b.count) * 1000) / 1000;
+      const avgScore = Math.round(b.scores.reduce((sum, s) => sum + s, 0) / b.scores.length);
+
+      let ratingLabel = 'Equilibrado';
+      let ratingColor = 'text-blue-300';
+      let ratingBg = 'bg-blue-950/40';
+      let ratingBorder = 'border-blue-800/60';
+
+      if (avgSecPerStepPerMp < 1.6) {
+        ratingLabel = 'Ultrarrápido';
+        ratingColor = 'text-emerald-300';
+        ratingBg = 'bg-emerald-950/40';
+        ratingBorder = 'border-emerald-700/60';
+      } else if (avgSecPerStepPerMp < 3.2) {
+        ratingLabel = 'Óptimo';
+        ratingColor = 'text-teal-300';
+        ratingBg = 'bg-teal-950/40';
+        ratingBorder = 'border-teal-700/60';
+      } else if (avgSecPerStepPerMp < 5.8) {
+        ratingLabel = 'Equilibrado';
+        ratingColor = 'text-indigo-300';
+        ratingBg = 'bg-indigo-950/40';
+        ratingBorder = 'border-indigo-800/60';
+      } else if (avgSecPerStepPerMp < 9.5) {
+        ratingLabel = 'Exigente';
+        ratingColor = 'text-amber-300';
+        ratingBg = 'bg-amber-950/40';
+        ratingBorder = 'border-amber-800/60';
+      } else {
+        ratingLabel = 'Intensivo';
+        ratingColor = 'text-rose-300';
+        ratingBg = 'bg-rose-950/40';
+        ratingBorder = 'border-rose-800/60';
+      }
+
+      return {
+        ...b,
+        avgSecPerStep,
+        avgSecPerStepPerMp,
+        avgMpPerSec,
+        avgScore,
+        ratingLabel,
+        ratingColor,
+        ratingBg,
+        ratingBorder,
+      };
+    }).sort((a, b) => a.avgSecPerStepPerMp - b.avgSecPerStepPerMp);
+
+    // Distribution
+    const distribution: Record<string, number> = {
+      'Ultrarrápido': 0,
+      'Óptimo': 0,
+      'Equilibrado': 0,
+      'Exigente': 0,
+      'Intensivo': 0
+    };
+    list.forEach(item => {
+      distribution[item.ratingLabel] = (distribution[item.ratingLabel] || 0) + item.count;
+    });
+
+    return {
+      ranking: list,
+      distribution,
+      totalAnalyzed: list.reduce((sum, item) => sum + item.count, 0)
+    };
+  }, [dashboardVideos]);
+
+  const ScatterTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0]?.payload;
+      if (!data) return null;
+      return (
+        <div className="bg-neutral-900 border border-neutral-750 p-3.5 rounded-xl shadow-2xl z-50 max-w-sm backdrop-blur-md">
+          <p className="text-neutral-100 text-xs font-bold mb-1 truncate max-w-[240px]">
+            {data.title}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-neutral-950 border border-neutral-800 text-teal-300">
+              {data.model}
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-neutral-950 border border-neutral-800 text-sky-300">
+              {data.gpu}
+            </span>
+            {data.resolution && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono text-neutral-400 bg-neutral-950 border border-neutral-800">
+                {data.resolution}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5 border-t border-neutral-800 pt-2 text-xs font-mono">
+            <div className="flex items-center justify-between text-neutral-300">
+              <span className="font-sans text-neutral-400">Pasos:</span>
+              <span className="font-bold text-neutral-100">{data.x} pasos</span>
+            </div>
+            <div className="flex items-center justify-between text-neutral-300">
+              <span className="font-sans text-neutral-400">Tiempo Render:</span>
+              <span className="font-bold text-teal-300">{formatTime(data.y)} ({data.y}s)</span>
+            </div>
+            <div className="flex items-center justify-between text-neutral-300">
+              <span className="font-sans text-neutral-400">Velocidad:</span>
+              <span className="font-bold text-amber-300">{data.secPerStep} s/step</span>
+            </div>
+            {data.secPerStepPerMegapixel !== undefined && (
+              <div className="flex items-center justify-between text-neutral-300">
+                <span className="font-sans text-neutral-400">Eficiencia Normalizada:</span>
+                <span className="font-bold text-sky-300">{data.secPerStepPerMegapixel} s/step/MP</span>
+              </div>
+            )}
+            {data.efficiencyLabel && (
+              <div className="flex items-center justify-between text-neutral-300 pt-1 border-t border-neutral-800/80">
+                <span className="font-sans text-neutral-400">Calificación:</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-sans font-bold bg-neutral-950 border border-neutral-800 text-neutral-200">
+                  {data.efficiencyLabel} ({data.efficiencyScore}/100)
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -1318,6 +1555,237 @@ export function DashboardView({ videos }: DashboardViewProps) {
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {/* PHASE 2 (3.2): GRÁFICO DE DISPERSIÓN INTERACTIVO (PASOS VS TIEMPO) */}
+              {scatterData.length > 0 && (
+                <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex flex-col gap-4 lg:col-span-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-3">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-emerald-400" />
+                        <h4 className="text-sm font-bold text-neutral-200">
+                          Dispersión de Rendimiento: Pasos vs Tiempo de Render
+                        </h4>
+                      </div>
+                      <p className="text-xs text-neutral-400">
+                        Visualiza la pendiente de aceleración de cada hardware o modelo (menor inclinación = mayor velocidad por paso).
+                      </p>
+                    </div>
+
+                    {/* Selector de agrupación / color */}
+                    <div className="flex items-center gap-1.5 self-start sm:self-center bg-neutral-950 p-1 rounded-xl border border-neutral-800">
+                      <span className="text-[11px] text-neutral-400 font-medium px-2">Colorear por:</span>
+                      <button
+                        onClick={() => setScatterGroupBy('gpu')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          scatterGroupBy === 'gpu'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'text-neutral-400 hover:text-neutral-200'
+                        }`}
+                      >
+                        GPU
+                      </button>
+                      <button
+                        onClick={() => setScatterGroupBy('model')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                          scatterGroupBy === 'model'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : 'text-neutral-400 hover:text-neutral-200'
+                        }`}
+                      >
+                        Modelo
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Scatter Chart Container */}
+                  <div className="h-80 w-full pt-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ScatterChart margin={{ top: 10, right: 25, bottom: 20, left: 10 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
+                        <XAxis 
+                          type="number" 
+                          dataKey="x" 
+                          name="Pasos" 
+                          stroke="#737373" 
+                          fontSize={12}
+                          unit="p"
+                          label={{ value: 'Pasos de Muestreo (Steps)', position: 'insideBottom', offset: -12, fill: '#a3a3a3', fontSize: 11 }} 
+                        />
+                        <YAxis 
+                          type="number" 
+                          dataKey="y" 
+                          name="Tiempo" 
+                          stroke="#737373" 
+                          fontSize={12}
+                          tickFormatter={(v) => formatTime(v)}
+                          label={{ value: 'Tiempo Render', angle: -90, position: 'insideLeft', offset: 0, fill: '#a3a3a3', fontSize: 11 }} 
+                        />
+                        <ZAxis range={[60, 60]} />
+                        <RechartsTooltip content={<ScatterTooltip />} cursor={{ strokeDasharray: '3 3', stroke: '#525252' }} />
+                        <Legend 
+                          verticalAlign="top" 
+                          align="right"
+                          wrapperStyle={{ paddingBottom: '10px', fontSize: '11px' }}
+                        />
+                        {scatterData.map((series) => (
+                          <Scatter
+                            key={`scatter-series-${series.name}`}
+                            name={`${series.name} (${series.avgSecPerStep} s/step)`}
+                            data={series.points}
+                            fill={series.color}
+                          />
+                        ))}
+                      </ScatterChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Resumen de pendientes / Velocidades medias por grupo */}
+                  <div className="pt-3 border-t border-neutral-800/80 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-neutral-400 font-medium mr-1">Pendiente media (Velocidad):</span>
+                    {scatterData.map((series) => (
+                      <div
+                        key={`slope-pill-${series.name}`}
+                        className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-neutral-950 border border-neutral-800 text-xs"
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: series.color }} />
+                        <span className="font-semibold text-neutral-200">{series.name}</span>
+                        <span className="font-mono text-emerald-400 font-bold">{series.avgSecPerStep} s/step</span>
+                        <span className="text-[10px] text-neutral-500 font-mono">(n={series.count})</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* PHASE 2 (3.1): RADAR / BENCHMARK DE EFICIENCIA TÉCNICA (s/step relativo a megapíxeles y VRAM) */}
+              {efficiencyBenchmark.ranking.length > 0 && (
+                <div className="bg-neutral-900 border border-neutral-800 p-6 rounded-2xl flex flex-col gap-5 lg:col-span-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-800 pb-4">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-400" />
+                        <h4 className="text-sm font-bold text-neutral-200">
+                          Indicador de Eficiencia Técnica y Ratio Calidad / Tiempo
+                        </h4>
+                      </div>
+                      <p className="text-xs text-neutral-400">
+                        Cálculo estandarizado en <strong>s/step/MP</strong> (segundos por paso normalizados por megapíxel de resolución) y VRAM.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs text-neutral-400 bg-neutral-950 px-3 py-1.5 rounded-xl border border-neutral-800">
+                      <Target className="w-3.5 h-3.5 text-teal-400" />
+                      <span>{efficiencyBenchmark.totalAnalyzed} ejecuciones analizadas</span>
+                    </div>
+                  </div>
+
+                  {/* Distribución por nivel de eficiencia */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                    <div className="p-3 rounded-xl bg-emerald-950/25 border border-emerald-800/40 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-emerald-400 uppercase">Ultrarrápido</span>
+                        <span className="text-[10px] font-mono text-emerald-300">&lt;1.6 s/MP</span>
+                      </div>
+                      <span className="text-xl font-bold font-mono text-emerald-200">
+                        {efficiencyBenchmark.distribution['Ultrarrápido']}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-teal-950/25 border border-teal-800/40 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-teal-400 uppercase">Óptimo</span>
+                        <span className="text-[10px] font-mono text-teal-300">1.6 - 3.2</span>
+                      </div>
+                      <span className="text-xl font-bold font-mono text-teal-200">
+                        {efficiencyBenchmark.distribution['Óptimo']}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-indigo-950/25 border border-indigo-800/40 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-indigo-400 uppercase">Equilibrado</span>
+                        <span className="text-[10px] font-mono text-indigo-300">3.2 - 5.8</span>
+                      </div>
+                      <span className="text-xl font-bold font-mono text-indigo-200">
+                        {efficiencyBenchmark.distribution['Equilibrado']}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-amber-950/25 border border-amber-800/40 flex flex-col gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-amber-400 uppercase">Exigente</span>
+                        <span className="text-[10px] font-mono text-amber-300">5.8 - 9.5</span>
+                      </div>
+                      <span className="text-xl font-bold font-mono text-amber-200">
+                        {efficiencyBenchmark.distribution['Exigente']}
+                      </span>
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-rose-950/25 border border-rose-800/40 flex flex-col gap-1 col-span-2 sm:col-span-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-rose-400 uppercase">Intensivo</span>
+                        <span className="text-[10px] font-mono text-rose-300">&gt;9.5 s/MP</span>
+                      </div>
+                      <span className="text-xl font-bold font-mono text-rose-200">
+                        {efficiencyBenchmark.distribution['Intensivo']}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tabla / Ranking comparativo de configuraciones */}
+                  <div className="overflow-x-auto rounded-xl border border-neutral-800">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-neutral-950/90 text-neutral-400 border-b border-neutral-800 font-semibold uppercase tracking-wider text-[10px]">
+                          <th className="py-2.5 px-3">#</th>
+                          <th className="py-2.5 px-3">Modelo</th>
+                          <th className="py-2.5 px-3">Resolución</th>
+                          <th className="py-2.5 px-3">GPU & VRAM</th>
+                          <th className="py-2.5 px-3 text-right">Velocidad (s/step)</th>
+                          <th className="py-2.5 px-3 text-right">Eficiencia (s/step/MP)</th>
+                          <th className="py-2.5 px-3 text-right">Throughput (MP/s)</th>
+                          <th className="py-2.5 px-3 text-center">Calificación</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-800/60 font-mono">
+                        {efficiencyBenchmark.ranking.map((cfg, index) => (
+                          <tr key={`cfg-${index}`} className="hover:bg-neutral-800/30 transition-colors">
+                            <td className="py-2 px-3 text-neutral-500 font-bold">{index + 1}</td>
+                            <td className="py-2 px-3 font-sans font-medium text-neutral-200">
+                              {cfg.model}
+                            </td>
+                            <td className="py-2 px-3 text-neutral-300">
+                              <span>{cfg.resolution}</span>
+                              <span className="text-neutral-500 text-[10px] ml-1">({cfg.megapixels} MP)</span>
+                            </td>
+                            <td className="py-2 px-3 font-sans text-neutral-300">
+                              <span className="text-sky-300 font-medium">{cfg.gpu}</span>
+                              {cfg.vram && (
+                                <span className="text-neutral-500 text-[10px] ml-1 font-mono">({cfg.vram}G)</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-right text-amber-300 font-bold">
+                              {cfg.avgSecPerStep}s
+                            </td>
+                            <td className="py-2 px-3 text-right text-teal-300 font-bold">
+                              {cfg.avgSecPerStepPerMp}
+                            </td>
+                            <td className="py-2 px-3 text-right text-neutral-400">
+                              {cfg.avgMpPerSec}
+                            </td>
+                            <td className="py-2 px-3 text-center font-sans">
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.ratingBg} ${cfg.ratingBorder} ${cfg.ratingColor}`}>
+                                {cfg.ratingLabel} ({cfg.avgScore}/100)
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}

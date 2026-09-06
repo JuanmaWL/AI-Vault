@@ -30,9 +30,10 @@ import {
   Calendar,
   User,
   Sliders,
-  Clapperboard
+  Clapperboard,
+  Zap
 } from 'lucide-react';
-import { getPlayableVideoUrl, extractTechnicalDetails, extractCreationDateFromText, SOFTWARE_ICONS, GPU_LOGOS, getGpuVendor, formatBytes } from '../../lib/utils';
+import { getPlayableVideoUrl, extractTechnicalDetails, extractCreationDateFromText, SOFTWARE_ICONS, GPU_LOGOS, getGpuVendor, formatBytes, calculateEfficiencyMetrics } from '../../lib/utils';
 import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
 
 interface CinemaSpotlightModalProps {
@@ -163,6 +164,11 @@ export function CinemaSpotlightModal({
       vendor,
       logo: vendor === 'nvidia' ? GPU_LOGOS.nvidia : vendor === 'amd' ? GPU_LOGOS.amd : null
     };
+  }, [currentVideo]);
+
+  const efficiencyMetrics = useMemo(() => {
+    if (!currentVideo) return null;
+    return calculateEfficiencyMetrics(currentVideo.renderSeconds, currentVideo.steps, currentVideo.width, currentVideo.height);
   }, [currentVideo]);
 
   // Creation date (prioritizes actual creation timestamp extracted from filename/prompt/metadata, fallback to upload date)
@@ -791,6 +797,24 @@ export function CinemaSpotlightModal({
                     <span className="text-[11px] text-neutral-500 font-mono">GPU No Detectada</span>
                   )}
                 </div>
+
+                {/* Benchmark de Eficiencia Técnica */}
+                {efficiencyMetrics && (
+                  <div className={`col-span-2 sm:col-span-3 p-2 rounded-xl border flex items-center justify-between gap-2 text-xs ${efficiencyMetrics.ratingBg} ${efficiencyMetrics.ratingBorder} ${efficiencyMetrics.ratingColor}`}>
+                    <div className="flex items-center gap-1.5 font-bold">
+                      <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>Eficiencia: {efficiencyMetrics.secPerStepPerMegapixel} s/step/MP</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-neutral-400 hidden sm:inline font-mono">
+                        {efficiencyMetrics.secPerStep} s/step @ {efficiencyMetrics.megapixels} MP
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md text-[10px] uppercase font-bold font-sans bg-neutral-950/70 border border-neutral-800">
+                        {efficiencyMetrics.ratingLabel} ({efficiencyMetrics.score}/100)
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* SECCIÓN 3: PIPELINE & ENCODERS (En modo detallado) */}

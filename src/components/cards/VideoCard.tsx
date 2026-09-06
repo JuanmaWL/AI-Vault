@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { VideoRecord } from '../../types';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight, Clapperboard } from 'lucide-react';
-import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../../lib/utils';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight, Clapperboard, Zap } from 'lucide-react';
+import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl, calculateEfficiencyMetrics } from '../../lib/utils';
 import { useInViewport } from '../../hooks/useInViewport';
 import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
 
@@ -146,6 +146,10 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
       displayToolName,
     };
   }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.rawMetadata]);
+
+  const efficiencyMetrics = useMemo(() => {
+    return calculateEfficiencyMetrics(video.renderSeconds, video.steps, video.width, video.height);
+  }, [video.renderSeconds, video.steps, video.width, video.height]);
 
   const hasTechDetails = Boolean(
     resolvedTech.textEncoder ||
@@ -652,6 +656,20 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 <Clock className="w-3.5 h-3.5 text-teal-400" />
                 <span className="text-neutral-400">FPS:</span>
                 <span className="text-neutral-200 font-medium font-mono">{fpsText}</span>
+              </div>
+            )}
+
+            {/* Indicador de Eficiencia Técnica / Benchmark */}
+            {efficiencyMetrics && (
+              <div 
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium ${efficiencyMetrics.ratingBg} ${efficiencyMetrics.ratingBorder} ${efficiencyMetrics.ratingColor}`}
+                title={`Eficiencia Técnica: ${efficiencyMetrics.secPerStep} s/step en ${efficiencyMetrics.megapixels} MP (${efficiencyMetrics.secPerStepPerMegapixel} s/step/MP normalizado). Rendimiento: ${efficiencyMetrics.score}/100`}
+              >
+                <Zap className="w-3.5 h-3.5 shrink-0" />
+                <span className="font-mono font-bold">{efficiencyMetrics.secPerStepPerMegapixel} s/step/MP</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded font-sans uppercase font-bold bg-neutral-950/60 border border-neutral-800">
+                  {efficiencyMetrics.ratingLabel}
+                </span>
               </div>
             )}
           </div>
