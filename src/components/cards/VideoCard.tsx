@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { VideoRecord } from '../../types';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight, Clapperboard } from 'lucide-react';
 import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../../lib/utils';
 import { useInViewport } from '../../hooks/useInViewport';
 import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
@@ -13,9 +13,10 @@ interface VideoCardProps {
   onDeleteClick?: () => void;
   onEditClick?: () => void;
   onCompareClick?: () => void;
+  onCinemaClick?: () => void;
 }
 
-export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onCompareClick }: VideoCardProps) {
+export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onCompareClick, onCinemaClick }: VideoCardProps) {
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -234,7 +235,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
         </div>
 
         {/* Contenedor del video */}
-        <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-neutral-800 flex items-center justify-center">
+        <div className="relative w-full aspect-video bg-black rounded-xl overflow-hidden shadow-2xl border border-neutral-800 flex items-center justify-center group/player">
           {selectionMode && (
             <div className="absolute top-3 left-3 z-20">
               <input
@@ -244,6 +245,21 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 className="w-5 h-5 rounded border-neutral-700 text-teal-500 focus:ring-teal-500 bg-neutral-900 cursor-pointer shadow-md"
               />
             </div>
+          )}
+
+          {/* Botón de Modo Cine flotante */}
+          {onCinemaClick && !selectionMode && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCinemaClick();
+              }}
+              className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-neutral-950/85 hover:bg-neutral-900 text-teal-300 hover:text-teal-200 border border-teal-500/40 hover:border-teal-400/70 shadow-lg backdrop-blur-md transition-all cursor-pointer hover:scale-105 active:scale-95 text-xs font-semibold"
+              title="Abrir en Modo Cine (Spotlight)"
+            >
+              <Clapperboard className="w-3.5 h-3.5 text-teal-400" />
+              <span className="hidden sm:inline text-[11px] font-mono">Modo Cine</span>
+            </button>
           )}
 
           {isInViewport ? (
@@ -363,56 +379,56 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 )}
               </div>
 
-              {/* Botones a la derecha: Toggle Detalles Técnicos y Acciones */}
-              <div className="flex items-center gap-2 shrink-0">
+              {/* Botones a la derecha: Toggle Info Técnica y Acciones compactas */}
+              <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
                 {hasTechDetails && (
                   <button
                     type="button"
                     onClick={handleToggleTechDetails}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
                       showTechDetails
                         ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                        : 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-neutral-750'
+                        : 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
                     }`}
                     title={showTechDetails ? "Ocultar detalles técnicos" : "Ver detalles técnicos"}
                   >
-                    <Cpu className={`w-3.5 h-3.5 ${showTechDetails ? 'text-cyan-400' : 'text-neutral-400'}`} />
-                    <span className="hidden sm:inline">Detalles técnicos</span>
-                    {showTechDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    <Cpu className={`w-3 h-3 ${showTechDetails ? 'text-cyan-400' : 'text-neutral-400'}`} />
+                    <span className="hidden md:inline">Técnica</span>
+                    {showTechDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   </button>
                 )}
 
                 {/* Botones de acción */}
                 {!selectionMode && (
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1">
                     {onCompareClick && (
                       <button
                         onClick={onCompareClick}
-                        className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 hover:text-violet-200 border border-violet-500/40 hover:border-violet-400/70 transition-all shadow-sm cursor-pointer active:scale-95"
-                        title="Comparar 1 vs 1 (pantalla dividida con otro vídeo)"
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold rounded-lg bg-violet-500/15 hover:bg-violet-500/25 text-violet-300 hover:text-violet-200 border border-violet-500/40 hover:border-violet-400/70 transition-all shadow-sm cursor-pointer active:scale-95"
+                        title="Comparar 1 vs 1"
                       >
-                        <SplitSquareVertical className="w-3.5 h-3.5 text-violet-400" />
-                        <span>Comparar 1 vs 1</span>
+                        <SplitSquareVertical className="w-3 h-3 text-violet-400" />
+                        <span>1 vs 1</span>
                       </button>
                     )}
                     {onEditClick && (
                       <button
                         onClick={onEditClick}
                         aria-label="Editar vídeo"
-                        className="p-1.5 text-neutral-500 hover:text-teal-400 hover:bg-neutral-800 rounded-lg transition-colors border border-transparent hover:border-neutral-700 cursor-pointer"
+                        className="p-1 text-neutral-500 hover:text-teal-400 hover:bg-neutral-800 rounded-lg transition-colors border border-transparent hover:border-neutral-700 cursor-pointer"
                         title="Editar vídeo"
                       >
-                        <Edit3 className="w-4 h-4" />
+                        <Edit3 className="w-3.5 h-3.5" />
                       </button>
                     )}
                     {onDeleteClick && (
                       <button
                         onClick={onDeleteClick}
                         aria-label="Borrar vídeo"
-                        className="p-1.5 text-neutral-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors border border-transparent hover:border-rose-900/50 cursor-pointer"
+                        className="p-1 text-neutral-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition-colors border border-transparent hover:border-rose-900/50 cursor-pointer"
                         title="Borrar vídeo"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>

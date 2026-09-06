@@ -414,11 +414,25 @@ export function extractTechnicalDetails(
     localTool = 'Wan2GP';
   }
 
-  // 2. Base Model Detection
+  // 2. Base Model Detection (prioritize Minimax H3 / FL2VA / Ref2VA / SCAIL, and distinguish Wan 2.1 model from WanGP tool name)
   let baseModel: string | undefined = undefined;
-  if (technicalModelStr.includes('minimax') || technicalModelStr.includes('h3')) {
+  if (
+    technicalModelStr.includes('minimax') ||
+    technicalModelStr.includes('h3') ||
+    technicalModelStr.includes('fl2va') ||
+    technicalModelStr.includes('ref2va') ||
+    technicalModelStr.includes('scail')
+  ) {
     baseModel = 'Minimax H3';
-  } else if (technicalModelStr.includes('wan') || technicalModelStr.includes('2.1')) {
+  } else if (
+    /\bwan\s*2\.?1\b/i.test(technicalModelStr) ||
+    /\bwan2\.1\b/i.test(technicalModelStr) ||
+    /\bwan[-_]?14b\b/i.test(technicalModelStr) ||
+    /\bwan[-_]?1\.3b\b/i.test(technicalModelStr) ||
+    /\bwan[-_]t2v\b/i.test(technicalModelStr) ||
+    /\bwan[-_]i2v\b/i.test(technicalModelStr) ||
+    (technicalModelStr.includes('wan') && !technicalModelStr.includes('wangp') && !technicalModelStr.includes('wan2gp'))
+  ) {
     baseModel = 'Wan 2.1';
   } else if (technicalModelStr.includes('ltx')) {
     baseModel = technicalModelStr.includes('2.5') ? 'LTX 2.5' : 'LTX 2.3';

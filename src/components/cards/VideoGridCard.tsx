@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { VideoRecord } from '../../types';
-import { Copy, Check, Sparkles, Edit3, Trash2, Clock, Cpu, User, Tag, ExternalLink, Calendar, SplitSquareVertical, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Check, Sparkles, Edit3, Trash2, Clock, Cpu, User, Tag, ExternalLink, Calendar, SplitSquareVertical, ChevronDown, ChevronUp, Clapperboard } from 'lucide-react';
 import { extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../../lib/utils';
 import { useInViewport } from '../../hooks/useInViewport';
 import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
@@ -13,6 +13,7 @@ interface VideoGridCardProps {
   onDeleteClick?: () => void;
   onEditClick?: () => void;
   onCompareClick?: () => void;
+  onCinemaClick?: () => void;
 }
 
 export function VideoGridCard({
@@ -23,6 +24,7 @@ export function VideoGridCard({
   onDeleteClick,
   onEditClick,
   onCompareClick,
+  onCinemaClick,
 }: VideoGridCardProps) {
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
@@ -171,6 +173,21 @@ export function VideoGridCard({
             </span>
           )}
         </div>
+
+        {/* Botón flotante de Modo Cine en la esquina superior izquierda si no está en modo selección */}
+        {onCinemaClick && !selectionMode && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onCinemaClick();
+            }}
+            className="absolute top-2.5 left-2.5 z-10 flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-950/85 hover:bg-neutral-900 text-teal-300 hover:text-teal-200 border border-teal-500/40 hover:border-teal-400/70 shadow-lg backdrop-blur-md transition-all cursor-pointer hover:scale-105 active:scale-95 text-[11px] font-semibold"
+            title="Abrir en Modo Cine (Spotlight)"
+          >
+            <Clapperboard className="w-3.5 h-3.5 text-teal-400" />
+            <span className="text-[10px] font-mono">Cine</span>
+          </button>
+        )}
 
         {isInViewport ? (
           <SmartVideoPlayer

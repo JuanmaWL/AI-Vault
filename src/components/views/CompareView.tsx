@@ -247,13 +247,15 @@ export function CompareView({ videos, sharedPrompt, onNavigateToVideo, onOpenDua
           <select 
             value={playbackRate} 
             onChange={e => setPlaybackRate(Number(e.target.value))} 
-            className="ml-1 sm:ml-2 bg-neutral-800 border border-neutral-700 text-neutral-200 text-sm font-semibold rounded-lg px-2 py-1.5 focus:outline-none focus:border-teal-500 cursor-pointer"
-            title="Velocidad de reproducción"
+            className="ml-1 sm:ml-2 bg-neutral-800 border border-neutral-700 text-neutral-200 text-xs sm:text-sm font-semibold rounded-lg px-2 py-1.5 focus:outline-none focus:border-teal-500 cursor-pointer"
+            title="Velocidad de reproducción sincronizada"
           >
-            <option value={0.25}>0.25x</option>
+            <option value={0.25}>0.25x (Lenta)</option>
             <option value={0.5}>0.5x</option>
-            <option value={1}>1x</option>
-            <option value={2}>2x</option>
+            <option value={0.75}>0.75x</option>
+            <option value={1}>1.0x (Normal)</option>
+            <option value={1.5}>1.5x</option>
+            <option value={2}>2.0x (Rápida)</option>
           </select>
 
           <button onClick={toggleMuteAll} className="p-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded-lg transition-colors ml-1 sm:ml-2" title={isMuted ? "Activar sonido" : "Silenciar"}>

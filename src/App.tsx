@@ -18,6 +18,7 @@ const BatchImportModal = lazy(() => import('./components/modals/BatchImportModal
 const EditProfileModal = lazy(() => import('./components/modals/EditProfileModal').then(m => ({ default: m.EditProfileModal })));
 const HardwareProfileModal = lazy(() => import('./components/modals/HardwareProfileModal').then(m => ({ default: m.HardwareProfileModal })));
 const DualCompareModal = lazy(() => import('./components/modals/DualCompareModal').then(m => ({ default: m.DualCompareModal })));
+const CinemaSpotlightModal = lazy(() => import('./components/modals/CinemaSpotlightModal').then(m => ({ default: m.CinemaSpotlightModal })));
 import { calculateOrientation, cleanForFirestore, extractTechnicalDetails, resolveHardwareForDate } from './lib/utils';
 import { MOCK_DATA } from './lib/mockData';
 import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -262,6 +263,7 @@ export default function App() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set());
   const [dualComparePair, setDualComparePair] = useState<{ videoA: VideoRecord; videoB: VideoRecord } | null>(null);
+  const [cinemaSpotlightIndex, setCinemaSpotlightIndex] = useState<number | null>(null);
   const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
   const [dbErrorToast, setDbErrorToast] = useState<string | null>(null);
 
@@ -1712,40 +1714,48 @@ export default function App() {
                                   ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
                                   : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
                               }`}>
-                                {visibleGroupVideos.map((video) => (
-                                  <VideoGridCard 
-                                    key={video.id || video.videoUrl}
-                                    video={video} 
-                                    selectionMode={selectionMode}
-                                    isSelected={selectedVideoIds.has(video.id!)}
-                                    onToggleSelect={() => toggleSelection(video.id!)}
-                                    onCompareClick={() => handleOpenDualCompare(video)}
-                                    onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
-                                    onEditClick={isVideoOwner(video) && !selectionMode ? () => {
-                                      setEditingVideo(video);
-                                      setIsModalOpen(true);
-                                    } : undefined}
-                                  />
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="flex flex-col gap-6">
-                                {visibleGroupVideos.map((video) => (
-                                  <div key={video.id || video.videoUrl}>
-                                    <VideoCard 
+                                {visibleGroupVideos.map((video) => {
+                                  const globalIdx = filteredVideos.findIndex(v => (v.id && v.id === video.id) || v.videoUrl === video.videoUrl);
+                                  return (
+                                    <VideoGridCard 
+                                      key={video.id || video.videoUrl}
                                       video={video} 
                                       selectionMode={selectionMode}
                                       isSelected={selectedVideoIds.has(video.id!)}
                                       onToggleSelect={() => toggleSelection(video.id!)}
                                       onCompareClick={() => handleOpenDualCompare(video)}
+                                      onCinemaClick={() => setCinemaSpotlightIndex(globalIdx >= 0 ? globalIdx : 0)}
                                       onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
                                       onEditClick={isVideoOwner(video) && !selectionMode ? () => {
                                         setEditingVideo(video);
                                         setIsModalOpen(true);
                                       } : undefined}
                                     />
-                                  </div>
-                                ))}
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-6">
+                                {visibleGroupVideos.map((video) => {
+                                  const globalIdx = filteredVideos.findIndex(v => (v.id && v.id === video.id) || v.videoUrl === video.videoUrl);
+                                  return (
+                                    <div key={video.id || video.videoUrl}>
+                                      <VideoCard 
+                                        video={video} 
+                                        selectionMode={selectionMode}
+                                        isSelected={selectedVideoIds.has(video.id!)}
+                                        onToggleSelect={() => toggleSelection(video.id!)}
+                                        onCompareClick={() => handleOpenDualCompare(video)}
+                                        onCinemaClick={() => setCinemaSpotlightIndex(globalIdx >= 0 ? globalIdx : 0)}
+                                        onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
+                                        onEditClick={isVideoOwner(video) && !selectionMode ? () => {
+                                          setEditingVideo(video);
+                                          setIsModalOpen(true);
+                                        } : undefined}
+                                      />
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                             {hasMoreInGroup && (
@@ -1784,7 +1794,7 @@ export default function App() {
                   ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4' 
                   : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
               }`}>
-                {filteredVideos.slice(0, visibleCount).map((video) => (
+                {filteredVideos.slice(0, visibleCount).map((video, idx) => (
                   <VideoGridCard 
                     key={video.id || video.videoUrl}
                     video={video} 
@@ -1792,6 +1802,7 @@ export default function App() {
                     isSelected={selectedVideoIds.has(video.id!)}
                     onToggleSelect={() => toggleSelection(video.id!)}
                     onCompareClick={() => handleOpenDualCompare(video)}
+                    onCinemaClick={() => setCinemaSpotlightIndex(idx)}
                     onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
                     onEditClick={isVideoOwner(video) && !selectionMode ? () => {
                       setEditingVideo(video);
@@ -1818,7 +1829,7 @@ export default function App() {
           ) : (
             <div className="flex flex-col gap-6 pb-24">
               <div className="flex flex-col gap-6">
-                {filteredVideos.slice(0, visibleCount).map((video) => (
+                {filteredVideos.slice(0, visibleCount).map((video, idx) => (
                   <div key={video.id || video.videoUrl}>
                     <VideoCard 
                       video={video} 
@@ -1826,6 +1837,7 @@ export default function App() {
                       isSelected={selectedVideoIds.has(video.id!)}
                       onToggleSelect={() => toggleSelection(video.id!)}
                       onCompareClick={() => handleOpenDualCompare(video)}
+                      onCinemaClick={() => setCinemaSpotlightIndex(idx)}
                       onDeleteClick={isVideoOwner(video) && !selectionMode ? () => setVideosToDelete([video.id!]) : undefined}
                       onEditClick={isVideoOwner(video) && !selectionMode ? () => {
                         setEditingVideo(video);
@@ -2103,6 +2115,15 @@ export default function App() {
             initialVideoB={dualComparePair.videoB}
             allVideos={videos}
             onClose={() => setDualComparePair(null)}
+          />
+        )}
+
+        {cinemaSpotlightIndex !== null && filteredVideos.length > 0 && (
+          <CinemaSpotlightModal
+            isOpen={cinemaSpotlightIndex !== null}
+            initialVideoIndex={cinemaSpotlightIndex}
+            videos={filteredVideos}
+            onClose={() => setCinemaSpotlightIndex(null)}
           />
         )}
       </Suspense>
