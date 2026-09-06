@@ -289,31 +289,60 @@ export function generateTitleFromPrompt(prompt: string): string {
 }
 
 /**
- * Extracts model size in billions of parameters (e.g. 20, 33)
+ * Extracts model size in billions of parameters (e.g. 20, 33, 14)
  * Priority:
- * 1. Inspect all inputs for known variants/architectures (fl2va, ref2va, 33b, 20b, pruned, full)
- * 2. Look for pattern /(\d+)\s*B\b/i
- * 3. Fallback to undefined
+ * 1. Direct number or explicit regex match /(\d+(?:\.\d+)?)\s*B\b/i
+ * 2. Explicit keywords for 20B (pruned, 20b, minimax_h3) or 33B (33b, full, minimax_h3_full)
+ * 3. Fallback to default if known architecture
  */
 export function extractModelSizeB(...inputs: (string | number | undefined | null)[]): number | undefined {
-  const sizeRegex = /(\d+)\s*B\b/i;
+  const sizeRegex = /\b(\d+(?:\.\d+)?)\s*B\b/i;
+
+  // Pass 1: Direct number, regex match (e.g. "20B", "33B", "14B"), or explicit 20B/33B keywords
   for (const input of inputs) {
     if (input === undefined || input === null) continue;
     if (typeof input === 'number' && !isNaN(input) && input > 0) return input;
     if (typeof input !== 'string') continue;
 
     const lower = input.toLowerCase();
-    if (lower.includes('33b') || lower.includes('33_b') || lower.includes('fl2va') || lower.includes('ref2va') || lower === 'minimax_h3_full') {
-      return 33;
+
+    // Direct token match (e.g., "20B", "33B", "14B")
+    const match = input.match(sizeRegex);
+    if (match && match[1]) {
+      const num = parseFloat(match[1]);
+      if (!isNaN(num) && num > 0) return num;
     }
-    if (lower.includes('20b') || lower.includes('20_b') || lower.includes('pruned') || lower === 'minimax_h3') {
+
+    // Explicit 20B indicators
+    if (
+      lower.includes('20b') ||
+      lower.includes('20_b') ||
+      lower.includes('_20') ||
+      lower.includes('pruned') ||
+      lower === 'minimax_h3' ||
+      lower.includes('pruned (20b)')
+    ) {
       return 20;
     }
 
-    const match = input.match(sizeRegex);
-    if (match && match[1]) {
-      const num = parseInt(match[1], 10);
-      if (!isNaN(num) && num > 0) return num;
+    // Explicit 33B indicators
+    if (
+      lower.includes('33b') ||
+      lower.includes('33_b') ||
+      lower.includes('_33') ||
+      lower === 'minimax_h3_full' ||
+      lower.includes('full (33b)')
+    ) {
+      return 33;
+    }
+  }
+
+  // Pass 2: Check full keyword
+  for (const input of inputs) {
+    if (typeof input !== 'string') continue;
+    const lower = input.toLowerCase();
+    if (lower.includes('full')) {
+      return 33;
     }
   }
 
@@ -409,7 +438,7 @@ export function extractTechnicalDetails(
     parsedJson?.model_variant
   );
 
-  // Model Variant (Full, Pruned, FL2VA, Ref2VA, SCAIL 2...)
+  // Model Variant (FL2VA, Ref2VA, Full, Pruned, SCAIL 2...)
   let modelVariant: string | undefined = undefined;
   const variantStr = [
     technicalModelStr,
@@ -419,16 +448,22 @@ export function extractTechnicalDetails(
     parsedJson?.variant
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
-  if (variantStr.includes('fl2va')) {
+  const isFl2va = variantStr.includes('fl2va');
+  const isRef2va = variantStr.includes('ref2va');
+  const isScail2 = variantStr.includes('scail2') || variantStr.includes('scail 2');
+
+  if (isFl2va && isRef2va) {
+    modelVariant = 'FL2VA / Ref2VA';
+  } else if (isFl2va) {
     modelVariant = 'FL2VA';
-  } else if (variantStr.includes('ref2va')) {
+  } else if (isRef2va) {
     modelVariant = 'Ref2VA';
+  } else if (isScail2) {
+    modelVariant = 'SCAIL 2';
   } else if (rawModelType.toLowerCase() === 'minimax_h3_full' || variantStr.includes('full') || modelSizeB === 33) {
     modelVariant = 'Full (33B)';
   } else if (rawModelType.toLowerCase() === 'minimax_h3' || variantStr.includes('pruned') || modelSizeB === 20) {
     modelVariant = 'Pruned (20B)';
-  } else if (variantStr.includes('scail2') || variantStr.includes('scail 2')) {
-    modelVariant = 'SCAIL 2';
   }
 
   // 3. Text Encoder Detection
