@@ -3,6 +3,7 @@ import { VideoRecord } from '../../types';
 import { Copy, Check, Sparkles, Edit3, Trash2, Clock, Cpu, User, Tag, ExternalLink, Calendar, SplitSquareVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl } from '../../lib/utils';
 import { useInViewport } from '../../hooks/useInViewport';
+import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
 
 interface VideoGridCardProps {
   video: VideoRecord;
@@ -172,7 +173,7 @@ export function VideoGridCard({
         </div>
 
         {isInViewport ? (
-          <video
+          <SmartVideoPlayer
             src={getPlayableVideoUrl(video)}
             className="w-full h-full object-contain"
             controls
