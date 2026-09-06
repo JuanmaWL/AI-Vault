@@ -4,6 +4,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { UserProfile, VideoRecord } from '../../types';
 import { normalizeHuggingFaceDatasetRepoId, processVideoMetadataFromUrl, parseVideoUrlInfo } from '../../lib/utils';
+import { HfImportManagerModal } from './HfImportManagerModal';
 import { 
   X, 
   User as UserIcon, 
@@ -18,7 +19,8 @@ import {
   CheckCircle2, 
   DownloadCloud, 
   Square,
-  Sparkles
+  Sparkles,
+  Maximize2
 } from 'lucide-react';
 
 interface EditProfileModalProps {
@@ -78,6 +80,8 @@ export function EditProfileModal({
     existingCount: number;
     totalFound: number;
   } | null>(null);
+  const [selectedHfPaths, setSelectedHfPaths] = useState<Set<string>>(new Set());
+  const [isManagerModalOpen, setIsManagerModalOpen] = useState(false);
 
   const [isImportingHf, setIsImportingHf] = useState(false);
   const cancelHfImportRef = useRef(false);
@@ -182,6 +186,7 @@ export function EditProfileModal({
         existingCount,
         totalFound: directVideoUrls.length
       });
+      setSelectedHfPaths(new Set(newVideos.map(v => v.path)));
 
       addHfLog('success', `Escaneo completado: ${scannedFoldersCount} carpetas analizadas, ${newVideos.length} vídeos nuevos detectados, ${existingCount} ya existentes en el catálogo.`);
     } catch (err: any) {
@@ -196,9 +201,12 @@ export function EditProfileModal({
   const handleImportNewVideos = async () => {
     if (!scanResult || scanResult.newVideos.length === 0 || !onSaveBatch) return;
 
+    const videosToImport = scanResult.newVideos.filter(v => selectedHfPaths.has(v.path));
+    if (videosToImport.length === 0) return;
+
     setIsImportingHf(true);
     cancelHfImportRef.current = false;
-    const total = scanResult.newVideos.length;
+    const total = videosToImport.length;
     setHfImportProgress({ current: 0, total });
     addHfLog('info', `Iniciando importación secuencial de ${total} vídeos nuevos atribuidos a tu usuario...`);
 
@@ -210,7 +218,7 @@ export function EditProfileModal({
         break;
       }
 
-      const item = scanResult.newVideos[i];
+      const item = videosToImport[i];
       setHfImportProgress({ current: i + 1, total });
       addHfLog('info', `[${i + 1}/${total}] Descargando y analizando metadatos: ${item.fileName}`);
 
@@ -239,12 +247,14 @@ export function EditProfileModal({
         
         setScanResult(prev => {
           if (!prev) return null;
+          const remainingNew = prev.newVideos.filter(v => !selectedHfPaths.has(v.path));
           return {
             ...prev,
-            newVideos: [],
+            newVideos: remainingNew,
             existingCount: prev.existingCount + importedRecords.length
           };
         });
+        setSelectedHfPaths(new Set());
       } catch (err: any) {
         addHfLog('error', `Error al guardar en base de datos: ${err.message || err}`);
       }
@@ -489,8 +499,8 @@ export function EditProfileModal({
                     <button
                       type="button"
                       onClick={handleImportNewVideos}
-                      disabled={scanResult.newVideos.length === 0 || isImportingHf}
-                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-600 text-neutral-950 transition-all disabled:cursor-not-allowed shrink-0 shadow-sm"
+                      disabled={selectedHfPaths.size === 0 || isImportingHf}
+                      className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-teal-500 hover:bg-teal-400 disabled:bg-neutral-800 disabled:text-neutral-600 text-neutral-950 transition-all disabled:cursor-not-allowed shrink-0 shadow-sm cursor-pointer"
                     >
                       {isImportingHf ? (
                         <>
@@ -500,34 +510,86 @@ export function EditProfileModal({
                       ) : (
                         <>
                           <DownloadCloud className="w-3.5 h-3.5" />
-                          <span>Importar los {scanResult.newVideos.length} nuevos</span>
+                          <span>Importar los {selectedHfPaths.size} seleccionados</span>
                         </>
                       )}
                     </button>
                   </div>
 
-                  {/* Preview of new videos */}
+                  {/* List of new videos with checkboxes and select/deselect all controls */}
                   {scanResult.newVideos.length > 0 && !isImportingHf && (
-                    <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-xs space-y-2 max-h-32 overflow-y-auto">
-                      <div className="font-semibold text-neutral-400 text-[11px] uppercase tracking-wider">
-                        Vídeos nuevos listos para importar a tu cuenta:
+                    <div className="bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 text-xs space-y-2.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="font-semibold text-neutral-400 text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+                          <span>Vídeos nuevos listos para importar:</span>
+                          <span className="text-teal-400 font-bold font-mono">({selectedHfPaths.size}/{scanResult.newVideos.length})</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setIsManagerModalOpen(true)}
+                            className="flex items-center gap-1 text-[11px] font-bold text-amber-400 hover:text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all cursor-pointer shadow-xs"
+                            title="Abrir gestor amplio con buscador, previsualización y selección por carpetas"
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                            <span>Gestor Avanzado</span>
+                          </button>
+                          <span className="text-neutral-700">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedHfPaths(new Set(scanResult.newVideos.map(v => v.path)))}
+                            className="text-[10px] text-teal-400 hover:text-teal-300 font-medium cursor-pointer hover:underline"
+                          >
+                            Todos
+                          </button>
+                          <span className="text-neutral-700">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedHfPaths(new Set())}
+                            className="text-[10px] text-neutral-400 hover:text-neutral-300 font-medium cursor-pointer hover:underline"
+                          >
+                            Ninguno
+                          </button>
+                        </div>
                       </div>
-                      <div className="space-y-1 font-mono text-[11px]">
-                        {scanResult.newVideos.slice(0, 6).map((v, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-neutral-400 gap-2">
-                            <span className="truncate">{v.fileName}</span>
-                            {v.category && (
-                              <span className="px-2 py-0.5 rounded bg-neutral-800 text-amber-300 border border-neutral-700 text-[10px] shrink-0 font-sans">
-                                {v.category}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                        {scanResult.newVideos.length > 6 && (
-                          <div className="text-neutral-500 text-[10px] italic text-center pt-1 font-sans">
-                            + {scanResult.newVideos.length - 6} vídeos adicionales
-                          </div>
-                        )}
+
+                      <div className="space-y-1 font-mono text-[11px] max-h-32 overflow-y-auto pr-1">
+                        {scanResult.newVideos.map((v) => {
+                          const isChecked = selectedHfPaths.has(v.path);
+                          return (
+                            <label
+                              key={v.path}
+                              className={`flex items-center justify-between gap-2 p-1.5 rounded-lg border transition-colors cursor-pointer select-none ${
+                                isChecked
+                                  ? 'bg-neutral-900/90 border-neutral-750 text-neutral-200'
+                                  : 'bg-neutral-950/40 border-neutral-850 text-neutral-500 opacity-60'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const next = new Set(selectedHfPaths);
+                                    if (e.target.checked) {
+                                      next.add(v.path);
+                                    } else {
+                                      next.delete(v.path);
+                                    }
+                                    setSelectedHfPaths(next);
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-neutral-700 bg-neutral-900 text-teal-500 focus:ring-teal-500 shrink-0 cursor-pointer"
+                                />
+                                <span className="truncate" title={v.fileName}>{v.fileName}</span>
+                              </div>
+                              {v.category && (
+                                <span className="px-1.5 py-0.2 rounded bg-neutral-800 text-amber-300 border border-neutral-700 text-[10px] shrink-0 font-sans">
+                                  {v.category}
+                                </span>
+                              )}
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -592,13 +654,25 @@ export function EditProfileModal({
             type="button"
             onClick={onClose}
             disabled={isScanningHf || isImportingHf}
-            className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-all disabled:opacity-40"
+            className="px-5 py-2 rounded-xl text-xs font-bold bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-all disabled:opacity-40 cursor-pointer"
           >
             Cerrar
           </button>
         </div>
 
       </div>
+
+      {/* Advanced HF Import Manager Modal */}
+      {isManagerModalOpen && scanResult && scanResult.newVideos.length > 0 && (
+        <HfImportManagerModal
+          newVideos={scanResult.newVideos}
+          selectedPaths={selectedHfPaths}
+          onSelectionChange={setSelectedHfPaths}
+          onConfirmImport={handleImportNewVideos}
+          onClose={() => setIsManagerModalOpen(false)}
+          isImporting={isImportingHf}
+        />
+      )}
     </div>
   );
 }
