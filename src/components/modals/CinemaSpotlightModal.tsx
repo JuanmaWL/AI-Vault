@@ -31,7 +31,8 @@ import {
   User,
   Sliders,
   Clapperboard,
-  Zap
+  Zap,
+  Flame,
 } from 'lucide-react';
 import { getPlayableVideoUrl, extractTechnicalDetails, extractCreationDateFromText, SOFTWARE_ICONS, GPU_LOGOS, getGpuVendor, formatBytes, calculateEfficiencyMetrics } from '../../lib/utils';
 import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
@@ -204,6 +205,29 @@ export function CinemaSpotlightModal({
   const goToNext = () => {
     setDirection(1);
     setCurrentIndex(prev => (prev < videos.length - 1 ? prev + 1 : 0));
+  };
+
+  // Easter Egg 4.1: 5 clics rápidos consecutivos sobre el badge de GPU activan GPU Turbo Mode (visual sutil, sin sonido)
+  const [gpuTurboActive, setGpuTurboActive] = useState(false);
+  const gpuClicksRef = useRef(0);
+  const gpuTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleGpuBadgeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    gpuClicksRef.current += 1;
+    if (gpuTimerRef.current) clearTimeout(gpuTimerRef.current);
+
+    if (gpuClicksRef.current >= 5) {
+      gpuClicksRef.current = 0;
+      setGpuTurboActive(true);
+      setTimeout(() => {
+        setGpuTurboActive(false);
+      }, 4000);
+    } else {
+      gpuTimerRef.current = setTimeout(() => {
+        gpuClicksRef.current = 0;
+      }, 1000);
+    }
   };
 
   // Keyboard navigation & shortcuts
@@ -759,39 +783,52 @@ export function CinemaSpotlightModal({
                   </span>
                 </div>
                 
-                {/* GPU Integrada en la misma zona de parámetros */}
+                {/* GPU Integrada en la misma zona de parámetros con Easter Egg Turbo */}
                 <div className="col-span-2 sm:col-span-2 bg-neutral-950/70 p-2 rounded-xl border border-neutral-800/80 flex flex-col justify-between">
                   <span className="text-neutral-500 block text-[10px] font-bold uppercase tracking-wider mb-1">GPU / HARDWARE</span>
                   {gpuInfo ? (
                     <div className="flex items-center gap-2">
-                      <span 
-                        className={`text-[11px] px-2.5 py-0.5 rounded-lg border flex items-center gap-1.5 font-bold shadow-sm ${
-                          gpuInfo.vendor === 'nvidia'
-                            ? 'bg-[#76B900]/15 border-[#76B900]/40 text-[#a3e635]'
+                      <button 
+                        type="button"
+                        onClick={handleGpuBadgeClick}
+                        className={`text-[11px] px-2.5 py-0.5 rounded-lg border flex items-center gap-1.5 font-bold shadow-sm cursor-pointer select-none transition-all ${
+                          gpuTurboActive
+                            ? 'bg-amber-950/40 border-amber-500/60 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)] ring-1 ring-amber-500/30'
+                            : gpuInfo.vendor === 'nvidia'
+                            ? 'bg-[#76B900]/15 border-[#76B900]/40 text-[#a3e635] hover:border-[#76b900]/70'
                             : gpuInfo.vendor === 'amd'
-                            ? 'bg-[#ED1C24]/15 border-[#ED1C24]/40 text-[#fca5a5]'
-                            : 'bg-neutral-900 border-neutral-750 text-neutral-300'
+                            ? 'bg-[#ED1C24]/15 border-[#ED1C24]/40 text-[#fca5a5] hover:border-[#ED1C24]/70'
+                            : 'bg-neutral-900 border-neutral-750 text-neutral-300 hover:border-neutral-600'
                         }`}
-                        title={gpuInfo.vram ? `GPU: ${gpuInfo.name} (${gpuInfo.vram}GB VRAM)` : `GPU: ${gpuInfo.name}`}
+                        title={gpuTurboActive ? 'GPU Turbo Mode Activado (+15% Clock)' : (gpuInfo.vram ? `GPU: ${gpuInfo.name} (${gpuInfo.vram}GB VRAM)` : `GPU: ${gpuInfo.name}`)}
                       >
-                        {gpuInfo.logo ? (
-                          <img 
-                            src={gpuInfo.logo} 
-                            alt={gpuInfo.vendor} 
-                            className="w-3.5 h-3.5 object-contain shrink-0" 
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLElement).style.display = 'none';
-                            }}
-                          />
+                        {gpuTurboActive ? (
+                          <>
+                            <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+                            <span>{gpuInfo.name} · TURBO (+15%)</span>
+                          </>
                         ) : (
-                          <Cpu className="w-3.5 h-3.5 text-neutral-400" />
+                          <>
+                            {gpuInfo.logo ? (
+                              <img 
+                                src={gpuInfo.logo} 
+                                alt={gpuInfo.vendor} 
+                                className="w-3.5 h-3.5 object-contain shrink-0" 
+                                referrerPolicy="no-referrer"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            ) : (
+                              <Cpu className="w-3.5 h-3.5 text-neutral-400" />
+                            )}
+                            <span>{gpuInfo.name}</span>
+                            {gpuInfo.vram && (
+                              <span className="text-[10px] opacity-80 font-normal">({gpuInfo.vram}GB)</span>
+                            )}
+                          </>
                         )}
-                        <span>{gpuInfo.name}</span>
-                        {gpuInfo.vram && (
-                          <span className="text-[10px] opacity-80 font-normal">({gpuInfo.vram}GB)</span>
-                        )}
-                      </span>
+                      </button>
                     </div>
                   ) : (
                     <span className="text-[11px] text-neutral-500 font-mono">GPU No Detectada</span>
@@ -800,17 +837,30 @@ export function CinemaSpotlightModal({
 
                 {/* Benchmark de Eficiencia Técnica */}
                 {efficiencyMetrics && (
-                  <div className={`col-span-2 sm:col-span-3 p-2 rounded-xl border flex items-center justify-between gap-2 text-xs ${efficiencyMetrics.ratingBg} ${efficiencyMetrics.ratingBorder} ${efficiencyMetrics.ratingColor}`}>
+                  <div 
+                    className={`col-span-2 sm:col-span-3 p-2 rounded-xl border flex items-center justify-between gap-2 text-xs ${efficiencyMetrics.ratingBg} ${efficiencyMetrics.ratingBorder} ${efficiencyMetrics.ratingColor}`}
+                    title={`Velocidad de generación de la GPU:\n• Nivel: ${efficiencyMetrics.ratingLabel} (${efficiencyMetrics.score}/100).\n• ¿Qué es MP?: Megapíxeles (${currentVideo?.width}×${currentVideo?.height} ÷ 1.000.000 = ${efficiencyMetrics.megapixels} MP).\n• Cálculo: ${efficiencyMetrics.secPerStep}s/step en ${efficiencyMetrics.megapixels} MP = ${efficiencyMetrics.secPerStepPerMegapixel} s/step/MP normalizado.\n• A menor tiempo por paso normalizado, más rápido renderiza la GPU.`}
+                  >
                     <div className="flex items-center gap-1.5 font-bold">
                       <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                      <span>Eficiencia: {efficiencyMetrics.secPerStepPerMegapixel} s/step/MP</span>
+                      {isDetailedView ? (
+                        <span>Velocidad: {efficiencyMetrics.secPerStepPerMegapixel} s/step/MP</span>
+                      ) : (
+                        <span>Velocidad: {efficiencyMetrics.ratingLabel}</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] text-neutral-400 hidden sm:inline font-mono">
-                        {efficiencyMetrics.secPerStep} s/step @ {efficiencyMetrics.megapixels} MP
-                      </span>
-                      <span className="px-2 py-0.5 rounded-md text-[10px] uppercase font-bold font-sans bg-neutral-950/70 border border-neutral-800">
-                        {efficiencyMetrics.ratingLabel} ({efficiencyMetrics.score}/100)
+                      {isDetailedView ? (
+                        <span className="text-[11px] text-neutral-400 hidden sm:inline font-mono">
+                          {efficiencyMetrics.secPerStep} s/step @ {efficiencyMetrics.megapixels} MP
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-neutral-400 hidden sm:inline font-sans">
+                          {efficiencyMetrics.secPerStep}s/paso
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded-md text-[10px] uppercase font-bold font-sans bg-neutral-950/70 border border-neutral-800" title="Índice de velocidad relativa (a menor tiempo por paso, mayor puntuación)">
+                        {efficiencyMetrics.score}/100 score
                       </span>
                     </div>
                   </div>

@@ -11,6 +11,7 @@ import { AccessGate } from './components/layout/AccessGate';
 import { DeleteConfirmModal } from './components/modals/DeleteConfirmModal';
 import { VaultLogo } from './components/layout/VaultLogo';
 import { AISparkle } from './components/layout/AISparkle';
+import { RetroCrtOverlay } from './components/layout/RetroCrtOverlay';
 
 // Carga perezosa (lazy) de los modales secundarios pesados para optimizar el bundle principal
 const AddVideoModal = lazy(() => import('./components/modals/AddVideoModal').then(m => ({ default: m.AddVideoModal })));
@@ -19,9 +20,10 @@ const EditProfileModal = lazy(() => import('./components/modals/EditProfileModal
 const HardwareProfileModal = lazy(() => import('./components/modals/HardwareProfileModal').then(m => ({ default: m.HardwareProfileModal })));
 const DualCompareModal = lazy(() => import('./components/modals/DualCompareModal').then(m => ({ default: m.DualCompareModal })));
 const CinemaSpotlightModal = lazy(() => import('./components/modals/CinemaSpotlightModal').then(m => ({ default: m.CinemaSpotlightModal })));
-import { calculateOrientation, cleanForFirestore, extractTechnicalDetails, resolveHardwareForDate } from './lib/utils';
+const SecretsModal = lazy(() => import('./components/modals/SecretsModal').then(m => ({ default: m.SecretsModal })));
+import { calculateOrientation, cleanForFirestore, extractTechnicalDetails, resolveHardwareForDate, calculateEfficiencyMetrics } from './lib/utils';
 import { MOCK_DATA } from './lib/mockData';
-import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle, Terminal, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import pkg from '../package.json';
 
@@ -137,6 +139,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
+  const [isSecretsModalOpen, setIsSecretsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
   const [usingLocal, setUsingLocal] = useState(false);
@@ -164,6 +167,63 @@ export default function App() {
       return next;
     });
   };
+
+  // Easter Egg 4.2: Modo Retro CRT vía Konami Code (↑ ↑ ↓ ↓ ← → ← → B A)
+  const [isRetroMode, setIsRetroMode] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ai_vault_retro_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleRetroMode = () => {
+    setIsRetroMode(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('ai_vault_retro_mode', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const konamiSequence = [
+      'ArrowUp', 'ArrowUp',
+      'ArrowDown', 'ArrowDown',
+      'ArrowLeft', 'ArrowRight',
+      'ArrowLeft', 'ArrowRight',
+      'b', 'a'
+    ];
+    let currentIndex = 0;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) {
+        return;
+      }
+
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const expected = konamiSequence[currentIndex].length === 1
+        ? konamiSequence[currentIndex].toLowerCase()
+        : konamiSequence[currentIndex];
+
+      if (key === expected) {
+        currentIndex++;
+        if (currentIndex === konamiSequence.length) {
+          currentIndex = 0;
+          toggleRetroMode();
+        }
+      } else {
+        const firstKey = konamiSequence[0].length === 1 ? konamiSequence[0].toLowerCase() : konamiSequence[0];
+        currentIndex = key === firstKey ? 1 : 0;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // View state
   const [view, setView] = useState<'detail' | 'compare' | 'dashboard'>('detail');
@@ -209,6 +269,8 @@ export default function App() {
   const [filterUser, setFilterUser] = useState<string>('Todos');
   const [filterModel, setFilterModel] = useState<string>('Todos');
   const [filterModelSizeB, setFilterModelSizeB] = useState<string>('Todos');
+  const [filterGpu, setFilterGpu] = useState<string>('Todas');
+  const [filterSpeed, setFilterSpeed] = useState<string>('Todas');
   const [filterOrientation, setFilterOrientation] = useState<string>('Todas');
   const [filterLocalTool, setFilterLocalTool] = useState<string>('Todos');
   const [filterResolution, setFilterResolution] = useState<string>('Todas');
@@ -226,7 +288,7 @@ export default function App() {
   // Resetear la cantidad visible al modificar cualquier filtro o búsqueda
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
+  }, [searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -234,6 +296,8 @@ export default function App() {
     if (filterUser !== 'Todos') count++;
     if (filterModel !== 'Todos') count++;
     if (filterModelSizeB !== 'Todos') count++;
+    if (filterGpu !== 'Todas') count++;
+    if (filterSpeed !== 'Todas') count++;
     if (filterOrientation !== 'Todas') count++;
     if (filterLocalTool !== 'Todos') count++;
     if (filterResolution !== 'Todas') count++;
@@ -243,13 +307,15 @@ export default function App() {
     if (filterTags.length > 0) count += filterTags.length;
     if (groupByFolder) count++;
     return count;
-  }, [filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
+  }, [filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
 
   const handleResetFilters = () => {
     setFilterGroup('Todas');
     setFilterUser('Todos');
     setFilterModel('Todos');
     setFilterModelSizeB('Todos');
+    setFilterGpu('Todas');
+    setFilterSpeed('Todas');
     setFilterOrientation('Todas');
     setFilterLocalTool('Todos');
     setFilterResolution('Todas');
@@ -775,6 +841,11 @@ export default function App() {
     [videos]
   );
 
+  const uniqueGpus = useMemo(() => {
+    const list = videos.map(v => v.hardware?.gpu?.trim()).filter(Boolean) as string[];
+    return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [videos]);
+
   const filteredVideos = useMemo(() => {
     return videos.filter(video => {
       // 1. Text Search
@@ -823,6 +894,26 @@ export default function App() {
         }
       }
 
+      // 4.2 GPU / Tarjeta Gráfica
+      if (filterGpu !== 'Todas') {
+        const gpu = video.hardware?.gpu?.trim();
+        if (filterGpu === 'Sin GPU') {
+          if (gpu) return false;
+        } else {
+          if (gpu !== filterGpu) return false;
+        }
+      }
+
+      // 4.3 Velocidad (Eficiencia GPU)
+      if (filterSpeed !== 'Todas') {
+        const eff = calculateEfficiencyMetrics(video.renderSeconds, video.steps, video.width, video.height);
+        if (filterSpeed === 'Sin datos') {
+          if (eff !== null) return false;
+        } else {
+          if (!eff || eff.ratingLabel !== filterSpeed) return false;
+        }
+      }
+
       // 5. Orientation
       if (filterOrientation !== 'Todas' && video.orientation !== filterOrientation) return false;
 
@@ -854,7 +945,7 @@ export default function App() {
 
       return true;
     });
-  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterOrientation, filterLocalTool, filterTags, filterResolution, filterLora, filterVae, filterEncoder]);
+  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterTags, filterResolution, filterLora, filterVae, filterEncoder]);
 
   const groupedVideos = useMemo(() => {
     if (!groupByFolder) return null;
@@ -1418,6 +1509,42 @@ export default function App() {
                             {uniqueModelSizes.map(s => <option key={s} value={String(s)}>{s}B parámetros</option>)}
                           </select>
                         )}
+
+                        {/* GPU / Tarjeta Gráfica */}
+                        <select 
+                          value={filterGpu} 
+                          onChange={e => setFilterGpu(e.target.value)} 
+                          className={`bg-neutral-900 border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-teal-500 cursor-pointer transition-colors ${
+                            filterGpu !== 'Todas' 
+                              ? 'border-teal-500/60 text-teal-300 font-medium bg-teal-950/20' 
+                              : 'border-neutral-800 hover:border-neutral-700 text-neutral-300'
+                          }`}
+                          title="Filtrar por GPU / Tarjeta gráfica"
+                        >
+                          <option value="Todas">🎮 GPU (Todas)</option>
+                          {uniqueGpus.map(g => <option key={g} value={g}>{g}</option>)}
+                          <option value="Sin GPU">Sin GPU</option>
+                        </select>
+
+                        {/* Velocidad / Eficiencia GPU */}
+                        <select 
+                          value={filterSpeed} 
+                          onChange={e => setFilterSpeed(e.target.value)} 
+                          className={`bg-neutral-900 border rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-teal-500 cursor-pointer transition-colors ${
+                            filterSpeed !== 'Todas'
+                              ? 'border-amber-500/60 text-amber-300 font-medium bg-amber-950/20'
+                              : 'border-neutral-800 hover:border-neutral-700 text-neutral-300'
+                          }`}
+                          title="Filtrar por velocidad relativa de renderizado"
+                        >
+                          <option value="Todas">⚡ Velocidad (Todas)</option>
+                          <option value="Ultrarrápido">⚡ Ultrarrápido (&lt;15 s/MP)</option>
+                          <option value="Óptimo">⚡ Óptimo (15-40 s/MP)</option>
+                          <option value="Equilibrado">⚡ Equilibrado (40-80 s/MP)</option>
+                          <option value="Lento">⚡ Lento (80-140 s/MP)</option>
+                          <option value="Muy Lento">⚡ Muy Lento (&gt;140 s/MP)</option>
+                          <option value="Sin datos">Sin datos de velocidad</option>
+                        </select>
 
                         {/* Resolución */}
                         <select 
@@ -1989,6 +2116,14 @@ export default function App() {
                 </>
               )}
             </div>
+            <button
+              type="button"
+              onClick={() => setIsSecretsModalOpen(true)}
+              className="p-1 rounded-md text-neutral-600 hover:text-teal-400 hover:bg-neutral-900 border border-transparent hover:border-neutral-800/80 transition-colors cursor-pointer"
+              title="Funciones ocultas & atajos"
+            >
+              <Terminal className="w-3.5 h-3.5" />
+            </button>
             <span className="text-neutral-700 hidden sm:inline">•</span>
             <div className="flex items-center gap-1.5 text-neutral-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80 inline-block shadow-xs" />
@@ -2124,6 +2259,19 @@ export default function App() {
             initialVideoIndex={cinemaSpotlightIndex}
             videos={filteredVideos}
             onClose={() => setCinemaSpotlightIndex(null)}
+          />
+        )}
+
+        {/* Easter Egg 4.2: Retro CRT Overlay */}
+        <RetroCrtOverlay isActive={isRetroMode} onToggle={toggleRetroMode} />
+
+        {/* Modal de documentación de funciones ocultas y atajos */}
+        {isSecretsModalOpen && (
+          <SecretsModal
+            isOpen={isSecretsModalOpen}
+            onClose={() => setIsSecretsModalOpen(false)}
+            isRetroMode={isRetroMode}
+            onToggleRetroMode={toggleRetroMode}
           />
         )}
       </Suspense>

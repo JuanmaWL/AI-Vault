@@ -37,6 +37,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
   const [selectedModel, setSelectedModel] = useState<string>('all');
   const [selectedModelSize, setSelectedModelSize] = useState<string>('all');
   const [selectedResolution, setSelectedResolution] = useState<string>('all');
+  const [selectedSpeedFilter, setSelectedSpeedFilter] = useState<string>('all');
   const [selectedLoraFilter, setSelectedLoraFilter] = useState<'all' | 'with_lora' | 'without_lora'>('all');
   const [selectedSoftwareSource, setSelectedSoftwareSource] = useState<string>('all');
   const [selectedOrientation, setSelectedOrientation] = useState<string>('all');
@@ -44,6 +45,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
   // Phase 2: Performance Metric Mode (Total Render Time vs Normalized s/step)
   const [metricMode, setMetricMode] = useState<MetricMode>('renderSeconds');
   const [scatterGroupBy, setScatterGroupBy] = useState<'gpu' | 'model'>('gpu');
+  const [efficiencyMode, setEfficiencyMode] = useState<'basic' | 'detailed'>('basic');
 
   // Discover all GPUs available across all videos
   const availableGpus = useMemo(() => {
@@ -119,6 +121,20 @@ export function DashboardView({ videos }: DashboardViewProps) {
     return Object.entries(orientationCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => ({ name, count }));
+  }, [videos]);
+
+  // Discover all Speed ratings available across all videos
+  const availableSpeeds = useMemo(() => {
+    const speedCounts: Record<string, number> = {};
+    videos.forEach(v => {
+      const eff = calculateEfficiencyMetrics(v.renderSeconds, v.steps, v.width, v.height);
+      const label = eff ? eff.ratingLabel : 'Sin datos';
+      speedCounts[label] = (speedCounts[label] || 0) + 1;
+    });
+    const order = ['Ultrarrápido', 'Óptimo', 'Equilibrado', 'Lento', 'Muy Lento', 'Sin datos'];
+    return order
+      .filter(name => (speedCounts[name] || 0) > 0)
+      .map(name => ({ name, count: speedCounts[name] }));
   }, [videos]);
 
   // Helper function to format full model name including parameter size if available
@@ -288,6 +304,15 @@ export function DashboardView({ videos }: DashboardViewProps) {
         const res = `${v.width}x${v.height}`;
         if (res !== selectedResolution) return false;
       }
+      // Speed filter
+      if (selectedSpeedFilter !== 'all') {
+        const eff = calculateEfficiencyMetrics(v.renderSeconds, v.steps, v.width, v.height);
+        if (selectedSpeedFilter === 'Sin datos') {
+          if (eff !== null) return false;
+        } else {
+          if (!eff || eff.ratingLabel !== selectedSpeedFilter) return false;
+        }
+      }
       // Software Source filter
       if (selectedSoftwareSource !== 'all') {
         const src = v.softwareSource || 'other';
@@ -306,9 +331,9 @@ export function DashboardView({ videos }: DashboardViewProps) {
       }
       return true;
     });
-  }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedSoftwareSource, selectedOrientation, selectedLoraFilter]);
+  }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedSpeedFilter, selectedSoftwareSource, selectedOrientation, selectedLoraFilter]);
 
-  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedSoftwareSource !== 'all' || selectedOrientation !== 'all' || selectedLoraFilter !== 'all';
+  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedSpeedFilter !== 'all' || selectedSoftwareSource !== 'all' || selectedOrientation !== 'all' || selectedLoraFilter !== 'all';
 
   // Software pipeline and catalog distribution analysis for current filtered view
   const softwareStats = useMemo(() => {
@@ -356,6 +381,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
     setSelectedModel('all');
     setSelectedModelSize('all');
     setSelectedResolution('all');
+    setSelectedSpeedFilter('all');
     setSelectedSoftwareSource('all');
     setSelectedOrientation('all');
     setSelectedLoraFilter('all');
@@ -656,28 +682,28 @@ export function DashboardView({ videos }: DashboardViewProps) {
       let ratingBg = 'bg-blue-950/40';
       let ratingBorder = 'border-blue-800/60';
 
-      if (avgSecPerStepPerMp < 1.6) {
+      if (avgSecPerStepPerMp < 15) {
         ratingLabel = 'Ultrarrápido';
         ratingColor = 'text-emerald-300';
         ratingBg = 'bg-emerald-950/40';
         ratingBorder = 'border-emerald-700/60';
-      } else if (avgSecPerStepPerMp < 3.2) {
+      } else if (avgSecPerStepPerMp < 40) {
         ratingLabel = 'Óptimo';
         ratingColor = 'text-teal-300';
         ratingBg = 'bg-teal-950/40';
         ratingBorder = 'border-teal-700/60';
-      } else if (avgSecPerStepPerMp < 5.8) {
+      } else if (avgSecPerStepPerMp < 80) {
         ratingLabel = 'Equilibrado';
         ratingColor = 'text-indigo-300';
         ratingBg = 'bg-indigo-950/40';
         ratingBorder = 'border-indigo-800/60';
-      } else if (avgSecPerStepPerMp < 9.5) {
-        ratingLabel = 'Exigente';
+      } else if (avgSecPerStepPerMp < 140) {
+        ratingLabel = 'Lento';
         ratingColor = 'text-amber-300';
         ratingBg = 'bg-amber-950/40';
         ratingBorder = 'border-amber-800/60';
       } else {
-        ratingLabel = 'Intensivo';
+        ratingLabel = 'Muy Lento';
         ratingColor = 'text-rose-300';
         ratingBg = 'bg-rose-950/40';
         ratingBorder = 'border-rose-800/60';
@@ -701,8 +727,8 @@ export function DashboardView({ videos }: DashboardViewProps) {
       'Ultrarrápido': 0,
       'Óptimo': 0,
       'Equilibrado': 0,
-      'Exigente': 0,
-      'Intensivo': 0
+      'Lento': 0,
+      'Muy Lento': 0
     };
     list.forEach(item => {
       distribution[item.ratingLabel] = (distribution[item.ratingLabel] || 0) + item.count;
@@ -922,8 +948,8 @@ export function DashboardView({ videos }: DashboardViewProps) {
             </span>
           </div>
 
-          {/* Cross-Filters Grid: 7 structured filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+          {/* Cross-Filters Grid: 8 structured filters */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
             
             {/* 1. GPU Filter */}
             <div className="flex flex-col gap-1.5">
@@ -1017,7 +1043,30 @@ export function DashboardView({ videos }: DashboardViewProps) {
               </select>
             </div>
 
-            {/* 5. Software Source Filter */}
+            {/* 5. Speed Filter */}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="dash-speed" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                <Zap className={`w-3 h-3 ${selectedSpeedFilter !== 'all' ? 'text-amber-400' : 'text-neutral-400'}`} />
+                Velocidad
+              </label>
+              <select
+                id="dash-speed"
+                value={selectedSpeedFilter}
+                onChange={(e) => setSelectedSpeedFilter(e.target.value)}
+                className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                  selectedSpeedFilter !== 'all'
+                    ? 'bg-amber-950/30 border-amber-500/50 text-amber-200 font-medium'
+                    : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                }`}
+              >
+                <option value="all">Todas ({videos.length})</option>
+                {availableSpeeds.map(s => (
+                  <option key={s.name} value={s.name}>{s.name} ({s.count})</option>
+                ))}
+              </select>
+            </div>
+
+            {/* 6. Software Source Filter */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="dash-software" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
                 <AppWindow className={`w-3 h-3 ${selectedSoftwareSource !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
@@ -1050,7 +1099,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
               </select>
             </div>
 
-            {/* 6. Orientation Filter */}
+            {/* 7. Orientation Filter */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="dash-orient" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
                 <Compass className={`w-3 h-3 ${selectedOrientation !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
@@ -1083,7 +1132,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
               </select>
             </div>
 
-            {/* 7. LoRA Filter */}
+            {/* 8. LoRA Filter */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="dash-lora" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
                 <Sparkles className={`w-3 h-3 ${selectedLoraFilter !== 'all' ? 'text-teal-400' : 'text-neutral-400'}`} />
@@ -1166,6 +1215,20 @@ export function DashboardView({ videos }: DashboardViewProps) {
                       type="button"
                       onClick={() => setSelectedResolution('all')}
                       className="hover:text-white p-0.5 hover:bg-teal-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
+                {selectedSpeedFilter !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/60 border border-amber-500/40 text-amber-300 text-xs font-medium">
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    Velocidad: {selectedSpeedFilter}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSpeedFilter('all')}
+                      className="hover:text-white p-0.5 hover:bg-amber-500/20 rounded cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -1669,26 +1732,92 @@ export function DashboardView({ videos }: DashboardViewProps) {
                       <div className="flex items-center gap-2">
                         <Zap className="w-4 h-4 text-amber-400" />
                         <h4 className="text-sm font-bold text-neutral-200">
-                          Indicador de Eficiencia Técnica y Ratio Calidad / Tiempo
+                          Indicador de Eficiencia Técnica y Velocidad de Generación
                         </h4>
                       </div>
                       <p className="text-xs text-neutral-400">
-                        Cálculo estandarizado en <strong>s/step/MP</strong> (segundos por paso normalizados por megapíxel de resolución) y VRAM.
+                        {efficiencyMode === 'basic'
+                          ? 'Modo básico: Clasificación cualitativa de velocidad en 5 niveles para comprender el rendimiento de un vistazo.'
+                          : 'Modo detallado: Métrica normalizada en s/step/MP (segundos por paso entre Megapíxeles) para comparar resoluciones.'}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400 bg-neutral-950 px-3 py-1.5 rounded-xl border border-neutral-800">
-                      <Target className="w-3.5 h-3.5 text-teal-400" />
-                      <span>{efficiencyBenchmark.totalAnalyzed} ejecuciones analizadas</span>
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      {/* Selector de modo: Básico (Etiquetas) vs Detallado (s/step/MP) */}
+                      <div className="flex items-center bg-neutral-950 p-1 rounded-xl border border-neutral-800 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setEfficiencyMode('basic')}
+                          className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                            efficiencyMode === 'basic'
+                              ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                              : 'text-neutral-400 hover:text-neutral-200'
+                          }`}
+                        >
+                          Modo Básico (Etiquetas)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEfficiencyMode('detailed')}
+                          className={`px-3 py-1 rounded-lg font-medium transition-all cursor-pointer ${
+                            efficiencyMode === 'detailed'
+                              ? 'bg-neutral-800 text-teal-300 shadow-sm'
+                              : 'text-neutral-400 hover:text-neutral-200'
+                          }`}
+                        >
+                          Modo Detallado (s/step/MP)
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-400 bg-neutral-950 px-3 py-1.5 rounded-xl border border-neutral-800">
+                        <Target className="w-3.5 h-3.5 text-teal-400" />
+                        <span>{efficiencyBenchmark.totalAnalyzed} ejecuciones</span>
+                      </div>
                     </div>
                   </div>
+
+                  {/* Guía didáctica explicativa en Modo Detallado */}
+                  {efficiencyMode === 'detailed' && (
+                    <div className="p-3.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-xs text-neutral-300 space-y-2">
+                      <div className="flex items-center gap-2 font-semibold text-teal-300">
+                        <Info className="w-4 h-4 text-teal-400 shrink-0" />
+                        <span>Guía didáctica: ¿Qué es MP y cómo interpretar valores como 80s/step en 0.52 MP?</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-neutral-400 pt-1">
+                        <div className="bg-neutral-900/60 p-2.5 rounded-lg border border-neutral-800/60 flex flex-col gap-1">
+                          <span className="font-bold text-sky-300 text-[11px] uppercase tracking-wide flex items-center gap-1">
+                            1. ¿Qué es MP (Megapíxeles)?
+                          </span>
+                          <p className="leading-relaxed text-[11px]">
+                            Es la resolución en millones de píxeles (<span className="font-mono text-neutral-300">Ancho × Alto ÷ 1.000.000</span>). Por ejemplo, 540×960 = <strong>0.52 MP</strong> y 720×1280 = <strong>0.92 MP</strong>.
+                          </p>
+                        </div>
+                        <div className="bg-neutral-900/60 p-2.5 rounded-lg border border-neutral-800/60 flex flex-col gap-1">
+                          <span className="font-bold text-amber-300 text-[11px] uppercase tracking-wide flex items-center gap-1">
+                            2. ¿Qué es 80s/step en 0.52 MP?
+                          </span>
+                          <p className="leading-relaxed text-[11px]">
+                            Indica que la GPU tardó <strong>80 segundos</strong> en procesar cada paso de muestreo individual al generar una imagen de 0.52 MP.
+                          </p>
+                        </div>
+                        <div className="bg-neutral-900/60 p-2.5 rounded-lg border border-neutral-800/60 flex flex-col gap-1">
+                          <span className="font-bold text-teal-300 text-[11px] uppercase tracking-wide flex items-center gap-1">
+                            3. ¿Por qué s/step/MP?
+                          </span>
+                          <p className="leading-relaxed text-[11px]">
+                            Al dividir <span className="font-mono text-neutral-300">80 ÷ 0.52 = 153.8 s/step/MP</span> se normaliza el coste a 1 Megapíxel estándar. Permite comparar resoluciones distintas. <strong>A menor valor, más rápido renderiza.</strong>
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Distribución por nivel de eficiencia */}
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                     <div className="p-3 rounded-xl bg-emerald-950/25 border border-emerald-800/40 flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-emerald-400 uppercase">Ultrarrápido</span>
-                        <span className="text-[10px] font-mono text-emerald-300">&lt;1.6 s/MP</span>
+                        <span className="text-[10px] font-mono text-emerald-300">&lt;15 s/MP</span>
                       </div>
                       <span className="text-xl font-bold font-mono text-emerald-200">
                         {efficiencyBenchmark.distribution['Ultrarrápido']}
@@ -1698,7 +1827,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
                     <div className="p-3 rounded-xl bg-teal-950/25 border border-teal-800/40 flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-teal-400 uppercase">Óptimo</span>
-                        <span className="text-[10px] font-mono text-teal-300">1.6 - 3.2</span>
+                        <span className="text-[10px] font-mono text-teal-300">15 - 40</span>
                       </div>
                       <span className="text-xl font-bold font-mono text-teal-200">
                         {efficiencyBenchmark.distribution['Óptimo']}
@@ -1708,7 +1837,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
                     <div className="p-3 rounded-xl bg-indigo-950/25 border border-indigo-800/40 flex flex-col gap-1">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-indigo-400 uppercase">Equilibrado</span>
-                        <span className="text-[10px] font-mono text-indigo-300">3.2 - 5.8</span>
+                        <span className="text-[10px] font-mono text-indigo-300">40 - 80</span>
                       </div>
                       <span className="text-xl font-bold font-mono text-indigo-200">
                         {efficiencyBenchmark.distribution['Equilibrado']}
@@ -1717,21 +1846,21 @@ export function DashboardView({ videos }: DashboardViewProps) {
 
                     <div className="p-3 rounded-xl bg-amber-950/25 border border-amber-800/40 flex flex-col gap-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-amber-400 uppercase">Exigente</span>
-                        <span className="text-[10px] font-mono text-amber-300">5.8 - 9.5</span>
+                        <span className="text-[11px] font-bold text-amber-400 uppercase">Lento</span>
+                        <span className="text-[10px] font-mono text-amber-300">80 - 140</span>
                       </div>
                       <span className="text-xl font-bold font-mono text-amber-200">
-                        {efficiencyBenchmark.distribution['Exigente']}
+                        {efficiencyBenchmark.distribution['Lento']}
                       </span>
                     </div>
 
                     <div className="p-3 rounded-xl bg-rose-950/25 border border-rose-800/40 flex flex-col gap-1 col-span-2 sm:col-span-1">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-bold text-rose-400 uppercase">Intensivo</span>
-                        <span className="text-[10px] font-mono text-rose-300">&gt;9.5 s/MP</span>
+                        <span className="text-[11px] font-bold text-rose-400 uppercase">Muy Lento</span>
+                        <span className="text-[10px] font-mono text-rose-300">&gt;140 s/MP</span>
                       </div>
                       <span className="text-xl font-bold font-mono text-rose-200">
-                        {efficiencyBenchmark.distribution['Intensivo']}
+                        {efficiencyBenchmark.distribution['Muy Lento']}
                       </span>
                     </div>
                   </div>
@@ -1745,10 +1874,19 @@ export function DashboardView({ videos }: DashboardViewProps) {
                           <th className="py-2.5 px-3">Modelo</th>
                           <th className="py-2.5 px-3">Resolución</th>
                           <th className="py-2.5 px-3">GPU & VRAM</th>
-                          <th className="py-2.5 px-3 text-right">Velocidad (s/step)</th>
-                          <th className="py-2.5 px-3 text-right">Eficiencia (s/step/MP)</th>
-                          <th className="py-2.5 px-3 text-right">Throughput (MP/s)</th>
-                          <th className="py-2.5 px-3 text-center">Calificación</th>
+                          {efficiencyMode === 'detailed' ? (
+                            <>
+                              <th className="py-2.5 px-3 text-right">Velocidad (s/step)</th>
+                              <th className="py-2.5 px-3 text-right">Eficiencia (s/step/MP)</th>
+                              <th className="py-2.5 px-3 text-right">Throughput (MP/s)</th>
+                              <th className="py-2.5 px-3 text-center">Calificación</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="py-2.5 px-3 text-right">Tiempo por Paso</th>
+                              <th className="py-2.5 px-3 text-center">Nivel de Velocidad</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-800/60 font-mono">
@@ -1768,20 +1906,35 @@ export function DashboardView({ videos }: DashboardViewProps) {
                                 <span className="text-neutral-500 text-[10px] ml-1 font-mono">({cfg.vram}G)</span>
                               )}
                             </td>
-                            <td className="py-2 px-3 text-right text-amber-300 font-bold">
-                              {cfg.avgSecPerStep}s
-                            </td>
-                            <td className="py-2 px-3 text-right text-teal-300 font-bold">
-                              {cfg.avgSecPerStepPerMp}
-                            </td>
-                            <td className="py-2 px-3 text-right text-neutral-400">
-                              {cfg.avgMpPerSec}
-                            </td>
-                            <td className="py-2 px-3 text-center font-sans">
-                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.ratingBg} ${cfg.ratingBorder} ${cfg.ratingColor}`}>
-                                {cfg.ratingLabel} ({cfg.avgScore}/100)
-                              </span>
-                            </td>
+                            {efficiencyMode === 'detailed' ? (
+                              <>
+                                <td className="py-2 px-3 text-right text-amber-300 font-bold">
+                                  {cfg.avgSecPerStep}s
+                                </td>
+                                <td className="py-2 px-3 text-right text-teal-300 font-bold">
+                                  {cfg.avgSecPerStepPerMp}
+                                </td>
+                                <td className="py-2 px-3 text-right text-neutral-400">
+                                  {cfg.avgMpPerSec}
+                                </td>
+                                <td className="py-2 px-3 text-center font-sans">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${cfg.ratingBg} ${cfg.ratingBorder} ${cfg.ratingColor}`}>
+                                    {cfg.ratingLabel} ({cfg.avgScore}/100)
+                                  </span>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="py-2 px-3 text-right text-neutral-200 font-medium">
+                                  {cfg.avgSecPerStep}s / paso
+                                </td>
+                                <td className="py-2 px-3 text-center font-sans">
+                                  <span className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${cfg.ratingBg} ${cfg.ratingBorder} ${cfg.ratingColor}`}>
+                                    {cfg.ratingLabel}
+                                  </span>
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>

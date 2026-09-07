@@ -7,9 +7,9 @@ import {
   Maximize2, Minimize2, FileText, CheckCircle2, AlertCircle, 
   SlidersHorizontal, Repeat, Search, User, Filter, Film, Tag,
   Grid2X2, Grid3X3, LayoutGrid, Info, ArrowUpRight, Loader2,
-  Sliders, MoveHorizontal
+  Sliders, MoveHorizontal, Zap
 } from 'lucide-react';
-import { computeParameterDiff, diffWords, formatBytes, getPlayableVideoUrl } from '../../lib/utils';
+import { computeParameterDiff, diffWords, formatBytes, getPlayableVideoUrl, calculateEfficiencyMetrics } from '../../lib/utils';
 
 interface DualCompareModalProps {
   initialVideoA: VideoRecord;
@@ -89,6 +89,8 @@ export function DualCompareModal({
   const [pickerAuthorFilter, setPickerAuthorFilter] = useState('all');
   const [pickerGroupFilter, setPickerGroupFilter] = useState('all');
   const [pickerResolutionFilter, setPickerResolutionFilter] = useState('all');
+  const [pickerGpuFilter, setPickerGpuFilter] = useState('all');
+  const [pickerSpeedFilter, setPickerSpeedFilter] = useState('all');
   const [pickerCols, setPickerCols] = useState<PickerCols>(4);
   const [pickerPage, setPickerPage] = useState(1);
   const [pickerPageSize, setPickerPageSize] = useState<number>(8); // Inicia con pocos vídeos para no saturar
@@ -170,10 +172,29 @@ export function DualCompareModal({
     return Array.from(set).sort();
   }, [allVideos]);
 
+  const uniqueGpus = useMemo(() => {
+    const set = new Set<string>();
+    allVideos.forEach(v => {
+      if (v.hardware?.gpu?.trim()) set.add(v.hardware.gpu.trim());
+    });
+    return Array.from(set).sort();
+  }, [allVideos]);
+
+  const uniqueSpeeds = useMemo(() => {
+    const speedCounts: Record<string, number> = {};
+    allVideos.forEach(v => {
+      const eff = calculateEfficiencyMetrics(v.renderSeconds, v.steps, v.width, v.height);
+      const label = eff ? eff.ratingLabel : 'Sin datos';
+      speedCounts[label] = (speedCounts[label] || 0) + 1;
+    });
+    const order = ['Ultrarrápido', 'Óptimo', 'Equilibrado', 'Lento', 'Muy Lento', 'Sin datos'];
+    return order.filter(name => (speedCounts[name] || 0) > 0);
+  }, [allVideos]);
+
   // Reset page when filters change
   useEffect(() => {
     setPickerPage(1);
-  }, [pickerSearch, pickerModelFilter, pickerAuthorFilter, pickerGroupFilter, pickerResolutionFilter, pickerPageSize]);
+  }, [pickerSearch, pickerModelFilter, pickerAuthorFilter, pickerGroupFilter, pickerResolutionFilter, pickerGpuFilter, pickerSpeedFilter, pickerPageSize]);
 
   // Filtered videos for visual picker
   const pickerFilteredVideos = useMemo(() => {
@@ -196,6 +217,22 @@ export function DualCompareModal({
         if (res !== pickerResolutionFilter) return false;
       }
 
+      // GPU Filter
+      if (pickerGpuFilter !== 'all') {
+        const gpu = v.hardware?.gpu?.trim() || 'Sin GPU';
+        if (gpu !== pickerGpuFilter) return false;
+      }
+
+      // Speed Filter
+      if (pickerSpeedFilter !== 'all') {
+        const eff = calculateEfficiencyMetrics(v.renderSeconds, v.steps, v.width, v.height);
+        if (pickerSpeedFilter === 'Sin datos') {
+          if (eff !== null) return false;
+        } else {
+          if (!eff || eff.ratingLabel !== pickerSpeedFilter) return false;
+        }
+      }
+
       // Free Search Filter
       if (!pickerSearch.trim()) return true;
       const q = pickerSearch.toLowerCase().trim();
@@ -210,7 +247,7 @@ export function DualCompareModal({
       
       return matchPrompt || matchModel || matchAuthor || matchGroup || matchTags || matchHardware || matchResolution || matchSteps;
     });
-  }, [allVideos, pickerSearch, pickerModelFilter, pickerAuthorFilter, pickerGroupFilter, pickerResolutionFilter]);
+  }, [allVideos, pickerSearch, pickerModelFilter, pickerAuthorFilter, pickerGroupFilter, pickerResolutionFilter, pickerGpuFilter, pickerSpeedFilter]);
 
   // Paginated videos
   const totalPages = Math.ceil(pickerFilteredVideos.length / (pickerPageSize === -1 ? (pickerFilteredVideos.length || 1) : pickerPageSize));
@@ -1197,7 +1234,43 @@ export function DualCompareModal({
                   </select>
                 )}
 
-                {(pickerModelFilter !== 'all' || pickerAuthorFilter !== 'all' || pickerResolutionFilter !== 'all' || pickerGroupFilter !== 'all' || pickerSearch) && (
+                {/* GPU Filter */}
+                {uniqueGpus.length > 0 && (
+                  <select
+                    value={pickerGpuFilter}
+                    onChange={e => setPickerGpuFilter(e.target.value)}
+                    className={`bg-neutral-900 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-teal-500 cursor-pointer ${
+                      pickerGpuFilter !== 'all'
+                        ? 'border-teal-500/50 text-teal-300 font-medium'
+                        : 'border-neutral-800 text-neutral-200'
+                    }`}
+                  >
+                    <option value="all">Todas las GPUs</option>
+                    {uniqueGpus.map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Speed Filter */}
+                {uniqueSpeeds.length > 0 && (
+                  <select
+                    value={pickerSpeedFilter}
+                    onChange={e => setPickerSpeedFilter(e.target.value)}
+                    className={`bg-neutral-900 border rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:border-teal-500 cursor-pointer ${
+                      pickerSpeedFilter !== 'all'
+                        ? 'border-amber-500/50 text-amber-300 font-medium'
+                        : 'border-neutral-800 text-neutral-200'
+                    }`}
+                  >
+                    <option value="all">⚡ Velocidad (Todas)</option>
+                    {uniqueSpeeds.map(s => (
+                      <option key={s} value={s}>⚡ {s}</option>
+                    ))}
+                  </select>
+                )}
+
+                {(pickerModelFilter !== 'all' || pickerAuthorFilter !== 'all' || pickerResolutionFilter !== 'all' || pickerGroupFilter !== 'all' || pickerGpuFilter !== 'all' || pickerSpeedFilter !== 'all' || pickerSearch) && (
                   <button
                     onClick={() => {
                       setPickerSearch('');
@@ -1205,6 +1278,8 @@ export function DualCompareModal({
                       setPickerAuthorFilter('all');
                       setPickerResolutionFilter('all');
                       setPickerGroupFilter('all');
+                      setPickerGpuFilter('all');
+                      setPickerSpeedFilter('all');
                     }}
                     className="text-xs text-teal-400 hover:text-teal-300 font-medium px-2 py-1 transition-colors cursor-pointer"
                   >

@@ -1492,7 +1492,7 @@ export interface VideoEfficiencyMetrics {
   secPerStep: number;
   secPerStepPerMegapixel: number;
   megapixelsPerSecond: number;
-  ratingLabel: 'Ultrarrápido' | 'Óptimo' | 'Equilibrado' | 'Exigente' | 'Intensivo';
+  ratingLabel: 'Ultrarrápido' | 'Óptimo' | 'Equilibrado' | 'Lento' | 'Muy Lento';
   ratingColor: string;
   ratingBg: string;
   ratingBorder: string;
@@ -1529,36 +1529,43 @@ export function calculateEfficiencyMetrics(
   // Megapixels rendered per second across all steps
   const megapixelsPerSecond = (megapixels * steps) / renderSeconds;
 
-  // Normalized score (0 to 100)
-  const score = Math.max(5, Math.min(100, Math.round(100 / (1 + (secPerStepPerMegapixel / 3.5)))));
+  // Normalized score (0 to 100) calibrated for video diffusion workloads
+  const score = Math.max(5, Math.min(100, Math.round(100 / (1 + (secPerStepPerMegapixel / 50)))));
 
   let ratingLabel: VideoEfficiencyMetrics['ratingLabel'] = 'Equilibrado';
-  let ratingColor = 'text-blue-300';
-  let ratingBg = 'bg-blue-950/40';
-  let ratingBorder = 'border-blue-800/60';
+  let ratingColor = 'text-indigo-300';
+  let ratingBg = 'bg-indigo-950/40';
+  let ratingBorder = 'border-indigo-800/60';
 
-  if (secPerStepPerMegapixel < 1.6) {
+  // Realistic thresholds for AI Video Generation (Wan2GP, Minimax H3 33B, LTX-Video)
+  // Evaluated in normalized s/step per Megapixel:
+  // e.g. 80s/step on 0.52 MP = 153.8 s/step/MP -> 'Muy Lento'
+  // e.g. 50s/step on 0.52 MP = 96.1 s/step/MP -> 'Lento'
+  // e.g. 30s/step on 0.52 MP = 57.7 s/step/MP -> 'Equilibrado'
+  // e.g. 15s/step on 0.52 MP = 28.8 s/step/MP -> 'Óptimo'
+  // e.g. 6s/step on 0.52 MP = 11.5 s/step/MP -> 'Ultrarrápido'
+  if (secPerStepPerMegapixel < 15) {
     ratingLabel = 'Ultrarrápido';
     ratingColor = 'text-emerald-300';
     ratingBg = 'bg-emerald-950/40';
     ratingBorder = 'border-emerald-700/60';
-  } else if (secPerStepPerMegapixel < 3.2) {
+  } else if (secPerStepPerMegapixel < 40) {
     ratingLabel = 'Óptimo';
     ratingColor = 'text-teal-300';
     ratingBg = 'bg-teal-950/40';
     ratingBorder = 'border-teal-700/60';
-  } else if (secPerStepPerMegapixel < 5.8) {
+  } else if (secPerStepPerMegapixel < 80) {
     ratingLabel = 'Equilibrado';
     ratingColor = 'text-indigo-300';
     ratingBg = 'bg-indigo-950/40';
     ratingBorder = 'border-indigo-800/60';
-  } else if (secPerStepPerMegapixel < 9.5) {
-    ratingLabel = 'Exigente';
+  } else if (secPerStepPerMegapixel < 140) {
+    ratingLabel = 'Lento';
     ratingColor = 'text-amber-300';
     ratingBg = 'bg-amber-950/40';
     ratingBorder = 'border-amber-800/60';
   } else {
-    ratingLabel = 'Intensivo';
+    ratingLabel = 'Muy Lento';
     ratingColor = 'text-rose-300';
     ratingBg = 'bg-rose-950/40';
     ratingBorder = 'border-rose-800/60';
