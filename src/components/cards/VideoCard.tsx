@@ -1,6 +1,6 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { VideoRecord } from '../../types';
-import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight, Clapperboard, Zap, Flame, X } from 'lucide-react';
+import { Layers, Settings, Workflow, Target, PlaySquare, ExternalLink, Calendar, Hash, Clock, StickyNote, Tag, Trash2, Edit3, ChevronDown, ChevronUp, Copy, Check, Cpu, HardDrive, User, Sparkles, Gauge, SplitSquareVertical, ArrowLeftRight, Clapperboard, Zap, Flame, X, Maximize2, RectangleHorizontal, Footprints, SlidersHorizontal, Dices, Info } from 'lucide-react';
 import { formatBytes, extractCreationDateFromText, getGpuVendor, GPU_LOGOS, SOFTWARE_ICONS, extractTechnicalDetails, getPlayableVideoUrl, calculateEfficiencyMetrics } from '../../lib/utils';
 import { useInViewport } from '../../hooks/useInViewport';
 import { SmartVideoPlayer } from '../common/SmartVideoPlayer';
@@ -16,6 +16,83 @@ interface VideoCardProps {
   onCinemaClick?: () => void;
 }
 
+function getSpeedTheme(ratingLabel?: string) {
+  switch (ratingLabel) {
+    case 'Ultrarrápido':
+      return {
+        accent: 'text-emerald-400',
+        text: 'text-emerald-300',
+        bg: 'bg-emerald-950/40',
+        border: 'border-emerald-500/40',
+        ring: 'ring-emerald-500/50',
+        bar: 'bg-emerald-400 text-emerald-950 font-bold',
+        pill: 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50',
+        cardBg: 'bg-emerald-950/30 border-emerald-800/40',
+        arrowBorder: 'border-emerald-500/40'
+      };
+    case 'Óptimo':
+      return {
+        accent: 'text-teal-400',
+        text: 'text-teal-300',
+        bg: 'bg-teal-950/40',
+        border: 'border-teal-500/40',
+        ring: 'ring-teal-500/50',
+        bar: 'bg-teal-400 text-teal-950 font-bold',
+        pill: 'bg-teal-950/90 text-teal-300 border-teal-500/50',
+        cardBg: 'bg-teal-950/30 border-teal-800/40',
+        arrowBorder: 'border-teal-500/40'
+      };
+    case 'Equilibrado':
+      return {
+        accent: 'text-indigo-400',
+        text: 'text-indigo-300',
+        bg: 'bg-indigo-950/40',
+        border: 'border-indigo-500/40',
+        ring: 'ring-indigo-500/50',
+        bar: 'bg-indigo-400 text-indigo-950 font-bold',
+        pill: 'bg-indigo-950/90 text-indigo-300 border-indigo-500/50',
+        cardBg: 'bg-indigo-950/30 border-indigo-800/40',
+        arrowBorder: 'border-indigo-500/40'
+      };
+    case 'Lento':
+      return {
+        accent: 'text-amber-400',
+        text: 'text-amber-300',
+        bg: 'bg-amber-950/40',
+        border: 'border-amber-500/40',
+        ring: 'ring-amber-500/50',
+        bar: 'bg-amber-400 text-amber-950 font-bold',
+        pill: 'bg-amber-950/90 text-amber-300 border-amber-500/50',
+        cardBg: 'bg-amber-950/30 border-amber-800/40',
+        arrowBorder: 'border-amber-500/40'
+      };
+    case 'Muy Lento':
+      return {
+        accent: 'text-rose-400',
+        text: 'text-rose-300',
+        bg: 'bg-rose-950/40',
+        border: 'border-rose-500/40',
+        ring: 'ring-rose-500/50',
+        bar: 'bg-rose-400 text-rose-950 font-bold',
+        pill: 'bg-rose-950/90 text-rose-300 border-rose-500/50',
+        cardBg: 'bg-rose-950/30 border-rose-800/40',
+        arrowBorder: 'border-rose-500/40'
+      };
+    default:
+      return {
+        accent: 'text-teal-400',
+        text: 'text-teal-300',
+        bg: 'bg-neutral-900',
+        border: 'border-neutral-700',
+        ring: 'ring-teal-500/50',
+        bar: 'bg-teal-400 text-teal-950 font-bold',
+        pill: 'bg-neutral-900 text-neutral-300 border-neutral-700',
+        cardBg: 'bg-neutral-900 border-neutral-800',
+        arrowBorder: 'border-neutral-700'
+      };
+  }
+}
+
 export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, onDeleteClick, onEditClick, onCompareClick, onCinemaClick }: VideoCardProps) {
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
@@ -23,18 +100,51 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const [copiedNegative, setCopiedNegative] = useState(false);
   const { targetRef, isInViewport } = useInViewport<HTMLDivElement>();
   
-  // Persist technical details expanded state in localStorage (defaults to true for maximum visibility)
-  const [showTechDetails, setShowTechDetails] = useState<boolean>(() => {
+  // Modo Detallado vs Modo Sencillo (en modo detallado se muestran encoders y el botón (i) de velocidad)
+  const [isDetailedMode, setIsDetailedMode] = useState<boolean>(() => {
     try {
-      const saved = localStorage.getItem('ai_vault_show_tech_details');
-      return saved !== null ? saved === 'true' : true;
+      const saved = localStorage.getItem('ai_vault_card_detail_mode') ?? localStorage.getItem('ai_vault_show_tech_details');
+      return saved !== null ? saved === 'true' : false;
     } catch {
-      return true;
+      return false;
     }
   });
 
+  const handleToggleDetailMode = () => {
+    setIsDetailedMode(prev => {
+      const next = !prev;
+      if (!next) {
+        setShowSpeedDropdown(false);
+      }
+      try {
+        localStorage.setItem('ai_vault_card_detail_mode', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
   // Desplegable de datos extra para la métrica de velocidad
   const [showSpeedDropdown, setShowSpeedDropdown] = useState(false);
+  const speedDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Cerrar el popover de velocidad al hacer clic fuera o presionar Escape
+  useEffect(() => {
+    if (!showSpeedDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (speedDropdownRef.current && !speedDropdownRef.current.contains(e.target as Node)) {
+        setShowSpeedDropdown(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowSpeedDropdown(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showSpeedDropdown]);
 
   // Easter Egg 4.1: 5 clics rápidos consecutivos sobre el badge de GPU activan GPU Turbo Mode (visual sutil, sin sonido)
   const [gpuTurboActive, setGpuTurboActive] = useState(false);
@@ -57,16 +167,6 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
         gpuClicksRef.current = 0;
       }, 1000);
     }
-  };
-
-  const handleToggleTechDetails = () => {
-    setShowTechDetails(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem('ai_vault_show_tech_details', String(next));
-      } catch {}
-      return next;
-    });
   };
 
   const handleCopyPrompt = async (e?: React.MouseEvent) => {
@@ -177,6 +277,10 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
     return calculateEfficiencyMetrics(video.renderSeconds, video.steps, video.width, video.height);
   }, [video.renderSeconds, video.steps, video.width, video.height]);
 
+  const speedTheme = useMemo(() => {
+    return getSpeedTheme(efficiencyMetrics?.ratingLabel);
+  }, [efficiencyMetrics?.ratingLabel]);
+
   const hasEncoders = Boolean(
     resolvedTech.textEncoder ||
     resolvedTech.videoVae ||
@@ -187,9 +291,15 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const authorName = video.creatorDisplayName || video.createdBy;
 
   return (
-    <div ref={targetRef} id={`video-card-${video.id}`} className={`flex flex-col lg:flex-row bg-neutral-900/60 border ${isSelected ? 'border-teal-500' : 'border-neutral-800'} rounded-2xl overflow-hidden hover:border-neutral-700 transition-all shadow-lg relative`}>
+    <div 
+      ref={targetRef} 
+      id={`video-card-${video.id}`} 
+      className={`flex flex-col lg:flex-row bg-neutral-900/60 border ${isSelected ? 'border-teal-500' : 'border-neutral-800'} rounded-2xl ${
+        showSpeedDropdown ? 'z-30 overflow-visible' : 'overflow-hidden'
+      } hover:border-neutral-700 transition-all shadow-lg relative`}
+    >
       {/* Zona de previsualización de vídeo amplia */}
-      <div className="w-full lg:w-[540px] xl:w-[620px] shrink-0 bg-neutral-950 p-4 sm:p-6 flex flex-col justify-start border-b lg:border-b-0 lg:border-r border-neutral-800">
+      <div className="w-full lg:w-[540px] xl:w-[620px] shrink-0 bg-neutral-950 p-4 sm:p-6 flex flex-col justify-start border-b lg:border-b-0 lg:border-r border-neutral-800 rounded-t-2xl lg:rounded-t-none lg:rounded-l-2xl">
         
         {/* Barra superior encima del vídeo: Modelo, Parámetros B, Variante y Herramienta (Wan2GP / Maestro) */}
         <div className="mb-2.5 flex items-center justify-between gap-2 flex-wrap min-w-0">
@@ -382,7 +492,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
       </div>
 
       {/* Zona de datos técnicos */}
-      <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between space-y-6">
+      <div className="flex-1 p-6 sm:p-8 flex flex-col justify-between space-y-6 rounded-b-2xl lg:rounded-b-none lg:rounded-r-2xl">
         <div className="space-y-4">
           {/* Header con Titular Principal, Carpeta y Acciones */}
           <div className="flex flex-col gap-3">
@@ -409,24 +519,23 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 )}
               </div>
 
-              {/* Botones a la derecha: Toggle Encoders y Acciones compactas */}
+              {/* Botones a la derecha: Modo Detallado / Sencillo y Acciones compactas */}
               <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto">
-                {hasEncoders && (
-                  <button
-                    type="button"
-                    onClick={handleToggleTechDetails}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
-                      showTechDetails
-                        ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-sm'
-                        : 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
-                    }`}
-                    title={showTechDetails ? "Ocultar encoders" : "Ver encoders (Text Encoder y VAE)"}
-                  >
-                    <Cpu className={`w-3 h-3 ${showTechDetails ? 'text-cyan-400' : 'text-neutral-400'}`} />
-                    <span className="hidden sm:inline">Encoders</span>
-                    {showTechDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleToggleDetailMode}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer ${
+                    isDetailedMode
+                      ? efficiencyMetrics
+                        ? `${speedTheme.bg} ${speedTheme.text} border ${speedTheme.border} shadow-xs`
+                        : 'bg-teal-500/15 text-teal-300 border border-teal-500/40 shadow-xs'
+                      : 'bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 border border-neutral-800'
+                  }`}
+                  title={isDetailedMode ? "Cambiar a modo sencillo (ocultar encoders y detalles)" : "Cambiar a modo detallado (ver encoders y detalles de velocidad)"}
+                >
+                  <SlidersHorizontal className={`w-3 h-3 ${isDetailedMode ? (efficiencyMetrics ? speedTheme.accent : 'text-teal-400') : 'text-neutral-400'}`} />
+                  <span className="hidden sm:inline">{isDetailedMode ? 'Detallado' : 'Sencillo'}</span>
+                </button>
 
                 {/* Botones de acción */}
                 {!selectionMode && (
@@ -466,11 +575,13 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
               </div>
             </div>
 
-            {/* Sección desplegable de ENCODERS */}
-            {showTechDetails && hasEncoders && (
-              <div className="flex flex-wrap items-center gap-2 p-2.5 bg-neutral-950/70 rounded-xl border border-neutral-800/80 animate-in fade-in duration-150">
+            {/* Sección de ENCODERS (visible únicamente en modo detallado) */}
+            {isDetailedMode && hasEncoders && (
+              <div className={`flex flex-wrap items-center gap-2 p-2.5 bg-neutral-950/70 rounded-xl border ${
+                efficiencyMetrics ? speedTheme.border : 'border-neutral-800/80'
+              } animate-in fade-in duration-150`}>
                 <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider flex items-center gap-1 mr-1">
-                  <Cpu className="w-3 h-3 text-teal-400" />
+                  <Cpu className={`w-3 h-3 ${efficiencyMetrics ? speedTheme.accent : 'text-teal-400'}`} />
                   ENCODERS:
                 </span>
                 {resolvedTech.textEncoder && (
@@ -611,7 +722,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             {/* 1. Resolución */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-blue-950/20 border border-blue-900/30 min-h-[64px]">
               <span className="text-[11px] text-blue-500/80 flex items-center gap-1.5 font-medium">
-                <Target className="w-3.5 h-3.5 text-blue-400 shrink-0" /> Resolución
+                <Maximize2 className="w-3.5 h-3.5 text-blue-400 shrink-0" /> Resolución
               </span>
               <span className="text-xs sm:text-sm font-semibold text-blue-100 font-mono truncate">
                 {video.width}x{video.height}
@@ -621,7 +732,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             {/* 2. Proporción */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-violet-950/20 border border-violet-900/30 min-h-[64px]">
               <span className="text-[11px] text-violet-500/80 flex items-center gap-1.5 font-medium">
-                <Target className="w-3.5 h-3.5 text-violet-400 shrink-0" /> Proporción
+                <RectangleHorizontal className="w-3.5 h-3.5 text-violet-400 shrink-0" /> Proporción
               </span>
               <span className="text-xs sm:text-sm font-semibold text-violet-100 font-mono truncate">
                 {video.orientation}
@@ -631,7 +742,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             {/* 3. Steps */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-900/30 min-h-[64px]">
               <span className="text-[11px] text-emerald-500/80 flex items-center gap-1.5 font-medium">
-                <Settings className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Steps
+                <Footprints className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Steps
               </span>
               <span className="text-xs sm:text-sm font-semibold text-emerald-100 font-mono truncate">{video.steps}</span>
             </div>
@@ -639,7 +750,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             {/* 4. Shift */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/30 min-h-[64px]">
               <span className="text-[11px] text-amber-500/80 flex items-center gap-1.5 font-medium">
-                <Workflow className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Shift
+                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Shift
               </span>
               <span className="text-xs sm:text-sm font-semibold text-amber-100 font-mono truncate">
                 {video.shift !== undefined ? video.shift : '—'}
@@ -649,34 +760,43 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
             {/* 5. Seed */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-rose-950/20 border border-rose-900/30 min-h-[64px]">
               <span className="text-[11px] text-rose-500/80 flex items-center gap-1.5 font-medium">
-                <Hash className="w-3.5 h-3.5 text-rose-400 shrink-0" /> Seed
+                <Dices className="w-3.5 h-3.5 text-rose-400 shrink-0" /> Seed
               </span>
               <span className="text-xs sm:text-sm font-semibold text-rose-100 font-mono truncate" title={String(video.seed || '')}>
                 {video.seed !== undefined ? video.seed : '—'}
               </span>
             </div>
 
-            {/* 6. Velocidad: Categoría + Segundos por paso + Desplegable para detalles extra */}
+            {/* 6. Velocidad: Categoría + Segundos por paso + Micro-indicador elegante para popover */}
             {efficiencyMetrics ? (
               <div 
-                className={`flex flex-col justify-between p-2.5 rounded-lg border transition-all relative min-h-[64px] ${efficiencyMetrics.ratingBg} ${efficiencyMetrics.ratingBorder}`}
+                ref={speedDropdownRef}
+                className={`flex flex-col justify-between p-2.5 rounded-lg border transition-all relative min-h-[64px] ${
+                  showSpeedDropdown ? `z-50 ring-1 ${speedTheme.ring}` : 'z-auto'
+                } ${efficiencyMetrics.ratingBg} ${efficiencyMetrics.ratingBorder}`}
               >
                 <div className="flex items-center justify-between gap-1">
                   <span className={`text-[11px] flex items-center gap-1.5 font-medium ${efficiencyMetrics.ratingColor}`}>
-                    <Zap className="w-3.5 h-3.5 shrink-0" /> Velocidad
+                    <Gauge className="w-3.5 h-3.5 shrink-0" /> Velocidad
                   </span>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowSpeedDropdown(prev => !prev);
-                    }}
-                    className="text-[10px] text-neutral-400 hover:text-neutral-200 transition-colors bg-neutral-950/70 hover:bg-neutral-900 px-1.5 py-0.5 rounded border border-neutral-800/80 flex items-center gap-0.5 cursor-pointer"
-                    title={showSpeedDropdown ? "Ocultar desglose de velocidad" : "Ver detalles técnicos y normalización MP"}
-                  >
-                    <span>{showSpeedDropdown ? 'Cerrar' : 'Detalles'}</span>
-                    {showSpeedDropdown ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  </button>
+                  {isDetailedMode && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowSpeedDropdown(prev => !prev);
+                      }}
+                      className={`w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                        showSpeedDropdown
+                          ? `${speedTheme.text} ${speedTheme.bg} border ${speedTheme.border} shadow-xs`
+                          : `text-neutral-400 hover:${speedTheme.text} hover:bg-neutral-900/80 border border-transparent`
+                      }`}
+                      title={showSpeedDropdown ? "Cerrar detalles de velocidad" : "Ver desglose técnico y normalización"}
+                      aria-label="Detalles de velocidad"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-baseline justify-between gap-1.5">
@@ -687,60 +807,118 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                     {efficiencyMetrics.secPerStep}s/p
                   </span>
                 </div>
+
+                {/* Popover flotante elegante anclado naturalmente a la celda */}
+                {isDetailedMode && showSpeedDropdown && (
+                  <div 
+                    onClick={(e) => e.stopPropagation()}
+                    className={`absolute right-0 top-[calc(100%+8px)] z-50 w-72 sm:w-84 max-w-[calc(100vw-2.5rem)] p-3.5 rounded-xl bg-neutral-900/98 backdrop-blur-md border ${speedTheme.border} shadow-2xl shadow-black/90 text-xs animate-in fade-in zoom-in-95 duration-150 flex flex-col gap-3`}
+                  >
+                    {/* Flecha indicadora que ancla visualmente el popup al botón (i) */}
+                    <div className={`absolute -top-1.5 right-2.5 w-3 h-3 bg-neutral-900 border-t border-l ${speedTheme.arrowBorder} rotate-45 transform pointer-events-none`} />
+
+                    {/* Cabecera con icono temático, título y badge con color de velocidad */}
+                    <div className="relative flex items-center justify-between border-b border-neutral-800/80 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <Gauge className={`w-4 h-4 ${speedTheme.accent}`} />
+                        <span className="text-xs font-bold text-neutral-200">
+                          Rendimiento GPU
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${speedTheme.pill}`}>
+                          {efficiencyMetrics.ratingLabel}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSpeedDropdown(false)}
+                        className="text-neutral-500 hover:text-neutral-300 p-0.5 rounded-md hover:bg-neutral-800 cursor-pointer transition-colors"
+                        title="Cerrar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {/* Escala visual de velocidad (5 niveles, destacando el actual) */}
+                    <div className="relative flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-[10px] text-neutral-400 font-medium px-0.5">
+                        <span>Escala de rendimiento:</span>
+                        <span className={`font-semibold ${speedTheme.text}`}>{efficiencyMetrics.ratingLabel}</span>
+                      </div>
+                      <div className="grid grid-cols-5 gap-1 text-center">
+                        {[
+                          { id: 'Ultrarrápido', label: 'Ultra' },
+                          { id: 'Óptimo', label: 'Óptimo' },
+                          { id: 'Equilibrado', label: 'Medio' },
+                          { id: 'Lento', label: 'Lento' },
+                          { id: 'Muy Lento', label: 'Muy lento' }
+                        ].map((tier) => {
+                          const isActive = efficiencyMetrics.ratingLabel === tier.id;
+                          return (
+                            <div 
+                              key={tier.id}
+                              className={`py-1 px-0.5 rounded text-[10px] transition-all flex items-center justify-center ${
+                                isActive
+                                  ? `${speedTheme.bar} shadow-xs`
+                                  : 'bg-neutral-950/70 text-neutral-500 border border-neutral-800/60'
+                              }`}
+                            >
+                              <span className="truncate w-full text-center leading-none">{tier.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Métricas clave en 3 tarjetas */}
+                    <div className="relative grid grid-cols-3 gap-1.5 text-center">
+                      <div className="p-2 rounded-lg bg-neutral-950/70 border border-neutral-800/60 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-neutral-400 uppercase font-sans font-bold">Tiempo/paso</span>
+                        <span className="text-xs font-mono font-bold text-neutral-100">{efficiencyMetrics.secPerStep}s</span>
+                        <span className="text-[9px] text-neutral-500 font-mono">({video.renderSeconds}s ÷ {video.steps}st)</span>
+                      </div>
+                      <div className="p-2 rounded-lg bg-neutral-950/70 border border-neutral-800/60 flex flex-col gap-0.5">
+                        <span className="text-[10px] text-neutral-400 uppercase font-sans font-bold">Resolución</span>
+                        <span className="text-xs font-mono font-bold text-sky-300">{efficiencyMetrics.megapixels} MP</span>
+                        <span className="text-[9px] text-neutral-500 font-mono">({video.width}×{video.height})</span>
+                      </div>
+                      <div className={`p-2 rounded-lg border ${speedTheme.cardBg} flex flex-col gap-0.5`}>
+                        <span className={`text-[10px] uppercase font-sans font-bold ${speedTheme.accent}`}>Normalizada</span>
+                        <span className={`text-xs font-mono font-bold ${speedTheme.text}`}>{efficiencyMetrics.secPerStepPerMegapixel} s/MP</span>
+                        <span className="text-[9px] text-neutral-400 font-sans">Coste por 1 MP</span>
+                      </div>
+                    </div>
+
+                    {/* Explicación fácil a la vista y bien estructurada */}
+                    <div className={`relative p-2.5 rounded-lg bg-neutral-950/80 border ${speedTheme.border} text-xs flex flex-col gap-1.5`}>
+                      <div className="flex items-start gap-2 text-[11px] leading-snug">
+                        <span className="shrink-0 text-sm leading-none mt-0.5">⚡</span>
+                        <div>
+                          <span className="font-semibold text-neutral-200">Coste por píxel: </span>
+                          <span className="text-neutral-400">Tarda </span>
+                          <span className={`font-mono font-bold ${speedTheme.text}`}>{efficiencyMetrics.secPerStepPerMegapixel}s</span>
+                          <span className="text-neutral-400"> en calcular 1 Megapíxel por paso.</span>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2 text-[11px] leading-snug text-neutral-400">
+                        <span className="shrink-0 text-sm leading-none mt-0.5">⚖️</span>
+                        <div>
+                          <span className="font-semibold text-neutral-300">Comparativa justa: </span>
+                          Permite comparar de forma directa vídeos a 540p, 720p o 1080p sin distorsión por resolución.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col justify-between p-2.5 rounded-lg bg-neutral-950/30 border border-neutral-800/40 opacity-50 min-h-[64px]">
                 <span className="text-[11px] text-neutral-500 flex items-center gap-1.5 font-medium">
-                  <Zap className="w-3.5 h-3.5 text-neutral-500 shrink-0" /> Velocidad
+                  <Gauge className="w-3.5 h-3.5 text-neutral-500 shrink-0" /> Velocidad
                 </span>
                 <span className="text-xs sm:text-sm font-semibold text-neutral-500 font-mono">—</span>
               </div>
             )}
           </div>
-
-          {/* Desplegable para datos extra de velocidad */}
-          {showSpeedDropdown && efficiencyMetrics && (
-            <div className="p-3 rounded-xl bg-neutral-950/90 border border-neutral-800/90 shadow-lg animate-in fade-in duration-150 flex flex-col gap-2.5">
-              <div className="flex items-center justify-between border-b border-neutral-800/80 pb-2">
-                <div className="flex items-center gap-2">
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-xs font-bold text-neutral-200">
-                    Desglose técnico de velocidad
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowSpeedDropdown(false)}
-                  className="text-neutral-500 hover:text-neutral-300 p-1 rounded-md hover:bg-neutral-900 cursor-pointer"
-                  title="Cerrar detalles"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                <div className="p-2 rounded-lg bg-neutral-900/70 border border-neutral-800/60 flex flex-col gap-0.5">
-                  <span className="text-[10px] text-neutral-500 uppercase font-sans font-bold">Tiempo por paso:</span>
-                  <span className="text-xs font-mono font-bold text-amber-300">{efficiencyMetrics.secPerStep}s / paso</span>
-                  <span className="text-[10px] text-neutral-400 font-sans">({video.renderSeconds}s totales ÷ {video.steps} steps)</span>
-                </div>
-                <div className="p-2 rounded-lg bg-neutral-900/70 border border-neutral-800/60 flex flex-col gap-0.5">
-                  <span className="text-[10px] text-neutral-500 uppercase font-sans font-bold">Resolución en MP:</span>
-                  <span className="text-xs font-mono font-bold text-sky-300">{efficiencyMetrics.megapixels} MP</span>
-                  <span className="text-[10px] text-neutral-400 font-sans">({video.width} × {video.height} píxeles)</span>
-                </div>
-                <div className="p-2 rounded-lg bg-neutral-900/70 border border-neutral-800/60 flex flex-col gap-0.5">
-                  <span className="text-[10px] text-neutral-500 uppercase font-sans font-bold">Normalizada (s/step/MP):</span>
-                  <span className="text-xs font-mono font-bold text-teal-300">{efficiencyMetrics.secPerStepPerMegapixel} s/MP</span>
-                  <span className="text-[10px] text-neutral-400 font-sans">Coste relativo a 1 Megapíxel</span>
-                </div>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-neutral-900/40 border border-neutral-800/50 text-[11px] text-neutral-400 leading-relaxed">
-                💡 <strong>¿Cómo se interpreta?</strong> La GPU tardó <span className="text-neutral-200 font-mono font-semibold">{efficiencyMetrics.secPerStep}s</span> en cada paso para generar <span className="text-neutral-200 font-mono font-semibold">{efficiencyMetrics.megapixels} MP</span>. Al normalizar a 1 MP estándar (<span className="text-teal-300 font-mono font-semibold">{efficiencyMetrics.secPerStepPerMegapixel} s/step/MP</span>), puedes comparar justamente la velocidad de vídeos con diferentes resoluciones (540p, 720p, 1080p).
-              </div>
-            </div>
-          )}
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-400 px-0.5">
             {/* Hardware / Tarjeta Gráfica con Easter Egg Turbo */}

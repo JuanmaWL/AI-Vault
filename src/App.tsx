@@ -21,6 +21,8 @@ const HardwareProfileModal = lazy(() => import('./components/modals/HardwareProf
 const DualCompareModal = lazy(() => import('./components/modals/DualCompareModal').then(m => ({ default: m.DualCompareModal })));
 const CinemaSpotlightModal = lazy(() => import('./components/modals/CinemaSpotlightModal').then(m => ({ default: m.CinemaSpotlightModal })));
 const SecretsModal = lazy(() => import('./components/modals/SecretsModal').then(m => ({ default: m.SecretsModal })));
+import { MobileFilterDrawer } from './components/modals/MobileFilterDrawer';
+import { MobileProfileSheet } from './components/modals/MobileProfileSheet';
 import { calculateOrientation, cleanForFirestore, extractTechnicalDetails, resolveHardwareForDate, calculateEfficiencyMetrics } from './lib/utils';
 import { MOCK_DATA } from './lib/mockData';
 import { Search, Plus, Database, LogOut, User as UserIcon, Edit3, Trash2, CheckSquare, Cpu, Sparkles, SplitSquareVertical, X, Check, LayoutList, LayoutGrid, Columns3, BarChart3, Filter, ChevronDown, ChevronUp, SlidersHorizontal, RotateCcw, Folder, FolderOpen, ArrowLeftRight, CheckCircle2, AlertCircle, Terminal, Zap } from 'lucide-react';
@@ -332,6 +334,8 @@ export default function App() {
   const [cinemaSpotlightIndex, setCinemaSpotlightIndex] = useState<number | null>(null);
   const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
   const [dbErrorToast, setDbErrorToast] = useState<string | null>(null);
+  const [isMobileFilterDrawerOpen, setIsMobileFilterDrawerOpen] = useState(false);
+  const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
 
   // Fetch or create user profile with Firestore multi-device sync
   const fetchUserProfile = async (user: User) => {
@@ -1106,12 +1110,12 @@ export default function App() {
 
         {/* Header Fijo */}
         <header className="sticky top-0 z-40 bg-neutral-950/80 backdrop-blur-xl border-b border-neutral-800">
-          <div className="max-w-[1600px] mx-auto px-6 h-20 flex items-center justify-between gap-6">
-            <div className="flex items-center gap-3 shrink-0 group cursor-default">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-16 md:h-20 flex items-center justify-between gap-3 md:gap-6">
+            <div className="flex items-center gap-2.5 sm:gap-3 shrink-0 group cursor-default">
               <div className="relative">
-                <div className="w-10 h-10 bg-neutral-900/90 border border-teal-500/30 group-hover:border-teal-400/60 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.15)] group-hover:shadow-[0_0_20px_rgba(45,212,191,0.25)] transition-all duration-300 relative">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 bg-neutral-900/90 border border-teal-500/30 group-hover:border-teal-400/60 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(20,184,166,0.15)] group-hover:shadow-[0_0_20px_rgba(45,212,191,0.25)] transition-all duration-300 relative">
                   <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/10 via-purple-500/10 to-pink-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-                  <VaultLogo className="w-6 h-6 drop-shadow-[0_0_6px_rgba(45,212,191,0.4)] relative z-10" />
+                  <VaultLogo className="w-5 h-5 sm:w-6 sm:h-6 drop-shadow-[0_0_6px_rgba(45,212,191,0.4)] relative z-10" />
                 </div>
                 {/* AI Sparkle badge overlapping top-right corner */}
                 <div className="absolute -top-1.5 -right-1.5 z-20 pointer-events-none">
@@ -1119,17 +1123,20 @@ export default function App() {
                 </div>
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight text-white group-hover:text-teal-100 transition-colors">AI Video Vault</h1>
+                <h1 className="text-base sm:text-xl font-bold tracking-tight text-white group-hover:text-teal-100 transition-colors">
+                  AI Video Vault
+                </h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className={`flex h-2 w-2 rounded-full ${usingLocal ? 'bg-amber-500' : 'bg-teal-500'}`}></span>
-                  <span className="text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
+                  <span className="text-[10px] sm:text-[11px] font-medium text-neutral-400 uppercase tracking-wider">
                     {usingLocal ? 'Modo Local' : 'Conectado a Firebase'}
                   </span>
                 </div>
               </div>
             </div>
 
-            <div className="flex-1 max-w-2xl relative group">
+            {/* Desktop Search (Preservado idéntico en >= md) */}
+            <div className="hidden md:flex flex-1 max-w-2xl relative group">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500 group-focus-within:text-white transition-colors" />
               <input
                 type="text"
@@ -1140,7 +1147,8 @@ export default function App() {
               />
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            {/* Desktop Right Buttons (Preservado idéntico en >= md) */}
+            <div className="hidden md:flex items-center gap-3 shrink-0">
               {/* Botón de Autenticación / Estado de Usuario */}
               <div className="flex items-center gap-1.5 bg-neutral-900/90 border border-neutral-800 rounded-full p-1 shadow-sm">
                 <button
@@ -1216,19 +1224,48 @@ export default function App() {
                 )}
               </div>
             </div>
+
+            {/* Mobile Actions Bar (< md) */}
+            <div className="flex md:hidden items-center gap-2 shrink-0">
+              {isAdmin && (
+                <button
+                  onClick={() => {
+                    setEditingVideo(undefined);
+                    setIsModalOpen(true);
+                  }}
+                  className="w-9 h-9 rounded-full bg-teal-500/15 border border-teal-500/30 text-teal-300 hover:text-white flex items-center justify-center cursor-pointer shadow-sm active:scale-95 transition-all"
+                  title="Nuevo Registro de Vídeo"
+                  aria-label="Nuevo Registro de Vídeo"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              )}
+
+              {/* Botón de Perfil Móvil */}
+              <button
+                onClick={() => setIsMobileProfileOpen(true)}
+                className="flex items-center gap-1.5 p-1 rounded-full bg-neutral-900 border border-neutral-800 hover:border-neutral-700 cursor-pointer shadow-sm active:scale-95 transition-all"
+                title="Menú y perfil de usuario"
+                aria-label="Menú y perfil de usuario"
+              >
+                <div className="w-7 h-7 rounded-full bg-teal-500/20 text-teal-300 flex items-center justify-center border border-teal-500/30">
+                  <UserIcon className="w-3.5 h-3.5" />
+                </div>
+              </button>
+            </div>
           </div>
         </header>
 
         {/* Sub-navegación para vistas (Barra de Navegación Principal) */}
-        <div className="border-b border-neutral-800/80 bg-neutral-950/85 backdrop-blur-xl sticky top-[65px] z-30 shadow-md shadow-black/20">
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6">
-            <div className="flex items-center justify-between py-2 sm:py-2.5 gap-4">
+        <div className="border-b border-neutral-800/80 bg-neutral-950/85 backdrop-blur-xl sticky top-16 md:top-20 z-30 shadow-md shadow-black/20">
+          <div className="max-w-[1600px] mx-auto px-3 sm:px-6">
+            <div className="flex items-center justify-between py-2 sm:py-2.5 gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
               {/* Segmented Control de Vistas Principal con Jerarquía Notoria (tipo Linear/Notion) */}
-              <nav className="flex items-center bg-neutral-900/95 border border-neutral-800 p-1.5 rounded-2xl shadow-xl shadow-black/40 gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar" aria-label="Vistas principales">
+              <nav className="flex items-center bg-neutral-900/95 border border-neutral-800 p-1 sm:p-1.5 rounded-2xl shadow-xl shadow-black/40 gap-1 sm:gap-1.5 shrink-0" aria-label="Vistas principales">
                 {/* 1. Catálogo (Teal) */}
                 <button 
                   onClick={() => setView('detail')} 
-                  className={`relative flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                  className={`relative flex items-center gap-1.5 sm:gap-2.5 px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
                     view === 'detail' 
                       ? 'text-teal-200 shadow-md shadow-teal-950/50' 
                       : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
@@ -1242,14 +1279,14 @@ export default function App() {
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
-                  <LayoutList className={`w-4 h-4 sm:w-4.5 sm:h-4.5 relative z-10 shrink-0 transition-colors ${view === 'detail' ? 'text-teal-400' : 'text-neutral-400'}`} />
+                  <LayoutList className={`w-3.5 h-3.5 sm:w-4 sm:h-4 relative z-10 shrink-0 transition-colors ${view === 'detail' ? 'text-teal-400' : 'text-neutral-400'}`} />
                   <span className="relative z-10 font-bold">Catálogo</span>
                 </button>
 
                 {/* 2. Comparar (Ámbar) */}
                 <button 
                   onClick={() => setView('compare')} 
-                  className={`relative flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                  className={`relative flex items-center gap-1.5 sm:gap-2.5 px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
                     view === 'compare' 
                       ? 'text-amber-200 shadow-md shadow-amber-950/50' 
                       : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
@@ -1263,14 +1300,14 @@ export default function App() {
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
-                  <Columns3 className={`w-4 h-4 sm:w-4.5 sm:h-4.5 relative z-10 shrink-0 transition-colors ${view === 'compare' ? 'text-amber-400' : 'text-neutral-400'}`} />
+                  <Columns3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 relative z-10 shrink-0 transition-colors ${view === 'compare' ? 'text-amber-400' : 'text-neutral-400'}`} />
                   <span className="relative z-10 font-bold">Comparar</span>
                 </button>
 
                 {/* 3. Métricas (Púrpura) */}
                 <button 
                   onClick={() => setView('dashboard')} 
-                  className={`relative flex items-center gap-2 sm:gap-2.5 px-4 sm:px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
+                  className={`relative flex items-center gap-1.5 sm:gap-2.5 px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold tracking-wide transition-all duration-200 cursor-pointer whitespace-nowrap ${
                     view === 'dashboard' 
                       ? 'text-purple-200 shadow-md shadow-purple-950/50' 
                       : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/40'
@@ -1284,21 +1321,22 @@ export default function App() {
                       transition={{ type: 'spring', stiffness: 450, damping: 35 }}
                     />
                   )}
-                  <BarChart3 className={`w-4 h-4 sm:w-4.5 sm:h-4.5 relative z-10 shrink-0 transition-colors ${view === 'dashboard' ? 'text-purple-400' : 'text-neutral-400'}`} />
+                  <BarChart3 className={`w-3.5 h-3.5 sm:w-4 sm:h-4 relative z-10 shrink-0 transition-colors ${view === 'dashboard' ? 'text-purple-400' : 'text-neutral-400'}`} />
                   <span className="relative z-10 font-bold">Métricas</span>
                 </button>
               </nav>
 
               {/* Botón Insignia Primario: Comparativa 1 vs 1 con Efecto Glow / Neón (Solo visible en Catálogo y Comparar) */}
               {videos.length >= 2 && view !== 'dashboard' && (
-                <div className="flex items-center shrink-0 p-1.5 -mr-1.5">
+                <div className="flex items-center shrink-0 p-1 -mr-1">
                   <button 
                     onClick={() => handleOpenDualCompare(videos[0], videos[1])} 
-                    className="relative group px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold tracking-wide transition-all duration-300 whitespace-nowrap bg-gradient-to-r from-teal-500/20 via-emerald-500/25 to-teal-500/20 text-teal-200 border border-teal-400/60 flex items-center gap-2.5 cursor-pointer shadow-[0_0_14px_rgba(20,184,166,0.35)] hover:shadow-[0_0_24px_rgba(20,184,166,0.65)] hover:border-teal-300 hover:scale-[1.02] active:scale-[0.98] dual-compare-glow"
-                    title="Abrir comparativa 1 vs 1 a pantalla completa (permite elegir y enfrentar cualquier vídeo del catálogo)"
+                    className="relative group px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-extrabold tracking-wide transition-all duration-300 whitespace-nowrap bg-gradient-to-r from-teal-500/20 via-emerald-500/25 to-teal-500/20 text-teal-200 border border-teal-400/60 flex items-center gap-1.5 sm:gap-2.5 cursor-pointer shadow-[0_0_14px_rgba(20,184,166,0.35)] hover:shadow-[0_0_24px_rgba(20,184,166,0.65)] hover:border-teal-300 hover:scale-[1.02] active:scale-[0.98] dual-compare-glow"
+                    title="Abrir comparativa 1 vs 1 a pantalla completa"
                   >
-                    <Sparkles className="w-4 h-4 text-teal-300 group-hover:rotate-12 transition-transform duration-300 shrink-0 drop-shadow-[0_0_8px_rgba(45,212,191,0.8)]" />
-                    <span className="relative z-10 font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">Comparativa 1 vs 1</span>
+                    <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-teal-300 group-hover:rotate-12 transition-transform duration-300 shrink-0 drop-shadow-[0_0_8px_rgba(45,212,191,0.8)]" />
+                    <span className="relative z-10 font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] hidden sm:inline">Comparativa 1 vs 1</span>
+                    <span className="relative z-10 font-bold drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:hidden">1 vs 1</span>
                   </button>
                 </div>
               )}
@@ -1307,18 +1345,40 @@ export default function App() {
         </div>
 
         {/* Main Content */}
-        <main className="max-w-[1600px] mx-auto px-6 py-8">
+        <main className="max-w-[1600px] mx-auto px-3 sm:px-6 py-4 sm:py-8">
           
           {/* Barra de Controles y Filtros (Oculta en Métricas ya que Métricas tiene su propia botonera y 7 filtros cruzados integrados) */}
           {view !== 'dashboard' && (
             <div className="mb-6 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 overflow-hidden shadow-sm backdrop-blur-sm">
+              {/* Barra de Búsqueda Rápida para Móvil (< md) */}
+              <div className="md:hidden p-3 border-b border-neutral-800/80 bg-neutral-950/40">
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar vídeos, prompts, modelos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-xl pl-10 pr-8 py-2 text-xs focus:outline-none focus:border-teal-500/50 focus:bg-neutral-950 text-neutral-200 placeholder:text-neutral-500 transition-colors"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 p-1"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Barra superior de controles */}
-              <div className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-3 sm:gap-4">
-                <div className="flex items-center gap-3">
-                  {/* Botón para desplegar filtros */}
+              <div className="p-3 sm:p-4 flex flex-wrap items-center justify-between gap-2.5 sm:gap-4">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  {/* Botón para desplegar filtros en Desktop (>= md) */}
                   <button
                     onClick={() => setShowFilters(prev => !prev)}
-                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
+                    className={`hidden md:flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer ${
                       showFilters || activeFiltersCount > 0
                         ? 'bg-neutral-800 text-teal-300 border-neutral-700 shadow-sm'
                         : 'bg-neutral-950/70 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
@@ -1339,9 +1399,28 @@ export default function App() {
                     )}
                   </button>
 
+                  {/* Botón para abrir cajón de filtros en Móvil (< md) */}
+                  <button
+                    onClick={() => setIsMobileFilterDrawerOpen(true)}
+                    className={`flex md:hidden items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border cursor-pointer active:scale-95 ${
+                      activeFiltersCount > 0
+                        ? 'bg-neutral-800 text-teal-300 border-teal-500/50 shadow-sm shadow-teal-950/40'
+                        : 'bg-neutral-950/70 text-neutral-300 border-neutral-800 hover:border-neutral-700 hover:text-white'
+                    }`}
+                    title="Abrir filtros"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-teal-400 shrink-0" />
+                    <span>Filtros</span>
+                    {activeFiltersCount > 0 && (
+                      <span className="px-1.5 py-0.2 bg-teal-500 text-neutral-950 text-[10px] font-bold rounded-full ml-0.5">
+                        {activeFiltersCount}
+                      </span>
+                    )}
+                  </button>
+
                   {/* Contador de resultados */}
                   <span className="text-xs sm:text-sm text-neutral-400">
-                    Mostrando <strong className="text-neutral-200">{filteredVideos.length}</strong> de {videos.length} vídeos
+                    <span className="hidden sm:inline">Mostrando </span><strong className="text-neutral-200">{filteredVideos.length}</strong> de {videos.length} <span className="hidden sm:inline">vídeos</span>
                   </span>
                 </div>
 
@@ -1445,16 +1524,17 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Panel de Filtros Desplegable */}
-              <AnimatePresence>
-                {showFilters && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 1 }}
-                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                    className="border-t border-neutral-800/80 bg-neutral-950/70"
-                  >
+              {/* Panel de Filtros Desplegable (Solo Desktop, en Móvil se usa MobileFilterDrawer) */}
+              <div className="hidden md:block">
+                <AnimatePresence>
+                  {showFilters && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 1 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="border-t border-neutral-800/80 bg-neutral-950/70"
+                    >
                     <div className="p-4 sm:p-5 flex flex-col gap-4">
                     
                     {/* BLOQUE 1: Filtros Principales / Habituales */}
@@ -1675,7 +1755,8 @@ export default function App() {
               )}
             </AnimatePresence>
           </div>
-        )}
+        </div>
+      )}
 
           {view === 'dashboard' ? (
             <DashboardView videos={filteredVideos} />
@@ -2264,6 +2345,63 @@ export default function App() {
 
         {/* Easter Egg 4.2: Retro CRT Overlay */}
         <RetroCrtOverlay isActive={isRetroMode} onToggle={toggleRetroMode} />
+
+        {/* Cajón de Filtros Móvil (Fase 1: Mobile Companion) */}
+        <MobileFilterDrawer
+          isOpen={isMobileFilterDrawerOpen}
+          onClose={() => setIsMobileFilterDrawerOpen(false)}
+          filterGroup={filterGroup}
+          setFilterGroup={setFilterGroup}
+          uniqueGroups={uniqueGroups}
+          filterModel={filterModel}
+          setFilterModel={setFilterModel}
+          uniqueModels={uniqueModels}
+          filterModelSizeB={filterModelSizeB}
+          setFilterModelSizeB={setFilterModelSizeB}
+          uniqueModelSizes={uniqueModelSizes}
+          filterGpu={filterGpu}
+          setFilterGpu={setFilterGpu}
+          uniqueGpus={uniqueGpus}
+          filterSpeed={filterSpeed}
+          setFilterSpeed={setFilterSpeed}
+          filterResolution={filterResolution}
+          setFilterResolution={setFilterResolution}
+          uniqueResolutions={uniqueResolutions}
+          filterLocalTool={filterLocalTool}
+          setFilterLocalTool={setFilterLocalTool}
+          uniqueLocalTools={uniqueLocalTools}
+          filterVae={filterVae}
+          setFilterVae={setFilterVae}
+          uniqueVaes={uniqueVaes}
+          filterEncoder={filterEncoder}
+          setFilterEncoder={setFilterEncoder}
+          uniqueEncoders={uniqueEncoders}
+          filterTags={filterTags}
+          setFilterTags={setFilterTags}
+          uniqueTags={uniqueTags}
+          activeFiltersCount={activeFiltersCount}
+          handleResetFilters={handleResetFilters}
+          totalFilteredCount={filteredVideos.length}
+        />
+
+        {/* Hoja Inferior de Perfil y Acciones Móvil (Fase 1: Mobile Companion) */}
+        <MobileProfileSheet
+          isOpen={isMobileProfileOpen}
+          onClose={() => setIsMobileProfileOpen(false)}
+          currentUser={{ email: currentUser?.email || null, uid: currentUser?.uid || '' }}
+          userDisplayName={userDisplayName || currentUser?.displayName || null}
+          userProfile={userProfile}
+          isAdmin={isAdmin}
+          usingLocal={usingLocal}
+          onOpenEditProfile={() => setIsNickModalOpen(true)}
+          onOpenHardwareModal={() => setIsHardwareModalOpen(true)}
+          onOpenBatchImport={() => setIsBatchModalOpen(true)}
+          onOpenAddVideo={() => {
+            setEditingVideo(undefined);
+            setIsModalOpen(true);
+          }}
+          onLogout={handleLogout}
+        />
 
         {/* Modal de documentación de funciones ocultas y atajos */}
         {isSecretsModalOpen && (
