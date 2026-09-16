@@ -98,6 +98,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
   const [isNegativeExpanded, setIsNegativeExpanded] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedNegative, setCopiedNegative] = useState(false);
+  const [copiedSeed, setCopiedSeed] = useState(false);
   const { targetRef, isInViewport } = useInViewport<HTMLDivElement>();
   
   // Modo Detallado vs Modo Sencillo (en modo detallado se muestran encoders y el botón (i) de velocidad)
@@ -718,56 +719,91 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
 
         {/* Métricas técnicas */}
         <div className="space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2.5 items-stretch">
-            {/* 1. Resolución */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-stretch">
+            {/* 1. Formato: Resolución + Proporción unificadas */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-blue-950/20 border border-blue-900/30 min-h-[64px]">
-              <span className="text-[11px] text-blue-500/80 flex items-center gap-1.5 font-medium">
-                <Maximize2 className="w-3.5 h-3.5 text-blue-400 shrink-0" /> Resolución
-              </span>
-              <span className="text-xs sm:text-sm font-semibold text-blue-100 font-mono truncate">
-                {video.width}x{video.height}
-              </span>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] text-blue-400/90 flex items-center gap-1.5 font-medium">
+                  <Maximize2 className="w-3.5 h-3.5 text-blue-400 shrink-0" /> Resolución
+                </span>
+                {video.orientation && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-900/40 text-blue-300 border border-blue-800/50">
+                    {video.orientation}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline justify-between gap-1.5">
+                <span className="text-xs sm:text-sm font-semibold text-blue-100 font-mono truncate">
+                  {video.width}×{video.height}
+                </span>
+                <span className="text-[10px] text-blue-400/70 font-mono shrink-0">
+                  {efficiencyMetrics ? `${efficiencyMetrics.megapixels} MP` : `${((video.width * video.height) / 1000000).toFixed(2)} MP`}
+                </span>
+              </div>
             </div>
             
-            {/* 2. Proporción */}
-            <div className="flex flex-col justify-between p-2.5 rounded-lg bg-violet-950/20 border border-violet-900/30 min-h-[64px]">
-              <span className="text-[11px] text-violet-500/80 flex items-center gap-1.5 font-medium">
-                <RectangleHorizontal className="w-3.5 h-3.5 text-violet-400 shrink-0" /> Proporción
-              </span>
-              <span className="text-xs sm:text-sm font-semibold text-violet-100 font-mono truncate">
-                {video.orientation}
-              </span>
-            </div>
-
-            {/* 3. Steps */}
+            {/* 2. Muestreo: Steps + Shift integrados */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-emerald-950/20 border border-emerald-900/30 min-h-[64px]">
-              <span className="text-[11px] text-emerald-500/80 flex items-center gap-1.5 font-medium">
-                <Footprints className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Steps
-              </span>
-              <span className="text-xs sm:text-sm font-semibold text-emerald-100 font-mono truncate">{video.steps}</span>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] text-emerald-400/90 flex items-center gap-1.5 font-medium">
+                  <Footprints className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Muestreo
+                </span>
+                {isDetailedMode && video.shift !== undefined && (
+                  <span 
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-900/40 text-emerald-300 border border-emerald-800/50"
+                    title={`Shift de inferencia: ${video.shift}`}
+                  >
+                    Shift {video.shift}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline justify-between gap-1.5">
+                <span className="text-xs sm:text-sm font-semibold text-emerald-100 font-mono truncate">
+                  {video.steps} <span className="text-[11px] text-emerald-400/80 font-sans font-normal">steps</span>
+                </span>
+                {!isDetailedMode && video.shift !== undefined && (
+                  <span className="text-[10px] text-emerald-400/60 font-mono shrink-0" title={`Shift: ${video.shift}`}>
+                    s:{video.shift}
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* 4. Shift */}
-            <div className="flex flex-col justify-between p-2.5 rounded-lg bg-amber-950/20 border border-amber-900/30 min-h-[64px]">
-              <span className="text-[11px] text-amber-500/80 flex items-center gap-1.5 font-medium">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400 shrink-0" /> Shift
-              </span>
-              <span className="text-xs sm:text-sm font-semibold text-amber-100 font-mono truncate">
-                {video.shift !== undefined ? video.shift : '—'}
-              </span>
-            </div>
-
-            {/* 5. Seed */}
+            {/* 3. Semilla (Seed) con botón de copiado rápido */}
             <div className="flex flex-col justify-between p-2.5 rounded-lg bg-rose-950/20 border border-rose-900/30 min-h-[64px]">
-              <span className="text-[11px] text-rose-500/80 flex items-center gap-1.5 font-medium">
-                <Dices className="w-3.5 h-3.5 text-rose-400 shrink-0" /> Seed
-              </span>
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-[11px] text-rose-400/90 flex items-center gap-1.5 font-medium">
+                  <Dices className="w-3.5 h-3.5 text-rose-400 shrink-0" /> Semilla
+                </span>
+                {video.seed !== undefined && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (video.seed !== undefined) {
+                        navigator.clipboard.writeText(String(video.seed));
+                        setCopiedSeed(true);
+                        setTimeout(() => setCopiedSeed(false), 1500);
+                      }
+                    }}
+                    className="text-rose-400/70 hover:text-rose-200 hover:bg-rose-900/40 p-0.5 rounded transition-all cursor-pointer flex items-center"
+                    title={copiedSeed ? "¡Copiada!" : "Copiar semilla"}
+                    aria-label="Copiar semilla"
+                  >
+                    {copiedSeed ? (
+                      <Check className="w-3 h-3 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3 h-3" />
+                    )}
+                  </button>
+                )}
+              </div>
               <span className="text-xs sm:text-sm font-semibold text-rose-100 font-mono truncate" title={String(video.seed || '')}>
                 {video.seed !== undefined ? video.seed : '—'}
               </span>
             </div>
 
-            {/* 6. Velocidad: Categoría + Segundos por paso + Micro-indicador elegante para popover */}
+            {/* 4. Velocidad: Categoría completa sin truncar + Tiempo/paso + Popover */}
             {efficiencyMetrics ? (
               <div 
                 ref={speedDropdownRef}
@@ -800,10 +836,10 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 </div>
 
                 <div className="flex items-baseline justify-between gap-1.5">
-                  <span className={`text-xs sm:text-sm font-bold truncate ${efficiencyMetrics.ratingColor}`}>
+                  <span className={`text-xs sm:text-sm font-bold whitespace-nowrap ${efficiencyMetrics.ratingColor}`}>
                     {efficiencyMetrics.ratingLabel}
                   </span>
-                  <span className="text-[11px] text-neutral-300 font-mono truncate" title={`${efficiencyMetrics.secPerStep} segundos por paso de renderizado`}>
+                  <span className="text-[11px] text-neutral-300 font-mono shrink-0" title={`${efficiencyMetrics.secPerStep} segundos por paso de renderizado`}>
                     {efficiencyMetrics.secPerStep}s/p
                   </span>
                 </div>

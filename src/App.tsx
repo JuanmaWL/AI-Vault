@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react';
 import { db, auth } from './lib/firebase';
-import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, orderBy, query, doc, deleteDoc, updateDoc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { VideoRecord, UserProfile, UserHardware, HardwareMilestone } from './types';
 import { VideoCard } from './components/cards/VideoCard';
@@ -9,6 +9,7 @@ import { CompareView } from './components/views/CompareView';
 import { DashboardView } from './components/views/DashboardView';
 import { AccessGate } from './components/layout/AccessGate';
 import { DeleteConfirmModal } from './components/modals/DeleteConfirmModal';
+import { DeleteProgressModal } from './components/modals/DeleteProgressModal';
 import { VaultLogo } from './components/layout/VaultLogo';
 import { AISparkle } from './components/layout/AISparkle';
 import { RetroCrtOverlay } from './components/layout/RetroCrtOverlay';
@@ -333,6 +334,7 @@ export default function App() {
   const [dualComparePair, setDualComparePair] = useState<{ videoA: VideoRecord; videoB: VideoRecord } | null>(null);
   const [cinemaSpotlightIndex, setCinemaSpotlightIndex] = useState<number | null>(null);
   const [videosToDelete, setVideosToDelete] = useState<string[] | null>(null);
+  const [deleteProgress, setDeleteProgress] = useState<{ current: number; total: number; isDone?: boolean } | null>(null);
   const [dbErrorToast, setDbErrorToast] = useState<string | null>(null);
   const [isMobileFilterDrawerOpen, setIsMobileFilterDrawerOpen] = useState(false);
   const [isMobileProfileOpen, setIsMobileProfileOpen] = useState(false);
@@ -1000,8 +1002,10 @@ export default function App() {
     const authorizedVideos = targetVideos.filter(isVideoOwner);
     const authorizedIds = authorizedVideos.map(v => v.id!).filter(Boolean);
 
+    // Close the confirmation modal immediately so it never re-renders with empty target list
+    setVideosToDelete(null);
+
     if (authorizedIds.length === 0) {
-      setVideosToDelete(null);
       return;
     }
 
@@ -1011,21 +1015,37 @@ export default function App() {
       .map(v => v.id!)
       .filter(Boolean);
 
-    // Optimistically update state & local storage immediately
+    const totalToDelete = authorizedIds.length;
+    setDeleteProgress({ current: 0, total: totalToDelete });
+
+    // Delete authorized records from Firestore in batches with live progress
+    if (db && !usingLocal && firestoreIds.length > 0) {
+      try {
+        const BATCH_CHUNK_SIZE = 25;
+        let processedCount = 0;
+        for (let i = 0; i < firestoreIds.length; i += BATCH_CHUNK_SIZE) {
+          const chunk = firestoreIds.slice(i, i + BATCH_CHUNK_SIZE);
+          const batch = writeBatch(db);
+          chunk.forEach(id => {
+            batch.delete(doc(db, COLLECTION_NAME, id));
+          });
+          await batch.commit();
+          processedCount += chunk.length;
+          setDeleteProgress({ current: Math.min(processedCount, totalToDelete), total: totalToDelete });
+        }
+      } catch (err) {
+        console.error("Error al borrar de Firestore", err);
+      }
+    } else {
+      setDeleteProgress({ current: totalToDelete, total: totalToDelete });
+    }
+
+    // Optimistically update state & local storage
     const updated = videos.filter(v => !authorizedIds.includes(v.id!));
     setVideos(updated);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch {}
-
-    // Delete authorized records from Firestore
-    if (db && !usingLocal && firestoreIds.length > 0) {
-      try {
-        await Promise.all(firestoreIds.map(id => deleteDoc(doc(db, COLLECTION_NAME, id))));
-      } catch (err) {
-        console.error("Error al borrar de Firestore", err);
-      }
-    }
 
     // Update selected IDs
     setSelectedVideoIds(prev => {
@@ -1037,7 +1057,12 @@ export default function App() {
     if (selectionMode && authorizedIds.length >= ids.length) {
       setSelectionMode(false);
     }
-    setVideosToDelete(null);
+
+    // Mark deletion as done and close after brief visual feedback
+    setDeleteProgress({ current: totalToDelete, total: totalToDelete, isDone: true });
+    setTimeout(() => {
+      setDeleteProgress(null);
+    }, 750);
   };
 
   const appBuildDate = useMemo(() => {
@@ -2250,6 +2275,7 @@ export default function App() {
 
       {videosToDelete && (() => {
         const targetList = videos.filter(v => videosToDelete.includes(v.id!));
+        if (targetList.length === 0) return null;
         const authorized = targetList.filter(isVideoOwner);
         const unauthorized = targetList.length - authorized.length;
         const activeUserLabel = userDisplayName || currentUser?.displayName || currentUser?.email || userProfile?.displayName || undefined;
@@ -2265,6 +2291,14 @@ export default function App() {
           />
         );
       })()}
+
+      {deleteProgress && (
+        <DeleteProgressModal
+          current={deleteProgress.current}
+          total={deleteProgress.total}
+          isDone={deleteProgress.isDone}
+        />
+      )}
 
       <Suspense fallback={null}>
         {isModalOpen && (
