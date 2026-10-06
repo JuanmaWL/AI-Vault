@@ -342,8 +342,9 @@ function CompareCard({
     let sizeB = video.modelSizeB;
     let softwareSource = video.softwareSource;
     let localTool = video.localTool;
+    let wanGpVersion = video.wanGpVersion;
 
-    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool) && video.rawMetadata) {
+    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool || !wanGpVersion) && video.rawMetadata) {
       try {
         const parsed = typeof video.rawMetadata === 'string' ? JSON.parse(video.rawMetadata) : video.rawMetadata;
         const extracted = extractTechnicalDetails(
@@ -359,6 +360,9 @@ function CompareCard({
           softwareSource = extracted.softwareSource;
           localTool = extracted.localTool;
         }
+        if (!wanGpVersion && extracted.wanGpVersion) {
+          wanGpVersion = extracted.wanGpVersion;
+        }
       } catch {}
     }
 
@@ -372,8 +376,9 @@ function CompareCard({
       modelSizeB: sizeB,
       softwareSource: effectiveSoftware,
       displayToolName,
+      wanGpVersion,
     };
-  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.rawMetadata]);
+  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.wanGpVersion, video.rawMetadata]);
 
   return (
     <div ref={targetRef} className="relative flex flex-col bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden transition-all h-full group/card hover:border-neutral-700 shadow-md">
@@ -485,21 +490,32 @@ function CompareCard({
               <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
             </span>
           ) : (
-            <span 
-              className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center gap-1.5 shadow-sm"
-              title={`Herramienta de generación: ${resolvedTech.displayToolName || 'Wan2GP'}`}
-            >
-              <img 
-                src={SOFTWARE_ICONS.wan2gp} 
-                alt="Wan2GP" 
-                className="w-3 h-3 object-contain shrink-0" 
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = 'none';
-                }}
-              />
-              <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span 
+                className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 flex items-center gap-1.5 shadow-sm"
+                title={`Herramienta de generación: ${resolvedTech.displayToolName || 'Wan2GP'}`}
+              >
+                <img 
+                  src={SOFTWARE_ICONS.wan2gp} 
+                  alt="Wan2GP" 
+                  className="w-3 h-3 object-contain shrink-0" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
+              </span>
+              {resolvedTech.wanGpVersion && (
+                <span 
+                  className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.25)] flex items-center gap-1"
+                  title={`Versión arquitectural Wan2GP: ${resolvedTech.wanGpVersion}`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                  <span>{resolvedTech.wanGpVersion}</span>
+                </span>
+              )}
+            </div>
           )}
         </div>
 
@@ -564,7 +580,7 @@ function CompareCard({
             )}
             {resolvedTech.textEncoder && (
               <div className="flex justify-between items-center text-[11px] font-mono text-neutral-400">
-                <span className="text-neutral-500">Encoder</span>
+                <span className="text-neutral-500">Text Encoder</span>
                 <span className="text-blue-300 truncate text-right ml-2" title={resolvedTech.textEncoder}>
                   {resolvedTech.textEncoder}
                 </span>

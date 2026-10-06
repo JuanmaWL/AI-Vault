@@ -7,7 +7,7 @@ import {
 import { 
   Cpu, Clock, Sliders, Layers, Sparkles, Filter, Info, AlertCircle, 
   Zap, RotateCcw, Box, Monitor, Gauge, ArrowRight, CheckCircle2, TrendingDown, TrendingUp,
-  Folder, Wrench, Film, AppWindow, Compass, X, Activity, Award, Target
+  Folder, Wrench, Film, AppWindow, Compass, X, Activity, Award, Target, Tag
 } from 'lucide-react';
 import { calculateEfficiencyMetrics } from '../../lib/utils';
 
@@ -40,6 +40,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
   const [selectedSpeedFilter, setSelectedSpeedFilter] = useState<string>('all');
   const [selectedLoraFilter, setSelectedLoraFilter] = useState<'all' | 'with_lora' | 'without_lora'>('all');
   const [selectedSoftwareSource, setSelectedSoftwareSource] = useState<string>('all');
+  const [selectedWanGpVersion, setSelectedWanGpVersion] = useState<string>('all');
   const [selectedOrientation, setSelectedOrientation] = useState<string>('all');
 
   // Phase 2: Performance Metric Mode (Total Render Time vs Normalized s/step)
@@ -135,6 +136,19 @@ export function DashboardView({ videos }: DashboardViewProps) {
     return order
       .filter(name => (speedCounts[name] || 0) > 0)
       .map(name => ({ name, count: speedCounts[name] }));
+  }, [videos]);
+
+  // Discover all Wan2GP Versions across videos
+  const availableWanGpVersions = useMemo(() => {
+    const counts: Record<string, number> = {};
+    videos.forEach(v => {
+      if (v.wanGpVersion) {
+        counts[v.wanGpVersion] = (counts[v.wanGpVersion] || 0) + 1;
+      }
+    });
+    return Object.entries(counts)
+      .sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true }))
+      .map(([name, count]) => ({ name, count }));
   }, [videos]);
 
   // Helper function to format full model name including parameter size if available
@@ -318,6 +332,10 @@ export function DashboardView({ videos }: DashboardViewProps) {
         const src = v.softwareSource || 'other';
         if (src !== selectedSoftwareSource) return false;
       }
+      // Wan2GP Version filter
+      if (selectedWanGpVersion !== 'all') {
+        if (v.wanGpVersion !== selectedWanGpVersion) return false;
+      }
       // Orientation filter
       if (selectedOrientation !== 'all') {
         const orient = v.orientation || 'other';
@@ -331,9 +349,9 @@ export function DashboardView({ videos }: DashboardViewProps) {
       }
       return true;
     });
-  }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedSpeedFilter, selectedSoftwareSource, selectedOrientation, selectedLoraFilter]);
+  }, [videos, selectedGpu, selectedModel, selectedModelSize, selectedResolution, selectedSpeedFilter, selectedSoftwareSource, selectedWanGpVersion, selectedOrientation, selectedLoraFilter]);
 
-  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedSpeedFilter !== 'all' || selectedSoftwareSource !== 'all' || selectedOrientation !== 'all' || selectedLoraFilter !== 'all';
+  const hasActiveFilters = selectedGpu !== 'all' || selectedModel !== 'all' || selectedModelSize !== 'all' || selectedResolution !== 'all' || selectedSpeedFilter !== 'all' || selectedSoftwareSource !== 'all' || selectedWanGpVersion !== 'all' || selectedOrientation !== 'all' || selectedLoraFilter !== 'all';
 
   // Software pipeline and catalog distribution analysis for current filtered view
   const softwareStats = useMemo(() => {
@@ -343,13 +361,22 @@ export function DashboardView({ videos }: DashboardViewProps) {
     let other = 0;
     const modelSet = new Set<string>();
     const folderSet = new Set<string>();
+    const wanGpVersionsMap: Record<string, number> = {};
 
     dashboardVideos.forEach((v) => {
       const src = v.softwareSource || 'other';
-      if (src === 'wan2gp') wan2gp++;
-      else if (src === 'maestro') maestro++;
-      else if (src === 'comfyui') comfyui++;
-      else other++;
+      if (src === 'wan2gp') {
+        wan2gp++;
+        if (v.wanGpVersion) {
+          wanGpVersionsMap[v.wanGpVersion] = (wanGpVersionsMap[v.wanGpVersion] || 0) + 1;
+        }
+      } else if (src === 'maestro') {
+        maestro++;
+      } else if (src === 'comfyui') {
+        comfyui++;
+      } else {
+        other++;
+      }
 
       if (v.model?.trim()) {
         modelSet.add(v.model.trim().toLowerCase());
@@ -360,6 +387,8 @@ export function DashboardView({ videos }: DashboardViewProps) {
     });
 
     const total = dashboardVideos.length;
+    const wanGpVersionsBreakdown = Object.entries(wanGpVersionsMap)
+      .sort((a, b) => b[0].localeCompare(a[0], undefined, { numeric: true }));
 
     return {
       total,
@@ -373,6 +402,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
       otherPct: total > 0 ? Math.round((other / total) * 100) : 0,
       modelsCount: modelSet.size,
       foldersCount: folderSet.size,
+      wanGpVersionsBreakdown,
     };
   }, [dashboardVideos]);
 
@@ -383,6 +413,7 @@ export function DashboardView({ videos }: DashboardViewProps) {
     setSelectedResolution('all');
     setSelectedSpeedFilter('all');
     setSelectedSoftwareSource('all');
+    setSelectedWanGpVersion('all');
     setSelectedOrientation('all');
     setSelectedLoraFilter('all');
   };
@@ -1099,6 +1130,33 @@ export function DashboardView({ videos }: DashboardViewProps) {
               </select>
             </div>
 
+            {/* 6.1 Versión Wan2GP Filter */}
+            {availableWanGpVersions.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="dash-wangp-version" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
+                  <Tag className={`w-3 h-3 ${selectedWanGpVersion !== 'all' ? 'text-cyan-400' : 'text-neutral-400'}`} />
+                  Versión Wan2GP
+                </label>
+                <select
+                  id="dash-wangp-version"
+                  value={selectedWanGpVersion}
+                  onChange={(e) => setSelectedWanGpVersion(e.target.value)}
+                  className={`w-full rounded-xl px-3 py-2 text-xs focus:outline-none transition-all cursor-pointer border ${
+                    selectedWanGpVersion !== 'all'
+                      ? 'bg-cyan-950/30 border-cyan-500/50 text-cyan-200 font-medium'
+                      : 'bg-neutral-950 border-neutral-800 hover:border-neutral-700 text-neutral-200 focus:border-teal-500'
+                  }`}
+                >
+                  <option value="all">Todas ({videos.filter(v => v.wanGpVersion).length})</option>
+                  {availableWanGpVersions.map(v => (
+                    <option key={v.name} value={v.name}>
+                      {v.name} ({v.count})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* 7. Orientation Filter */}
             <div className="flex flex-col gap-1.5">
               <label htmlFor="dash-orient" className="text-[11px] font-semibold text-neutral-400 flex items-center gap-1.5">
@@ -1249,6 +1307,20 @@ export function DashboardView({ videos }: DashboardViewProps) {
                   </span>
                 )}
 
+                {selectedWanGpVersion !== 'all' && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-950/60 border border-cyan-500/40 text-cyan-300 text-xs font-medium">
+                    <Tag className="w-3 h-3 text-cyan-400" />
+                    Wan2GP: {selectedWanGpVersion}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedWanGpVersion('all')}
+                      className="hover:text-white p-0.5 hover:bg-cyan-500/20 rounded cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+
                 {selectedOrientation !== 'all' && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-950/60 border border-teal-500/40 text-teal-300 text-xs font-medium">
                     <Compass className="w-3 h-3 text-teal-400" />
@@ -1371,6 +1443,29 @@ export function DashboardView({ videos }: DashboardViewProps) {
                       style={{ width: `${softwareStats.wan2gpPct}%` }}
                     />
                   </div>
+
+                  {/* Sub-desglose por versiones de Wan2GP */}
+                  {softwareStats.wanGpVersionsBreakdown && softwareStats.wanGpVersionsBreakdown.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2 pt-2 border-t border-neutral-900">
+                      <span className="text-[10px] text-neutral-500 uppercase font-semibold">Versiones:</span>
+                      {softwareStats.wanGpVersionsBreakdown.map(([ver, count]) => (
+                        <button
+                          key={ver}
+                          type="button"
+                          onClick={() => setSelectedWanGpVersion(selectedWanGpVersion === ver ? 'all' : ver)}
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded-md border flex items-center gap-1 transition-all cursor-pointer ${
+                            selectedWanGpVersion === ver
+                              ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-sm font-bold'
+                              : 'bg-neutral-900/80 border-neutral-800 text-cyan-300/90 hover:border-cyan-600/60 hover:text-cyan-200'
+                          }`}
+                          title={`Filtrar por Wan2GP ${ver}`}
+                        >
+                          <span>{ver}</span>
+                          <span className="text-neutral-500">({count})</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 

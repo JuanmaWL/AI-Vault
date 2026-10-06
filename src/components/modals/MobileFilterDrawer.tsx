@@ -31,6 +31,9 @@ interface MobileFilterDrawerProps {
   filterEncoder: string;
   setFilterEncoder: (val: string) => void;
   uniqueEncoders: string[];
+  filterWanGpVersion: string;
+  setFilterWanGpVersion: (val: string) => void;
+  uniqueWanGpVersions: string[];
   filterTags: string[];
   setFilterTags: React.Dispatch<React.SetStateAction<string[]>>;
   uniqueTags: string[];
@@ -68,6 +71,9 @@ export function MobileFilterDrawer({
   filterEncoder,
   setFilterEncoder,
   uniqueEncoders,
+  filterWanGpVersion,
+  setFilterWanGpVersion,
+  uniqueWanGpVersions,
   filterTags,
   setFilterTags,
   uniqueTags,
@@ -303,9 +309,25 @@ export function MobileFilterDrawer({
                         onChange={e => setFilterEncoder(e.target.value)}
                         className="w-full h-11 px-3 bg-neutral-950 border border-blue-900/60 rounded-xl text-xs text-blue-300 focus:outline-none focus:border-blue-500 cursor-pointer"
                       >
-                        <option value="Todos">🔤 Todos los Encoders</option>
+                        <option value="Todos">🔤 Todos los Text Encoders</option>
                         {uniqueEncoders.map(enc => (
                           <option key={enc} value={enc}>{enc}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {uniqueWanGpVersions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-medium text-cyan-300">Versión Wan2GP</label>
+                      <select
+                        value={filterWanGpVersion}
+                        onChange={e => setFilterWanGpVersion(e.target.value)}
+                        className="w-full h-11 px-3 bg-neutral-950 border border-cyan-900/60 rounded-xl text-xs text-cyan-300 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                      >
+                        <option value="Todas">🏷️ Todas las versiones Wan2GP</option>
+                        {uniqueWanGpVersions.map(ver => (
+                          <option key={ver} value={ver}>{ver}</option>
                         ))}
                       </select>
                     </div>

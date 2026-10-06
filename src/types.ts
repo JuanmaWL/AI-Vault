@@ -95,6 +95,7 @@ export interface VideoRecord {
   generationTimeBasis?: string;   // Base de cálculo (ej: "active")
   jobId?: string;                 // ID único del job en Maestro/Wan2GP
   settingsVersion?: number;       // Versión de settings (ej: 2.52 en Maestro)
+  wanGpVersion?: string;          // Versión arquitectural de Wan2GP (ej: "v17.00", "v17.01")
   generatedAt?: number;           // timestamp Unix (ms)
   rawMetadata?: string;           // JSON original sin parsear
 }

@@ -855,6 +855,11 @@ export function DualCompareModal({
                 <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
                 <span className="text-xs font-bold text-blue-300 font-mono">Vídeo A</span>
                 <span className="text-xs text-neutral-300 font-medium truncate max-w-[150px]">({videoA.model})</span>
+                {videoA.wanGpVersion && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/90 border border-cyan-500/50 text-cyan-300 font-bold" title={`Wan2GP: ${videoA.wanGpVersion}`}>
+                    {videoA.wanGpVersion}
+                  </span>
+                )}
                 <button
                   onClick={() => setPickerTarget('A')}
                   className="ml-1 text-[10px] bg-blue-900/60 hover:bg-blue-800 text-blue-200 px-2 py-0.5 rounded font-medium transition-colors cursor-pointer"
@@ -883,6 +888,11 @@ export function DualCompareModal({
                 <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse"></span>
                 <span className="text-xs font-bold text-purple-300 font-mono">Vídeo B</span>
                 <span className="text-xs text-neutral-300 font-medium truncate max-w-[150px]">({videoB.model})</span>
+                {videoB.wanGpVersion && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/90 border border-cyan-500/50 text-cyan-300 font-bold" title={`Wan2GP: ${videoB.wanGpVersion}`}>
+                    {videoB.wanGpVersion}
+                  </span>
+                )}
                 <button
                   onClick={() => setPickerTarget('B')}
                   className="ml-1 text-[10px] bg-purple-900/60 hover:bg-purple-800 text-purple-200 px-2 py-0.5 rounded font-medium transition-colors cursor-pointer"

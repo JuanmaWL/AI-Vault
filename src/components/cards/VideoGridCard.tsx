@@ -72,8 +72,9 @@ export function VideoGridCard({
     let sizeB = video.modelSizeB;
     let softwareSource = video.softwareSource;
     let localTool = video.localTool;
+    let wanGpVersion = video.wanGpVersion;
 
-    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool) && video.rawMetadata) {
+    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool || !wanGpVersion) && video.rawMetadata) {
       try {
         const parsed = typeof video.rawMetadata === 'string' ? JSON.parse(video.rawMetadata) : video.rawMetadata;
         const extracted = extractTechnicalDetails(
@@ -89,6 +90,9 @@ export function VideoGridCard({
           softwareSource = extracted.softwareSource;
           localTool = extracted.localTool;
         }
+        if (!wanGpVersion && extracted.wanGpVersion) {
+          wanGpVersion = extracted.wanGpVersion;
+        }
       } catch {}
     }
 
@@ -102,8 +106,9 @@ export function VideoGridCard({
       modelSizeB: sizeB,
       softwareSource: effectiveSoftware,
       displayToolName,
+      wanGpVersion,
     };
-  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.rawMetadata]);
+  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.wanGpVersion, video.rawMetadata]);
 
   const mainHeadline = video.title || video.model || 'Vídeo sin título';
   const authorName = video.creatorDisplayName || video.createdBy;
@@ -156,21 +161,31 @@ export function VideoGridCard({
               <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
             </span>
           ) : (
-            <span 
-              className="px-2 py-0.5 rounded-md bg-indigo-600/90 border border-indigo-400/80 text-white font-bold text-[10px] shadow-lg backdrop-blur-sm flex items-center gap-1.5"
-              title={`Herramienta: ${resolvedTech.displayToolName || 'Wan2GP'}`}
-            >
-              <img 
-                src={SOFTWARE_ICONS.wan2gp} 
-                alt="Wan2GP" 
-                className="w-3 h-3 object-contain shrink-0" 
-                referrerPolicy="no-referrer"
-                onError={(e) => {
-                  (e.currentTarget as HTMLElement).style.display = 'none';
-                }}
-              />
-              <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
-            </span>
+            <div className="flex items-center gap-1">
+              <span 
+                className="px-2 py-0.5 rounded-md bg-indigo-600/90 border border-indigo-400/80 text-white font-bold text-[10px] shadow-lg backdrop-blur-sm flex items-center gap-1.5"
+                title={`Herramienta: ${resolvedTech.displayToolName || 'Wan2GP'}`}
+              >
+                <img 
+                  src={SOFTWARE_ICONS.wan2gp} 
+                  alt="Wan2GP" 
+                  className="w-3 h-3 object-contain shrink-0" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLElement).style.display = 'none';
+                  }}
+                />
+                <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
+              </span>
+              {resolvedTech.wanGpVersion && (
+                <span 
+                  className="px-1.5 py-0.5 rounded-md bg-cyan-950/90 border border-cyan-400/80 text-cyan-200 font-mono font-bold text-[10px] shadow-lg backdrop-blur-sm"
+                  title={`Versión arquitectural Wan2GP: ${resolvedTech.wanGpVersion}`}
+                >
+                  {resolvedTech.wanGpVersion}
+                </span>
+              )}
+            </div>
           )}
         </div>
 

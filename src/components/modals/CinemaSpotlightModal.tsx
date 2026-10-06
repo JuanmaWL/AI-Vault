@@ -120,8 +120,9 @@ export function CinemaSpotlightModal({
     let sizeB = currentVideo.modelSizeB;
     let softwareSource = currentVideo.softwareSource;
     let localTool = currentVideo.localTool;
+    let wanGpVersion = currentVideo.wanGpVersion;
 
-    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool) && currentVideo.rawMetadata) {
+    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool || !wanGpVersion) && currentVideo.rawMetadata) {
       try {
         const parsed = typeof currentVideo.rawMetadata === 'string' ? JSON.parse(currentVideo.rawMetadata) : currentVideo.rawMetadata;
         const extracted = extractTechnicalDetails(
@@ -137,6 +138,9 @@ export function CinemaSpotlightModal({
           softwareSource = extracted.softwareSource;
           localTool = extracted.localTool;
         }
+        if (!wanGpVersion && extracted.wanGpVersion) {
+          wanGpVersion = extracted.wanGpVersion;
+        }
       } catch {}
     }
 
@@ -150,6 +154,7 @@ export function CinemaSpotlightModal({
       modelSizeB: sizeB,
       softwareSource: effectiveSoftware,
       displayToolName,
+      wanGpVersion,
     };
   }, [currentVideo]);
 
@@ -743,13 +748,24 @@ export function CinemaSpotlightModal({
                     <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
                   </span>
                 ) : resolvedTech.softwareSource === 'wan2gp' || resolvedTech.displayToolName?.toLowerCase().includes('wan') ? (
-                  <span 
-                    className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 shadow-sm flex items-center gap-1.5"
-                    title="Generado con Wan2GP"
-                  >
-                    <img src={SOFTWARE_ICONS.wan2gp} alt="Wan2GP" className="w-3.5 h-3.5 object-contain" />
-                    <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span 
+                      className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 shadow-sm flex items-center gap-1.5"
+                      title="Generado con Wan2GP"
+                    >
+                      <img src={SOFTWARE_ICONS.wan2gp} alt="Wan2GP" className="w-3.5 h-3.5 object-contain" />
+                      <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
+                    </span>
+                    {resolvedTech.wanGpVersion && (
+                      <span 
+                        className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.25)] flex items-center gap-1"
+                        title={`Versión arquitectural Wan2GP: ${resolvedTech.wanGpVersion}`}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                        <span>{resolvedTech.wanGpVersion}</span>
+                      </span>
+                    )}
+                  </div>
                 ) : resolvedTech.displayToolName ? (
                   <span 
                     className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-300 shadow-sm flex items-center gap-1.5"
@@ -890,7 +906,7 @@ export function CinemaSpotlightModal({
                         className="text-[11px] px-2 py-0.5 rounded-md border flex items-center gap-1 font-mono bg-blue-950/40 border-blue-800/60 text-blue-300"
                         title={`Text Encoder: ${resolvedTech.textEncoder}`}
                       >
-                        <span className="text-[9px] text-blue-400/70 font-sans uppercase font-bold">Encoder:</span>
+                        <span className="text-[9px] text-blue-400/70 font-sans uppercase font-bold">Text Encoder:</span>
                         {resolvedTech.textEncoder}
                       </span>
                     )}

@@ -108,8 +108,28 @@ function normalizeRecord(raw: any): VideoRecord {
     createdBy: raw.createdBy,
     creatorUid: typeof raw.creatorUid === 'string' ? raw.creatorUid : undefined,
     creatorDisplayName: typeof raw.creatorDisplayName === 'string' ? raw.creatorDisplayName : undefined,
-    videoVae: typeof raw.videoVae === 'string' && raw.videoVae !== 'Not Found' ? raw.videoVae : 'Original VAE',
-    textEncoder: typeof raw.textEncoder === 'string' ? raw.textEncoder : undefined,
+    videoVae: (() => {
+      let v = typeof raw.videoVae === 'string' && raw.videoVae !== 'Not Found' ? raw.videoVae : 'Auto';
+      if (typeof raw.rawMetadata === 'string' && (raw.rawMetadata.includes('int8_convrot') || raw.rawMetadata.includes('config'))) {
+        try {
+          const parsed = JSON.parse(raw.rawMetadata);
+          const ext = extractTechnicalDetails(parsed, raw.rawMetadata, parsed.model_type || parsed.type || '');
+          if (ext.videoVae && ext.videoVae !== 'Not Found') v = ext.videoVae;
+        } catch {}
+      }
+      return v;
+    })(),
+    textEncoder: (() => {
+      let t = typeof raw.textEncoder === 'string' ? raw.textEncoder : undefined;
+      if (typeof raw.rawMetadata === 'string' && (raw.rawMetadata.includes('int8_convrot') || raw.rawMetadata.includes('"config"'))) {
+        try {
+          const parsed = JSON.parse(raw.rawMetadata);
+          const ext = extractTechnicalDetails(parsed, raw.rawMetadata, parsed.model_type || parsed.type || '');
+          if (ext.textEncoder && ext.textEncoder !== 'Not Found') t = ext.textEncoder;
+        } catch {}
+      }
+      return t;
+    })(),
     precision: typeof raw.precision === 'string' ? raw.precision : undefined,
     renderSeconds: typeof raw.renderSeconds === 'number' ? raw.renderSeconds : undefined,
     fileSizeBytes: typeof raw.fileSizeBytes === 'number' ? raw.fileSizeBytes : undefined,
@@ -128,6 +148,19 @@ function normalizeRecord(raw: any): VideoRecord {
     jobElapsedTimeSeconds: typeof raw.jobElapsedTimeSeconds === 'number' ? raw.jobElapsedTimeSeconds : undefined,
     generationTimeBasis: typeof raw.generationTimeBasis === 'string' ? raw.generationTimeBasis : undefined,
     settingsVersion: typeof raw.settingsVersion === 'number' ? raw.settingsVersion : undefined,
+    wanGpVersion: (() => {
+      if (typeof raw.wanGpVersion === 'string' && raw.wanGpVersion.trim().length > 0) {
+        return raw.wanGpVersion.trim();
+      }
+      if (typeof raw.rawMetadata === 'string' && (raw.rawMetadata.includes('WanGP') || raw.rawMetadata.includes('Wan2GP') || raw.rawMetadata.includes('wangp'))) {
+        try {
+          const parsed = JSON.parse(raw.rawMetadata);
+          const ext = extractTechnicalDetails(parsed, raw.rawMetadata, parsed.model_type || parsed.type || '');
+          if (ext.wanGpVersion) return ext.wanGpVersion;
+        } catch {}
+      }
+      return undefined;
+    })(),
   };
 }
 
@@ -280,6 +313,7 @@ export default function App() {
   const [filterLora, setFilterLora] = useState<string>('Todos');
   const [filterVae, setFilterVae] = useState<string>('Todos');
   const [filterEncoder, setFilterEncoder] = useState<string>('Todos');
+  const [filterWanGpVersion, setFilterWanGpVersion] = useState<string>('Todas');
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [groupByFolder, setGroupByFolder] = useState<boolean>(false);
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -291,7 +325,7 @@ export default function App() {
   // Resetear la cantidad visible al modificar cualquier filtro o búsqueda
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
+  }, [searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterWanGpVersion, filterTags, groupByFolder]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
@@ -307,10 +341,11 @@ export default function App() {
     if (filterLora !== 'Todos') count++;
     if (filterVae !== 'Todos') count++;
     if (filterEncoder !== 'Todos') count++;
+    if (filterWanGpVersion !== 'Todas') count++;
     if (filterTags.length > 0) count += filterTags.length;
     if (groupByFolder) count++;
     return count;
-  }, [filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterTags, groupByFolder]);
+  }, [filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterResolution, filterLora, filterVae, filterEncoder, filterWanGpVersion, filterTags, groupByFolder]);
 
   const handleResetFilters = () => {
     setFilterGroup('Todas');
@@ -325,6 +360,7 @@ export default function App() {
     setFilterLora('Todos');
     setFilterVae('Todos');
     setFilterEncoder('Todos');
+    setFilterWanGpVersion('Todas');
     setFilterTags([]);
     setGroupByFolder(false);
   };
@@ -852,6 +888,11 @@ export default function App() {
     return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
   }, [videos]);
 
+  const uniqueWanGpVersions = useMemo(() => {
+    const list = videos.map(v => v.wanGpVersion).filter(Boolean) as string[];
+    return Array.from(new Set(list)).sort((a, b) => b.localeCompare(a, undefined, { numeric: true, sensitivity: 'base' }));
+  }, [videos]);
+
   const filteredVideos = useMemo(() => {
     return videos.filter(video => {
       // 1. Text Search
@@ -861,6 +902,7 @@ export default function App() {
           video.model.toLowerCase().includes(lower) ||
           (video.modelSizeB !== undefined && `${video.modelSizeB}b`.includes(lower)) ||
           (video.localTool && video.localTool.toLowerCase().includes(lower)) ||
+          (video.wanGpVersion && video.wanGpVersion.toLowerCase().includes(lower)) ||
           (video.tags && video.tags.some((t) => t.toLowerCase().includes(lower))) ||
           (video.loras && video.loras.some((l) => l.name.toLowerCase().includes(lower))) ||
           video.steps.toString().includes(lower) ||
@@ -940,18 +982,33 @@ export default function App() {
       }
 
       // 10. Video VAE (Técnico)
-      if (filterVae !== 'Todos' && video.videoVae !== filterVae) return false;
+      if (filterVae !== 'Todos') {
+        const isDefaultVae = (str: string) => {
+          const l = str.toLowerCase();
+          return l.startsWith('auto') || l.startsWith('original') || l === 'default';
+        };
+        const normFilterVae = isDefaultVae(filterVae) ? 'auto' : filterVae.toLowerCase();
+        const normVideoVae = isDefaultVae(video.videoVae || '') ? 'auto' : (video.videoVae || '').toLowerCase();
+        if (normVideoVae !== normFilterVae && video.videoVae !== filterVae) return false;
+      }
 
       // 11. Text Encoder & Precisión (Técnico: Qwen3-VL INT8/FP8/BF16/GGUF...)
       if (filterEncoder !== 'Todos') {
-        const matchEncoder = video.textEncoder === filterEncoder;
+        const normFilterEnc = filterEncoder.toLowerCase().startsWith('default') ? 'default' : filterEncoder.toLowerCase();
+        const normVideoEnc = (video.textEncoder || '').toLowerCase().startsWith('default') ? 'default' : (video.textEncoder || '').toLowerCase();
+        const matchEncoder = normVideoEnc === normFilterEnc || video.textEncoder === filterEncoder;
         const matchPrecision = video.precision === filterEncoder;
         if (!matchEncoder && !matchPrecision) return false;
       }
 
+      // 12. Versión Wan2GP (Técnico / Arquitectural)
+      if (filterWanGpVersion !== 'Todas') {
+        if (video.wanGpVersion !== filterWanGpVersion) return false;
+      }
+
       return true;
     });
-  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterTags, filterResolution, filterLora, filterVae, filterEncoder]);
+  }, [videos, searchTerm, filterGroup, filterUser, filterModel, filterModelSizeB, filterGpu, filterSpeed, filterOrientation, filterLocalTool, filterTags, filterResolution, filterLora, filterVae, filterEncoder, filterWanGpVersion]);
 
   const groupedVideos = useMemo(() => {
     if (!groupByFolder) return null;
@@ -1711,13 +1768,13 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* BLOQUE 2: Componentes Técnicos Avanzados (VAE de Vídeo y Text Encoder / Precisión) */}
-                    {(uniqueVaes.length > 0 || uniqueEncoders.length > 0) && (
+                    {/* BLOQUE 2: Componentes Técnicos Avanzados (VAE de Vídeo, Text Encoder / Precisión y Versión Wan2GP) */}
+                    {(uniqueVaes.length > 0 || uniqueEncoders.length > 0 || uniqueWanGpVersions.length > 0) && (
                       <div className="pt-3 border-t border-neutral-850 space-y-2">
                         <div className="flex items-center gap-1.5">
                           <Cpu className="w-3 h-3 text-indigo-400" />
                           <span className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
-                            Arquitectura Técnica & Encoders
+                            Arquitectura Técnica, Encoders & Versión Wan2GP
                           </span>
                         </div>
 
@@ -1745,6 +1802,19 @@ export default function App() {
                             >
                               <option value="Todos">🔤 Text Encoder / Precisión (Todos)</option>
                               {uniqueEncoders.map(enc => <option key={enc} value={enc}>{enc}</option>)}
+                            </select>
+                          )}
+
+                          {/* Versión Wan2GP (Arquitectural) */}
+                          {uniqueWanGpVersions.length > 0 && (
+                            <select 
+                              value={filterWanGpVersion} 
+                              onChange={e => setFilterWanGpVersion(e.target.value)} 
+                              className="bg-neutral-900 border border-cyan-900/60 hover:border-cyan-700 rounded-lg px-3 py-1.5 text-xs text-cyan-300 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                              title="Filtro por versión arquitectural de Wan2GP (v17.00, v17.01...)"
+                            >
+                              <option value="Todas">🏷️ Versión Wan2GP (Todas)</option>
+                              {uniqueWanGpVersions.map(ver => <option key={ver} value={ver}>{ver}</option>)}
                             </select>
                           )}
                         </div>
@@ -2410,6 +2480,9 @@ export default function App() {
           filterEncoder={filterEncoder}
           setFilterEncoder={setFilterEncoder}
           uniqueEncoders={uniqueEncoders}
+          filterWanGpVersion={filterWanGpVersion}
+          setFilterWanGpVersion={setFilterWanGpVersion}
+          uniqueWanGpVersions={uniqueWanGpVersions}
           filterTags={filterTags}
           setFilterTags={setFilterTags}
           uniqueTags={uniqueTags}

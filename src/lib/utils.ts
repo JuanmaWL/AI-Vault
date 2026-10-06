@@ -199,6 +199,7 @@ export function formatBytes(bytes?: number, decimals = 2): string {
 }
 
 export const TEXT_ENCODER_OPTIONS = [
+  'Default (Qwen3-VL-32B)',
   'Default',
   'Qwen3-VL BF16',
   'Qwen3-VL Quanto INT8',
@@ -209,7 +210,10 @@ export const TEXT_ENCODER_OPTIONS = [
 ] as const;
 
 export const VIDEO_VAE_OPTIONS = [
+  'Auto',
+  'INT8 ConvRot Decoder',
   'FP8 Mixed Precision',
+  'BF16',
   'Original VAE',
   'Not Found',
 ] as const;
@@ -237,6 +241,53 @@ export interface ExtractedTechnicalDetails {
   jobElapsedTimeSeconds?: number;
   generationTimeBasis?: string;
   settingsVersion?: number;
+  wanGpVersion?: string;
+}
+
+/**
+ * Normalizes a Wan2GP version string to ensure 'v' prefix and exactly 2 decimal digits (e.g. "17.0" -> "v17.00", "17.01" -> "v17.01", "v12.6" -> "v12.60").
+ */
+export function formatWanGpVersion(ver: string): string {
+  const clean = ver.trim().replace(/^v/i, '');
+  if (!clean) return '';
+  if (!clean.includes('.')) {
+    return `v${clean}.00`;
+  }
+  const [major, minor] = clean.split('.');
+  const paddedMinor = minor.length === 1 ? `${minor}0` : (minor.length === 0 ? '00' : minor.slice(0, 2));
+  return `v${major}.${paddedMinor}`;
+}
+
+/**
+ * Extracts and normalizes Wan2GP architectural version (e.g. "v17.00", "v17.01", "v12.60")
+ * from metadata strings like "WanGP v17.00 by DeepBeepMeep...", "type", "params", or raw comments.
+ */
+export function extractWanGpVersion(...inputs: (string | number | undefined | null)[]): string | undefined {
+  const wanGpRegex = /(?:wan(?:2)?gp|wangp)[\s_.:-]*v?(\d+(?:\.\d+)?)/i;
+  const standaloneVRegex = /\bv(\d+\.\d{1,2})\b/i;
+
+  for (const input of inputs) {
+    if (input === undefined || input === null) continue;
+    const str = String(input).trim();
+    if (!str) continue;
+
+    let numStr: string | null = null;
+    const match = str.match(wanGpRegex);
+    if (match && match[1]) {
+      numStr = match[1];
+    } else {
+      const vMatch = str.match(standaloneVRegex);
+      if (vMatch && vMatch[1]) {
+        numStr = vMatch[1];
+      }
+    }
+
+    if (numStr) {
+      return formatWanGpVersion(numStr);
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -355,14 +406,25 @@ export function extractTechnicalDetails(
   modelType: string = '',
   typeDesc: string = ''
 ): ExtractedTechnicalDetails {
-  // Support nested "params" format (standard in Maestro and some Wan2GP outputs)
-  const actualParams = (parsedJson && typeof parsedJson === 'object' && parsedJson.params && typeof parsedJson.params === 'object')
-    ? parsedJson.params
-    : parsedJson;
+  // Support unpacking MediaInfo wrapper or nested "params" format (standard in Maestro and some Wan2GP outputs)
+  let innerJson = parsedJson;
+  if (parsedJson?.media?.track && Array.isArray(parsedJson.media.track)) {
+    const generalTrack = parsedJson.media.track.find((t: any) => t['@type'] === 'General');
+    const comment = generalTrack?.extra?.Comment || generalTrack?.Comment;
+    if (typeof comment === 'string') {
+      try {
+        innerJson = JSON.parse(comment);
+      } catch {}
+    }
+  }
 
-  const rawModelType = actualParams?.model_type || parsedJson?.model_type || modelType || '';
-  const typeField = actualParams?.type || parsedJson?.type || typeDesc || '';
-  const modelFilename = actualParams?.model_filename || parsedJson?.model_filename || actualParams?.filename || parsedJson?.filename || '';
+  const actualParams = (innerJson && typeof innerJson === 'object' && innerJson.params && typeof innerJson.params === 'object')
+    ? innerJson.params
+    : (innerJson || parsedJson);
+
+  const rawModelType = actualParams?.model_type || innerJson?.model_type || parsedJson?.model_type || modelType || '';
+  const typeField = actualParams?.type || innerJson?.type || parsedJson?.type || typeDesc || '';
+  const modelFilename = actualParams?.model_filename || innerJson?.model_filename || parsedJson?.model_filename || actualParams?.filename || parsedJson?.filename || '';
 
   const technicalModelStr = [
     rawModelType,
@@ -480,21 +542,51 @@ export function extractTechnicalDetails(
     modelVariant = 'Pruned (20B)';
   }
 
-  // 3. Text Encoder Detection
-  let textEncoder: string = 'Not Found';
-  let configStr = actualParams?.config || parsedJson?.config || '';
+  // 3. Text Encoder & Video VAE Configuration Parsing
+  let configStr = actualParams?.config || innerJson?.config || parsedJson?.config || '';
   if (!configStr && rawComment) {
-    const configMatch = rawComment.match(/"config"\s*:\s*"([^"]+)"/i) || rawComment.match(/config[:=]\s*([a-zA-Z0-9_, -]+)/i);
-    if (configMatch && configMatch[1]) {
+    const configMatch = rawComment.match(/\\?"config\\?"\s*:\s*\\?"([^"\\]*)\\?"/i) || 
+      rawComment.match(/"config"\s*:\s*"([^"]*)"/i) || 
+      rawComment.match(/config[:=]\s*([a-zA-Z0-9_, -]+)/i);
+    if (configMatch && configMatch[1] !== undefined) {
       configStr = configMatch[1];
     }
   }
 
+  // Decompose configStr into text encoder and video vae parts (Wan2GP format: "<text_encoder>,<video_vae>")
+  let configTextEncPart = '';
+  let configVaePart = '';
+
+  if (typeof configStr === 'string' && configStr.length > 0) {
+    if (configStr.includes(',')) {
+      const commaIdx = configStr.indexOf(',');
+      configTextEncPart = configStr.substring(0, commaIdx).trim();
+      configVaePart = configStr.substring(commaIdx + 1).trim();
+    } else {
+      const trimmed = configStr.trim();
+      const lower = trimmed.toLowerCase();
+      if (
+        lower.includes('convrot') ||
+        lower.includes('conv_rot') ||
+        lower.includes('fp8') ||
+        lower.startsWith('vae') ||
+        lower === 'bf16'
+      ) {
+        configVaePart = trimmed;
+      } else {
+        configTextEncPart = trimmed;
+      }
+    }
+  }
+
+  let textEncoder: string = 'Not Found';
   const rawTextEnc = [
-    configStr,
+    configTextEncPart,
     actualParams?.minimax_h3_text_encoder,
+    innerJson?.minimax_h3_text_encoder,
     parsedJson?.minimax_h3_text_encoder,
     actualParams?.text_encoder,
+    innerJson?.text_encoder,
     parsedJson?.text_encoder,
     actualParams?.text_encoder_name,
     actualParams?.text_encoder_path,
@@ -508,7 +600,7 @@ export function extractTechnicalDetails(
       textEncoder = 'Qwen3-VL GGUF Q4_K_M';
     } else if (rawTextEnc.includes('q2_k') || rawTextEnc.includes('q2-k') || rawTextEnc.includes('q2k') || rawTextEnc.includes('gguf_q2_k') || rawTextEnc.includes('gguf_q2')) {
       textEncoder = 'Qwen3-VL GGUF Q2_K';
-    } else if (rawTextEnc.includes('quanto') || rawTextEnc.includes('int8')) {
+    } else if ((rawTextEnc.includes('quanto') || rawTextEnc.includes('int8')) && !rawTextEnc.includes('convrot') && !rawTextEnc.includes('conv_rot')) {
       textEncoder = 'Qwen3-VL Quanto INT8';
     } else if (rawTextEnc.includes('nvfp4') || rawTextEnc.includes('awq')) {
       textEncoder = 'Qwen3-VL NVFP4 AWQ';
@@ -519,26 +611,51 @@ export function extractTechnicalDetails(
     } else if (rawTextEnc.includes('qwen3-vl') || rawTextEnc.includes('qwen3_vl') || rawTextEnc.includes('qwen3') || rawTextEnc.includes('qwen')) {
       textEncoder = 'Qwen3-VL GGUF Q4_K_M';
     }
+  } else if (softwareSource === 'wan2gp') {
+    textEncoder = 'Default';
   }
 
-  // 4. Video VAE Detection - Default is ALWAYS 'Original VAE'
-  let videoVae: string = 'Original VAE';
+  // 4. Video VAE Detection - In Wan2GP default is 'Auto'
+  let videoVae: string = 'Auto';
   const rawVae = [
-    configStr,
+    configVaePart,
     actualParams?.video_vae,
+    innerJson?.video_vae,
     parsedJson?.video_vae,
     actualParams?.vae,
+    innerJson?.vae,
     parsedJson?.vae,
     actualParams?.vae_name,
     actualParams?.vae_model,
     actualParams?.vae_path
   ].filter(val => typeof val === 'string' && val.trim().length > 0).join(' ').toLowerCase();
 
-  if (rawVae.length > 0) {
+  const hasConvrot = rawVae.includes('convrot') || rawVae.includes('conv_rot') || rawVae.includes('int8_convrot');
+
+  if (hasConvrot) {
+    videoVae = 'INT8 ConvRot Decoder';
+  } else if (rawVae.length > 0) {
     if (rawVae.includes('fp8') || rawVae.includes('fp8mix') || rawVae.includes('fp8_mix')) {
       videoVae = 'FP8 Mixed Precision';
-    } else if (rawVae.includes('original') || rawVae.includes('default') || rawVae.includes('wan2.1_vae') || rawVae.includes('wan 2.1 vae')) {
-      videoVae = 'Original VAE';
+    } else if (rawVae.includes('bf16')) {
+      videoVae = 'BF16';
+    } else if (rawVae.includes('auto') || rawVae.includes('original') || rawVae.includes('default') || rawVae.includes('wan2.1_vae') || rawVae.includes('wan 2.1 vae')) {
+      videoVae = 'Auto';
+    }
+  } else {
+    videoVae = 'Auto';
+  }
+
+  // Para MiniMax H3, especificar el Text Encoder por defecto (Qwen3-VL-32B) entre paréntesis
+  const isMinimaxH3 = (baseModel === 'MiniMax H3') ||
+    rawModelType.toLowerCase().includes('minimax') ||
+    rawModelType.toLowerCase().includes('h3') ||
+    technicalModelStr.includes('minimax') ||
+    technicalModelStr.includes('h3');
+
+  if (isMinimaxH3) {
+    if (textEncoder === 'Default') {
+      textEncoder = 'Default (Qwen3-VL-32B)';
     }
   }
 
@@ -555,6 +672,20 @@ export function extractTechnicalDetails(
   const jobElapsedTimeSeconds = parsedJson?.job_elapsed_time !== undefined ? Number(parsedJson.job_elapsed_time) : undefined;
   const generationTimeBasis = parsedJson?.generation_time_basis;
   const settingsVersion = actualParams?.settings_version ?? parsedJson?.settings_version;
+
+  // Wan2GP Architectural Version (e.g. "v17.00", "v17.01", "v12.60")
+  let wanGpVersion: string | undefined = undefined;
+  if (softwareSource === 'wan2gp') {
+    wanGpVersion = extractWanGpVersion(
+      actualParams?.wan_version,
+      parsedJson?.wan_version,
+      actualParams?.type,
+      innerJson?.type,
+      parsedJson?.type,
+      typeField,
+      rawComment
+    );
+  }
 
   const tags: string[] = [];
 
@@ -581,6 +712,7 @@ export function extractTechnicalDetails(
     jobElapsedTimeSeconds,
     generationTimeBasis: generationTimeBasis ? String(generationTimeBasis) : undefined,
     settingsVersion: settingsVersion !== undefined ? Number(settingsVersion) : undefined,
+    wanGpVersion,
   };
 }
 
@@ -619,6 +751,7 @@ export interface ParsedWanGpMetadata {
   jobElapsedTimeSeconds?: number;
   generationTimeBasis?: string;
   settingsVersion?: number;
+  wanGpVersion?: string;
 }
 
 /**
@@ -761,6 +894,7 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
       jobElapsedTimeSeconds: techDetails.jobElapsedTimeSeconds,
       generationTimeBasis: techDetails.generationTimeBasis,
       settingsVersion: techDetails.settingsVersion,
+      wanGpVersion: techDetails.wanGpVersion,
     };
   } catch {
     // Non-JSON comment fallback
@@ -790,6 +924,7 @@ export function parseWanGpMetadata(commentRaw?: string, fallbackDurationSec?: nu
       jobElapsedTimeSeconds: techDetails.jobElapsedTimeSeconds,
       generationTimeBasis: techDetails.generationTimeBasis,
       settingsVersion: techDetails.settingsVersion,
+      wanGpVersion: techDetails.wanGpVersion,
     };
   }
 }
@@ -841,32 +976,115 @@ export function computeParameterDiff(a: VideoRecord, b: VideoRecord): DiffItem[]
     isDifferent: toolA.toLowerCase() !== toolB.toLowerCase(),
   });
 
+  // 1.2 Versión Wan2GP (Arquitectural)
+  let wanVerA = a.wanGpVersion;
+  let wanVerB = b.wanGpVersion;
+
+  if (!wanVerA && a.rawMetadata && (a.rawMetadata.includes('WanGP') || a.rawMetadata.includes('Wan2GP') || a.rawMetadata.includes('wangp'))) {
+    try {
+      const p = typeof a.rawMetadata === 'string' ? JSON.parse(a.rawMetadata) : a.rawMetadata;
+      const ext = extractTechnicalDetails(p, typeof a.rawMetadata === 'string' ? a.rawMetadata : JSON.stringify(a.rawMetadata));
+      if (ext.wanGpVersion) wanVerA = ext.wanGpVersion;
+    } catch {}
+  }
+  if (!wanVerB && b.rawMetadata && (b.rawMetadata.includes('WanGP') || b.rawMetadata.includes('Wan2GP') || b.rawMetadata.includes('wangp'))) {
+    try {
+      const p = typeof b.rawMetadata === 'string' ? JSON.parse(b.rawMetadata) : b.rawMetadata;
+      const ext = extractTechnicalDetails(p, typeof b.rawMetadata === 'string' ? b.rawMetadata : JSON.stringify(b.rawMetadata));
+      if (ext.wanGpVersion) wanVerB = ext.wanGpVersion;
+    } catch {}
+  }
+
+  const isWanA = (a.softwareSource === 'wan2gp' || a.localTool?.toLowerCase().includes('wan') || (!a.softwareSource && a.source === 'local'));
+  const isWanB = (b.softwareSource === 'wan2gp' || b.localTool?.toLowerCase().includes('wan') || (!b.softwareSource && b.source === 'local'));
+
+  if (wanVerA || wanVerB || isWanA || isWanB) {
+    const dispA = wanVerA || (isWanA ? 'No detectada' : 'N/A (Otro software)');
+    const dispB = wanVerB || (isWanB ? 'No detectada' : 'N/A (Otro software)');
+    diffs.push({
+      id: 'wanGpVersion',
+      category: 'model',
+      label: 'Versión Wan2GP',
+      valueA: wanVerA,
+      valueB: wanVerB,
+      displayA: dispA,
+      displayB: dispB,
+      isDifferent: (wanVerA || '') !== (wanVerB || ''),
+    });
+  }
+
   // 2. Text Encoder
-  const encA = a.textEncoder || 'Not Found';
-  const encB = b.textEncoder || 'Not Found';
+  let encA = a.textEncoder;
+  let encB = b.textEncoder;
+
+  if (a.rawMetadata && (a.rawMetadata.includes('"config"') || a.rawMetadata.includes('int8_convrot') || !encA || encA === 'Not Found')) {
+    try {
+      const p = typeof a.rawMetadata === 'string' ? JSON.parse(a.rawMetadata) : a.rawMetadata;
+      const ext = extractTechnicalDetails(p, typeof a.rawMetadata === 'string' ? a.rawMetadata : JSON.stringify(a.rawMetadata));
+      if (ext.textEncoder) encA = ext.textEncoder;
+    } catch {}
+  }
+  if (b.rawMetadata && (b.rawMetadata.includes('"config"') || b.rawMetadata.includes('int8_convrot') || !encB || encB === 'Not Found')) {
+    try {
+      const p = typeof b.rawMetadata === 'string' ? JSON.parse(b.rawMetadata) : b.rawMetadata;
+      const ext = extractTechnicalDetails(p, typeof b.rawMetadata === 'string' ? b.rawMetadata : JSON.stringify(b.rawMetadata));
+      if (ext.textEncoder) encB = ext.textEncoder;
+    } catch {}
+  }
+
+  const displayEncA = encA || 'Not Found';
+  const displayEncB = encB || 'Not Found';
+  const normEncA = (!encA || encA === 'Not Found' || encA === 'Default' || encA.toLowerCase().startsWith('default (qwen3-vl')) ? 'Default' : encA;
+  const normEncB = (!encB || encB === 'Not Found' || encB === 'Default' || encB.toLowerCase().startsWith('default (qwen3-vl')) ? 'Default' : encB;
+
   diffs.push({
     id: 'textEncoder',
     category: 'model',
     label: 'Text Encoder',
-    valueA: encA,
-    valueB: encB,
-    displayA: encA,
-    displayB: encB,
-    isDifferent: encA !== encB,
+    valueA: displayEncA,
+    valueB: displayEncB,
+    displayA: displayEncA,
+    displayB: displayEncB,
+    isDifferent: normEncA !== normEncB,
   });
 
   // 3. Video VAE
-  const vaeA = a.videoVae || 'Not Found';
-  const vaeB = b.videoVae || 'Not Found';
+  let vaeA = a.videoVae;
+  let vaeB = b.videoVae;
+
+  if (a.rawMetadata && (a.rawMetadata.includes('config') || a.rawMetadata.includes('int8_convrot') || !vaeA || vaeA === 'Not Found')) {
+    try {
+      const p = typeof a.rawMetadata === 'string' ? JSON.parse(a.rawMetadata) : a.rawMetadata;
+      const ext = extractTechnicalDetails(p, typeof a.rawMetadata === 'string' ? a.rawMetadata : JSON.stringify(a.rawMetadata));
+      if (ext.videoVae) vaeA = ext.videoVae;
+    } catch {}
+  }
+  if (b.rawMetadata && (b.rawMetadata.includes('config') || b.rawMetadata.includes('int8_convrot') || !vaeB || vaeB === 'Not Found')) {
+    try {
+      const p = typeof b.rawMetadata === 'string' ? JSON.parse(b.rawMetadata) : b.rawMetadata;
+      const ext = extractTechnicalDetails(p, typeof b.rawMetadata === 'string' ? b.rawMetadata : JSON.stringify(b.rawMetadata));
+      if (ext.videoVae) vaeB = ext.videoVae;
+    } catch {}
+  }
+
+  const displayVaeA = vaeA || 'Auto';
+  const displayVaeB = vaeB || 'Auto';
+  const isAutoOrOriginal = (v: string) => {
+    const l = v.toLowerCase();
+    return l.startsWith('auto') || l.startsWith('original') || l === 'default';
+  };
+  const normVaeA = isAutoOrOriginal(displayVaeA) ? 'Auto' : displayVaeA;
+  const normVaeB = isAutoOrOriginal(displayVaeB) ? 'Auto' : displayVaeB;
+
   diffs.push({
     id: 'videoVae',
     category: 'model',
     label: 'Video VAE',
-    valueA: vaeA,
-    valueB: vaeB,
-    displayA: vaeA,
-    displayB: vaeB,
-    isDifferent: vaeA !== vaeB,
+    valueA: displayVaeA,
+    valueB: displayVaeB,
+    displayA: displayVaeA,
+    displayB: displayVaeB,
+    isDifferent: normVaeA !== normVaeB,
   });
 
   // 4. Pasos (Steps)
@@ -1318,6 +1536,7 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
   let jobElapsedTimeSeconds: number | undefined = undefined;
   let generationTimeBasis: string | undefined = undefined;
   let settingsVersion: number | undefined = undefined;
+  let wanGpVersion: string | undefined = undefined;
 
   try {
     const response = await fetch(url);
@@ -1373,7 +1592,7 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
           if (metadata.modelTypeRaw) modelTypeRaw = metadata.modelTypeRaw;
           if (metadata.softwareSource) softwareSource = metadata.softwareSource;
           if (metadata.localTool) localTool = metadata.localTool;
-          videoVae = metadata.videoVae || 'Original VAE';
+          videoVae = metadata.videoVae || 'Auto';
           textEncoder = metadata.textEncoder;
           if (metadata.tags && metadata.tags.length > 0) tagsInput = metadata.tags.join(', ');
           if (metadata.renderSeconds !== undefined) renderSeconds = metadata.renderSeconds;
@@ -1391,6 +1610,7 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
           jobElapsedTimeSeconds = metadata.jobElapsedTimeSeconds;
           generationTimeBasis = metadata.generationTimeBasis;
           settingsVersion = metadata.settingsVersion;
+          wanGpVersion = metadata.wanGpVersion;
         }
       }
     }
@@ -1454,6 +1674,7 @@ export async function processVideoMetadataFromUrl(options: ProcessVideoUrlOption
     jobElapsedTimeSeconds: jobElapsedTimeSeconds !== undefined && !isNaN(jobElapsedTimeSeconds) ? jobElapsedTimeSeconds : undefined,
     generationTimeBasis,
     settingsVersion: settingsVersion !== undefined && !isNaN(settingsVersion) ? settingsVersion : undefined,
+    wanGpVersion,
   };
 
   return record;

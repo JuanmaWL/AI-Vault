@@ -1,7 +1,7 @@
 import { useState, FormEvent, useMemo, useRef, DragEvent } from 'react';
 import { VideoRecord, Lora, VideoSource } from '../../types';
-import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, processVideoMetadataFromUrl, generateTitleFromPrompt, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS, SOFTWARE_ICONS } from '../../lib/utils';
-import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder, Type, Wrench } from 'lucide-react';
+import { calculateOrientation, parseModelAndTags, extractTechnicalDetails, parseWanGpMetadata, parseVideoUrlInfo, processVideoMetadataFromUrl, generateTitleFromPrompt, formatWanGpVersion, TEXT_ENCODER_OPTIONS, VIDEO_VAE_OPTIONS, SOFTWARE_ICONS } from '../../lib/utils';
+import { X, Plus, Trash2, Check, FileVideo, AlertCircle, UploadCloud, Wand2, Cpu, Layers, Sparkles, Folder, Type, Wrench, Tag } from 'lucide-react';
 import { CategorySelector } from '../layout/CategorySelector';
 import wasmUrl from 'mediainfo.js/MediaInfoModule.wasm?url';
 
@@ -47,7 +47,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [fps, setFps] = useState<string>(initialData?.fps?.toString() || '');
   const [durationSeconds, setDurationSeconds] = useState<string>(initialData?.durationSeconds?.toString() || '');
   const [fileSizeBytes, setFileSizeBytes] = useState<number | undefined>(initialData?.fileSizeBytes);
-  const [videoVae, setVideoVae] = useState<string>(initialData?.videoVae || 'Original VAE');
+  const [videoVae, setVideoVae] = useState<string>(initialData?.videoVae || 'Auto');
   const [textEncoder, setTextEncoder] = useState<string>(initialData?.textEncoder || '');
   const [precision, setPrecision] = useState<string>(initialData?.precision || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
@@ -71,6 +71,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
   const [jobElapsedTimeSeconds, setJobElapsedTimeSeconds] = useState<number | undefined>(initialData?.jobElapsedTimeSeconds);
   const [generationTimeBasis, setGenerationTimeBasis] = useState<string | undefined>(initialData?.generationTimeBasis);
   const [settingsVersion, setSettingsVersion] = useState<number | undefined>(initialData?.settingsVersion);
+  const [wanGpVersion, setWanGpVersion] = useState<string>(initialData?.wanGpVersion || '');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -194,6 +195,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
           if (metadata.jobElapsedTimeSeconds !== undefined) { setJobElapsedTimeSeconds(metadata.jobElapsedTimeSeconds); }
           if (metadata.generationTimeBasis) { setGenerationTimeBasis(metadata.generationTimeBasis); }
           if (metadata.settingsVersion !== undefined) { setSettingsVersion(metadata.settingsVersion); }
+          if (metadata.wanGpVersion) { setWanGpVersion(metadata.wanGpVersion); newAutoFilled.wanGpVersion = true; foundSomething = true; }
           if (metadata.tags && metadata.tags.length > 0) {
             const existingTags = tagsInput ? tagsInput.split(',').map(t => t.trim()).filter(Boolean) : [];
             const merged = Array.from(new Set([...existingTags, ...metadata.tags]));
@@ -388,6 +390,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
       jobElapsedTimeSeconds,
       generationTimeBasis,
       settingsVersion,
+      wanGpVersion: wanGpVersion.trim() ? formatWanGpVersion(wanGpVersion.trim()) : undefined,
     };
 
     if (groupName.trim() && onAddCategory) {
@@ -547,6 +550,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                         if (rec.jobElapsedTimeSeconds !== undefined) setJobElapsedTimeSeconds(rec.jobElapsedTimeSeconds);
                         if (rec.generationTimeBasis) setGenerationTimeBasis(rec.generationTimeBasis);
                         if (rec.settingsVersion !== undefined) setSettingsVersion(rec.settingsVersion);
+                        if (rec.wanGpVersion) setWanGpVersion(rec.wanGpVersion);
                         
                         setAutoFilled({
                           prompt: true,
@@ -781,6 +785,33 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   ))}
                 </datalist>
               </div>
+
+              {/* Versión Wan2GP (solo si software es Wan2GP o tiene versión especificada) */}
+              {(softwareSource === 'wan2gp' || localTool.toLowerCase().includes('wan') || wanGpVersion) && (
+                <div className="space-y-2 col-span-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Versión Wan2GP</span>
+                    </label>
+                    <AutoFillBadge field="wanGpVersion" />
+                  </div>
+                  <input 
+                    type="text" 
+                    list="wangp-versions-list"
+                    value={wanGpVersion}
+                    onChange={e => setWanGpVersion(e.target.value)}
+                    placeholder="v17.00, v17.01..."
+                    className="w-full bg-neutral-950 border border-cyan-900/60 rounded-xl px-4 py-2.5 text-sm text-cyan-200 font-mono focus:outline-none focus:border-cyan-500/50 transition-all"
+                    title="Versión arquitectural de Wan2GP (ej: v17.00, v17.01)"
+                  />
+                  <datalist id="wangp-versions-list">
+                    {['v17.01', 'v17.00', 'v16.00', 'v15.00', 'v14.00', 'v13.00', 'v12.60'].map(v => (
+                      <option key={v} value={v} />
+                    ))}
+                  </datalist>
+                </div>
+              )}
             </div>
 
             {/* Tags */}
@@ -1075,7 +1106,7 @@ export function AddVideoModal({ onClose, onSave, userEmail, initialData, existin
                   </div>
                   <div className="relative">
                     <select
-                      value={videoVae || 'Original VAE'}
+                      value={videoVae || 'Auto'}
                       onChange={e => setVideoVae(e.target.value)}
                       className="w-full bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-2.5 text-sm text-neutral-200 focus:outline-none focus:border-purple-500/50 appearance-none font-sans"
                     >

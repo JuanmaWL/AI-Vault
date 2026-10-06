@@ -240,8 +240,9 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
     let precision = video.precision;
     let softwareSource = video.softwareSource;
     let localTool = video.localTool;
+    let wanGpVersion = video.wanGpVersion;
 
-    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool) && video.rawMetadata) {
+    if ((!textEnc || !vae || !variant || sizeB === undefined || !softwareSource || !localTool || !wanGpVersion) && video.rawMetadata) {
       try {
         const parsed = typeof video.rawMetadata === 'string' ? JSON.parse(video.rawMetadata) : video.rawMetadata;
         const extracted = extractTechnicalDetails(
@@ -258,6 +259,9 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
           softwareSource = extracted.softwareSource;
           localTool = extracted.localTool;
         }
+        if (!wanGpVersion && extracted.wanGpVersion) {
+          wanGpVersion = extracted.wanGpVersion;
+        }
       } catch {}
     }
 
@@ -271,8 +275,9 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
       modelSizeB: sizeB,
       softwareSource: effectiveSoftware,
       displayToolName,
+      wanGpVersion,
     };
-  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.rawMetadata]);
+  }, [video.textEncoder, video.videoVae, video.modelVariant, video.modelSizeB, video.softwareSource, video.localTool, video.wanGpVersion, video.rawMetadata]);
 
   const efficiencyMetrics = useMemo(() => {
     return calculateEfficiencyMetrics(video.renderSeconds, video.steps, video.width, video.height);
@@ -356,21 +361,32 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                 <span>{resolvedTech.displayToolName || 'ComfyUI'}</span>
               </span>
             ) : (
-              <span 
-                className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 shadow-sm flex items-center gap-1.5"
-                title={`Herramienta de generación: ${resolvedTech.displayToolName || 'Wan2GP'}`}
-              >
-                <img 
-                  src={SOFTWARE_ICONS.wan2gp} 
-                  alt="Wan2GP" 
-                  className="w-3.5 h-3.5 object-contain shrink-0" 
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLElement).style.display = 'none';
-                  }}
-                />
-                <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span 
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-500/15 border border-indigo-500/40 text-indigo-300 shadow-sm flex items-center gap-1.5"
+                  title={`Herramienta de generación: ${resolvedTech.displayToolName || 'Wan2GP'}`}
+                >
+                  <img 
+                    src={SOFTWARE_ICONS.wan2gp} 
+                    alt="Wan2GP" 
+                    className="w-3.5 h-3.5 object-contain shrink-0" 
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLElement).style.display = 'none';
+                    }}
+                  />
+                  <span>{resolvedTech.displayToolName || 'Wan2GP'}</span>
+                </span>
+                {resolvedTech.wanGpVersion && (
+                  <span 
+                    className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 shadow-[0_0_8px_rgba(6,182,212,0.25)] flex items-center gap-1.5"
+                    title={`Versión arquitectural Wan2GP: ${resolvedTech.wanGpVersion}`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                    <span>{resolvedTech.wanGpVersion}</span>
+                  </span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -590,7 +606,7 @@ export function VideoCard({ video, selectionMode, isSelected, onToggleSelect, on
                     className="text-[11px] px-2.5 py-0.5 rounded-md border flex items-center gap-1 font-mono bg-blue-950/40 border-blue-800/60 text-blue-300"
                     title={`Text Encoder: ${resolvedTech.textEncoder}`}
                   >
-                    <span className="text-[10px] text-blue-400/80 font-sans uppercase font-bold">Encoder:</span>
+                    <span className="text-[10px] text-blue-400/80 font-sans uppercase font-bold">Text Encoder:</span>
                     {resolvedTech.textEncoder}
                   </span>
                 )}
